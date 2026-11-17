@@ -319,14 +319,13 @@ def collect_repo(
     commit_history_days: int,
     ignored_worktree_globs: list[str],
     github_hosts: Sequence[str] = GITHUB_HOSTS,
-    listed: list[tuple[str, str | None]] | None = None,
 ) -> LocalRepo:
-    """`repo` as git has it. `listed` is its `git worktree list`, when that's been read."""
+    """`repo` as git has it."""
     config, refs = RepoConfig.read(repo), Refs.read(repo)
     found = _remotes(config, refs, github_hosts)
     default_branch = found.default_branch
     worktrees: list[Worktree] = []
-    for path, branch in listed if listed is not None else read_worktrees(repo):
+    for path, branch in read_worktrees(repo):
         if any(fnmatch.fnmatch(path, glob) for glob in ignored_worktree_globs):
             continue
         if not Path(path).exists():  # deleted without `git worktree remove`: git lists it
@@ -442,28 +441,17 @@ def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
     return parse_worktrees(printable(Git(repo).run("worktree", "list", "--porcelain", strip=False)))
 
 
-Listed = list[tuple[str, str | None]] | GitTimeoutError | None
-"""A repository's `git worktree list`; the timeout reading it; or None where git can't read
-it (not a repository: left to fail, and be said, on its own)."""
-
-
-def folded(repos: list[Path]) -> dict[Path, Listed]:
-    """`repos` with one path per repository, each with its `git worktree list` (see `Listed`): a
-    path that's a worktree of another listed one is folded into it, keeping the main checkout
-    if it's listed, else the first listed."""
-    by_main: dict[Path, tuple[Path, Listed]] = {}
+def folded(repos: list[Path]) -> list[Path]:
+    """`repos` with one path per repository, by its common git directory, read without
+    running git: a path that's a worktree of another listed one is folded into it, keeping the
+    main checkout if it's listed, else the first listed. A path that isn't a repository is
+    kept, to fail, and be said, on its own."""
+    by_common: dict[Path, Path] = {}
     for repo in repos:
-        listed: Listed
-        try:
-            listed = read_worktrees(repo)
-            main = Path(listed[0][0]).resolve()
-        except GitTimeoutError as e:  # its read fails with it, rather than wait again
-            listed, main = e, repo.resolve()
-        except GitError:
-            listed, main = None, repo.resolve()
-        if main not in by_main or repo.resolve() == main:
-            by_main[main] = (repo, listed)
-    return dict(by_main.values())
+        common = git_common_dir(repo) or repo.resolve()
+        if common not in by_common or common == (repo / ".git").resolve():
+            by_common[common] = repo
+    return list(by_common.values())
 
 
 def collect(
@@ -487,12 +475,9 @@ def collect(
     def one(repo: Path) -> LocalRepo | None:
         if only is not None and str(repo) in before and str(git_common_dir(repo)) not in only:
             return before[str(repo)]
-        listed = existing[repo]
         try:
-            if isinstance(listed, GitTimeoutError):
-                raise listed
             return collect_repo(
-                repo, now, commit_history_days, ignored_worktree_globs, github_hosts, listed=listed
+                repo, now, commit_history_days, ignored_worktree_globs, github_hosts
             )
         except (GitError, OSError) as e:  # a hung git (GitTimeoutError), say
             failed.append(e)

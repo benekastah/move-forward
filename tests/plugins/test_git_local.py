@@ -8,6 +8,7 @@ import pytest
 from git_client import GitError, GitTimeoutError
 from git_client.testing import GitCall
 
+from move_forward.api.git import git_common_dir
 from move_forward.db import Database
 from move_forward.git import Git
 from move_forward.plugins.git import client as local
@@ -249,6 +250,27 @@ def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
     assert sorted(args[0] for args in git_calls) == sorted(
         ["worktree", "config", "for-each-ref", "--no-optional-locks", "rev-list", "log"]
     )
+
+
+def test_a_collect_of_the_repos_that_moved_starts_no_git_in_the_others(
+    tmp_path: Path, git_calls: list[GitCall]
+) -> None:
+    """As many gits as reading the moved repo alone: none to find out the others are kept."""
+    moved, kept = tmp_path / "moved", tmp_path / "kept"
+    for repo in (moved, kept):
+        _init_repo(repo)
+        _commit(repo, "a.txt")
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    before = local.collect([moved, kept], now, 30, [])
+    git_calls.clear()
+    local.collect([moved], now, 30, [])
+    alone = sorted(call[0] for call in git_calls)
+    git_calls.clear()
+    found = local.collect(
+        [moved, kept], now, 30, [], only={str(git_common_dir(moved))}, previous=before
+    )
+    assert sorted(call[0] for call in git_calls) == alone
+    assert found.repos == before.repos
 
 
 def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
