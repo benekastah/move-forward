@@ -44,7 +44,7 @@ Context, Graph`; imports are absolute, as Ruff enforces): everything a plugin ma
 there, and core's own modules may change without notice. Its submodules group the rest:
 `api.html` (`page`, `e` to escape, `shown` to drop hidden characters, `buttons`,
 `linkable`), `api.shell` (`run`, `CommandError`), `api.git` (`Git`, `GitError`,
-`git_common_dir`, and py-git-client's `config`, `config_key` and `refs`), `api.http`
+`GitTimeoutError`, `NotARepositoryError`, `git_common_dir`, and py-git-client's `config`, `config_key` and `refs`), `api.http`
 (`request`, `RequestError`), `api.localtime` (`local`, `day`, `at`), `api.ids`
 (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`TokenFields`,
 `TokenSettings`, `token`, `read`, `write`, `delete`). Ruff refuses any other core import

@@ -379,6 +379,42 @@ def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: P
     assert found.my_dirs == ["api/v1"]  # not jan@x.com's web, whose email has mine in it
 
 
+def _hangs(monkeypatch: pytest.MonkeyPatch, hung: Path, command: str) -> list[str]:
+    """git times out on `command` in `hung`; returns the commands each run there."""
+    ran: list[str] = []
+    real = Git.output
+
+    def output(self: Git, *args: str, **kwargs: Any) -> str:
+        if Path(self.directory) == hung:
+            ran.append(args[0])
+            if args[0] == command:
+                raise GitTimeoutError(list(args), None, "")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Git, "output", output)
+    return ran
+
+
+@pytest.mark.parametrize("command", ["rev-list", "worktree"])
+def test_a_repo_whose_git_times_out_is_kept_as_read_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    """Not stored afresh without what timed out (its branches' counts), nor, for its worktree
+    list, asked again and timed out twice."""
+    hung, good = tmp_path / "hung", tmp_path / "good"
+    for repo in (hung, good):
+        _init_repo(repo)
+        _commit(repo, "a.txt")
+        Git(repo).run("switch", "-q", "-c", "topic")
+        _commit(repo, "b.txt")
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    before = local.collect([hung, good], now, 30, [])
+    ran = _hangs(monkeypatch, hung, command)
+    found = local.collect([hung, good], now, 30, [], previous=before)
+    assert found.repos == before.repos
+    assert ran.count(command) == 1
+
+
 def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

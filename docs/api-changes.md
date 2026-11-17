@@ -18,7 +18,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   `run_bytes`, `ok` (a yes-or-no answer), `resolve` (an object id, or None) or its own `output`
   (stdout as git printed it, with bytes that aren't UTF-8 replaced, for a parser). A failure
   raises `api.git.GitError` (its `stderr` and `stdout`), not `CommandError`; a timeout too,
-  rather than `subprocess.TimeoutExpired`. `api.git` also has py-git-client's batched reads
+  rather than `subprocess.TimeoutExpired`, as its subclass `api.git.GitTimeoutError`, and a
+  missing repository as `api.git.NotARepositoryError`. `api.git` also has py-git-client's batched reads
   `config`, `config_key` and `refs`. Plugins never import py-git-client itself (Ruff bans it,
   as it does core's own modules), so every git command runs the dashboard's way.
   `api.shell.git` is gone, and `git_common_dir` moved from `api.shell` to `api.git`.
