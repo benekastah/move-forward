@@ -27,6 +27,7 @@ from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec
 from move_forward.kinds import FAMILIES, Family, declaring
+from move_forward.markup import Html
 from move_forward.notifications import Event
 from move_forward.page import Item, Panel, Surface
 from move_forward.panels import Dashboard
@@ -243,7 +244,7 @@ class Harness:
         with self._installed():
             return refresh.run_action(self.config, self.db, f"{self.name}/{name}", fields)
 
-    def page(self, key: str, query: dict[str, list[str]] | None = None) -> str | Response | None:
+    def page(self, key: str, query: dict[str, list[str]] | None = None) -> Html | Response | None:
         """One of the plugin's pages, by its key (`""` its own), with a query."""
         with self._installed():
             return refresh.plugin_page(self.config, self.db, page_path(self.name, key), query or {})

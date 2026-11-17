@@ -8,8 +8,9 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from string.templatelib import Template
 from typing import Annotated
 
 from git_client import GitError
@@ -33,6 +34,7 @@ from move_forward.db import CORE, Database
 from move_forward.domain import Model
 from move_forward.graph import Graph, Ref, publisher
 from move_forward.kinds import FAMILIES, PERSON
+from move_forward.markup import Html, html
 from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
 from move_forward.plugin import (
@@ -670,10 +672,12 @@ def page_of(path: str) -> tuple[str, str]:
 
 def plugin_page(
     config: Config, db: Database, path: str, query: dict[str, list[str]]
-) -> str | Response | None:
+) -> Html | Response | None:
     """The enabled plugin's page at `path`, `/<plugin>/<key>`, or None when there's no such
     page (or the plugin has nothing at that query). Raises `PageFailed` when its handler
-    raises."""
+    raises. What its handler answers is HTML only if it's `Html`: a t-string is built with
+    `html`, and text (a `Response`'s body of a markup type too, `MARKUP_TYPES`) is escaped, to
+    show as text."""
     name, key = page_of(path)
     plugins = enabled(config, db, datetime.now(UTC))
     e = next((e for e in plugins if e.name == name), None)
@@ -682,10 +686,34 @@ def plugin_page(
         return None
     graph, _ = stored_graph(db, plugins)
     try:
-        return handler(InputRequest(e.ctx, graph, page=Page(query, path)))
+        return _as_html(handler(InputRequest(e.ctx, graph, page=Page(query, path))))
     except Exception as err:
         log.exception("%s: page %s failed", e.name, path)
         raise PageFailed(path) from err
+
+
+def _as_html(answer: Html | Response | None) -> Html | Response | None:
+    """A page's answer, HTML only where it's `Html`: a t-string is built with `html` (which
+    raises for what it can't build, e.g. None), and text is escaped."""
+    if isinstance(answer, (str, Template)):
+        return html(t"{answer}")
+    if isinstance(answer, Response) and _is_html(answer.content_type):
+        return replace(answer, body=html(t"{answer.body}"))
+    return answer
+
+
+MARKUP_TYPES = frozenset(
+    {"text/html", "application/xhtml+xml", "image/svg+xml", "text/xml", "application/xml"}
+)
+"""Content types a browser renders as markup, which can run a script, with any type ending in
+`+xml` (Atom, RSS, MathML): a `Response` of one is HTML only where its body is `Html`."""
+
+
+def _is_html(content_type: str) -> bool:
+    """Whether a browser reads a `Response` of `content_type` as markup: one of `MARKUP_TYPES`,
+    or any XML type (`+xml`)."""
+    essence = content_type.partition(";")[0].strip().lower()
+    return essence in MARKUP_TYPES or essence.endswith("+xml")
 
 
 def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> str:

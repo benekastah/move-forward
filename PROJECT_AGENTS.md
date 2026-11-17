@@ -111,6 +111,11 @@ what's untried where it runs).
   items are core's Act now's candidates, each with `Signals` (effort, what it closes, who's waiting,
   and a `task`: the stable id Act now keeps a snooze or pin by): those of its panels marked
   `act_now`, but deferred ones, unless an item says otherwise (`Item.act_now`).
+- The page's HTML is built from t-strings through `markup.html`, which escapes every value in
+  one unless it's `Html` (what another `html` returned), so nothing is escaped by hand and none
+  can be forgotten. `Html` is made by hand only of a constant known to be HTML (a script).
+  Plugins' pages are built the same way, with `api.html.html`, and what a page handler answers
+  as HTML (its text, or a `Response`'s body of a markup type) that isn't `Html` is escaped.
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.

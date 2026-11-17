@@ -25,6 +25,7 @@ from move_forward.api import (
     Request,
     Signals,
     attrs,
+    html,
 )
 from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
 from move_forward.strict import Strict
@@ -124,9 +125,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
         return {"close": close}
 
     def pages(self) -> dict[str, PageHandler]:
-        def issue(req: InputRequest[LinearConfig]) -> str | None:
+        def issue(req: InputRequest[LinearConfig]) -> html.Html | None:
             key = req.page.query.get("key", [""])[0]
-            return f"<p>{key} at {req.page.path}</p>" if key else None
+            return html.html(t"<p>{key} at {req.page.path}</p>") if key else None
 
         return {"issue": issue}
 

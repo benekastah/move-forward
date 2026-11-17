@@ -22,7 +22,7 @@ from conftest import (
     titles,
 )
 
-from move_forward import render, server
+from move_forward import server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
@@ -161,7 +161,7 @@ def test_ping_page_has_a_form_per_target() -> None:
     assert html.count(action) == 2
     assert server._back_to_page(query) == f"/slack/ping?{urlencode({'pr': candidate.url})}"  # pyright: ignore[reportPrivateUsage]
     assert "name='target' value='user:alice'" in html and "Fix &lt;it&gt;" in html
-    assert render.e(DEFAULT_PING_FIRST.format(url=candidate.url)) in html
+    assert html_module.escape(DEFAULT_PING_FIRST.format(url=candidate.url)) in html
     assert "data-reload" not in html
 
 

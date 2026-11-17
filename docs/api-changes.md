@@ -15,6 +15,19 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   handles: a team's handle isn't unique, even within one publisher (github publishes the teams
   of every org whose PRs request one). Key a requested team by its id, and show its `team`
   entity's handle or title.
+- **Pages are built from t-strings**: `api.html.html(t"<p>{title}</p>")` escapes every value
+  in a t-string unless it's `api.html.Html` (what `html`, `page` or `buttons` returned), a nested
+  t-string or a list, tuple or iterator (a generator) of those, so a forgotten escape can't put a
+  title into a page as HTML; None, and any other iterable but text (a dict, a set), raise
+  `TypeError`. `api.html.e` is gone: build with `html` instead.
+  `page`'s `body` is `Html`, and so is its `script` (JavaScript you mark `Html` yourself, as it
+  goes in as it is). A page handler (`PageHandler`) returns `Html`: a bare t-string is built with
+  `html`, and text that isn't `Html` is escaped, to show as text. A `Response`'s body of a type
+  a browser renders as markup (`text/html`, `application/xhtml+xml`, `image/svg+xml`,
+  `text/xml`, `application/xml`, and any type ending in `+xml`) is escaped the same way unless
+  it's `Html`; a body of another type goes out as it is, with `X-Content-Type-Options: nosniff`.
+  A `Response` with no content type, with a header name that isn't an HTTP token, or whose
+  `headers` set `Content-Type` or `Content-Length`, answers 500.
 
 ## Version 4
 

@@ -42,8 +42,8 @@ What it needs from another goes through the graph.
 A plugin uses core only through `move_forward.api` (`from move_forward.api import Plugin,
 Context, Graph`; imports are absolute, as Ruff enforces): everything a plugin may use is
 there, and core's own modules may change without notice. Its submodules group the rest:
-`api.html` (`page`, `e` to escape, `shown` to drop hidden characters, `buttons`,
-`linkable`), `api.shell` (`run`, `CommandError`), `api.git` (`Git`, `GitError`,
+`api.html` (`html` and `Html` to build HTML, `page`, `shown` to drop hidden characters,
+`buttons`, `linkable`), `api.shell` (`run`, `CommandError`), `api.git` (`Git`, `GitError`,
 `GitTimeoutError`, `NotARepositoryError`, and py-git-client's `git_common_dir`, `config`, `config_key`, `refs`, `printable`, `CatFile`, and `update_refs` with its `RefUpdate`), `api.http`
 (`request`, `RequestError`), `api.localtime` (`local`, `day`, `at`), `api.ids`
 (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`TokenFields`,
@@ -524,12 +524,14 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   the category (a todo ticked off): core remembers it and shows it as the page now has it (the
   todo ticked, to untick), found by its main subject, so give what an action leaves on the
   page (a ticked todo) the same subject it had.
-- **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> str | Response | None`
+- **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> Html | Response | None`
   (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
-  `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use
-  `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
-  `Response.redirect(url)`. Every page needs the
-  dashboard's token, as every request does.
+  `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML, built from
+  t-strings with `api.html.html`, which escapes every value in one unless it's `Html` (what
+  `html`, `page` or `buttons` returned): `html.page("Issue", "issue",
+  html.html(t"<p>{issue.title}</p>"))`. Text that isn't `Html` is shown as text. Or it returns a
+  `Response`, e.g. `Response.redirect(url)`, whose body of a markup type (HTML, SVG, any XML) is
+  escaped too unless it's `Html`. Every page needs the dashboard's token, as every request does.
 - **Commands.** Add `Command[LinearConfig]` to the bases and implement `cli(parser)` for `mfd
   linear ...`, returning a handler `(req:
   InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
