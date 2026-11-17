@@ -23,10 +23,6 @@ wrong, add it.
   org's `web` channel, and its pings count as theirs. Key them by the team's id; `Team.handle`'s
   docstring ("unique only within its publisher") is wrong too, as one publisher has several
   orgs' teams.
-- **Windows' accounts in another language.** On a Windows that isn't in English, `icacls` names
-  SYSTEM and Administrators in its language, so `private.is_private` wouldn't recognize them
-  and the token file would be warned about on every start: look their names up from their
-  well-known SIDs (`LookupAccountSidW`) rather than matching English ones.
 
 ## The skill and the dashboard disagree
 

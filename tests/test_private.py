@@ -70,6 +70,49 @@ def test_on_windows_only_me_and_the_system_may_hold_access(monkeypatch: pytest.M
     assert not private.is_private(Path("shared"))  # the Users group can read it
 
 
+def test_on_windows_the_system_is_named_in_its_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A German Windows names SYSTEM, Administrators and OWNER RIGHTS in German, as Windows
+    looks them up by their well-known SIDs."""
+    german = {
+        private.SYSTEM_SID: ("NT-AUTORITÄT", "SYSTEM"),
+        private.ADMINISTRATORS_SID: ("VORDEFINIERT", "Administratoren"),
+        private.OWNER_RIGHTS_SID: ("", "EIGENTÜMERRECHTE"),
+    }
+    answers = {
+        "mine": "mine ACME\\jane:(F)\n"
+        "     NT-AUTORITÄT\\SYSTEM:(I)(F)\n"
+        "     VORDEFINIERT\\Administratoren:(I)(F)\n"
+        "     EIGENTÜMERRECHTE:(I)(F)\n\n",
+        "shared": "shared ACME\\jane:(F)\n     VORDEFINIERT\\Benutzer:(I)(RX)\n\n",
+    }
+
+    def icacls(args: list[str], encoding: str = "utf-8") -> str:
+        return answers[args[1]]
+
+    def me() -> str:
+        return "ACME\\jane"
+
+    monkeypatch.setattr(private, "WINDOWS", True)
+    monkeypatch.setattr(private, "_me", me)
+    monkeypatch.setattr(private, "run", icacls)
+    monkeypatch.setattr(private, "_lookup", german.get)
+    assert private.is_private(Path("mine"))
+    assert not private.is_private(Path("shared"))  # the Users group can read it
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="LookupAccountSidW and icacls are Windows'")
+def test_on_windows_the_system_is_named_as_icacls_names_it(tmp_path: Path) -> None:
+    """The only check that `_lookup`'s ctypes binding agrees with Windows: a new file inherits
+    SYSTEM and Administrators from its folder, and icacls lists them as they're looked up,
+    whatever Windows' language."""
+    path = tmp_path / "f"
+    path.write_text("x", encoding="utf-8")
+    listing = private.run(["icacls", str(path)], encoding="oem")
+    holders = set(private._holders(listing, str(path)))  # pyright: ignore[reportPrivateUsage]
+    account = private._account  # pyright: ignore[reportPrivateUsage]
+    assert {account(private.SYSTEM_SID), account(private.ADMINISTRATORS_SID)} <= holders, listing
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="icacls is Windows' own")
 def test_on_windows_a_missing_file_cant_be_made_private(tmp_path: Path) -> None:
     """What `db._private` retries on: icacls failing as a `CommandError`."""
