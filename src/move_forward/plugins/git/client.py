@@ -143,6 +143,13 @@ class Remotes:
     """`owner/name` of the main remote on GitHub, else of the first remote on GitHub."""
 
 
+def _replaced(value: str) -> str:
+    """Text py-git-client read, with its bytes that aren't UTF-8 (which it keeps as
+    surrogates) replaced, as `Git.output` does: the database can't take a surrogate, so one
+    repo's odd config would fail storing every repo."""
+    return value.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+
+
 @dataclass(frozen=True)
 class RepoConfig:
     """A repository's git config as git reads it (its own, mine and the system's), from one
@@ -155,7 +162,10 @@ class RepoConfig:
 
     @classmethod
     def read(cls, repo: Path) -> RepoConfig:
-        return cls({key: values[-1] or "" for key, values in config(Git(repo)).items()})
+        # Keys too: a remote's name, from its key, is stored, and a branch's is looked up as
+        # `Git.output` read it.
+        listed = config(Git(repo)).items()
+        return cls({_replaced(key): _replaced(values[-1] or "") for key, values in listed})
 
     def get(self, key: str) -> str | None:
         """`key`'s value (`branch.<name>.remote`, in any case but the subsection's), or None when

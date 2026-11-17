@@ -415,6 +415,22 @@ def test_a_repo_whose_git_times_out_is_kept_as_read_before(
     assert ran.count(command) == 1
 
 
+def test_config_bytes_that_arent_utf8_are_replaced_so_the_repo_can_be_stored(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    Git(repo).run("init", "-q", "-b", "dev")
+    _commit(repo, "a.txt")
+    with (repo / ".git" / "config").open("ab") as config:
+        config.write(b"[init]\n\tdefaultBranch = tr\xe9s\n")  # neither main nor master here
+    collected = local.collect_repo(repo, datetime.now(UTC), 30, [])
+    assert collected.default_branch == "tr\ufffds"
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    LocalRepository(db).save(LocalSnapshot(repos=[collected]))
+
+
 def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
