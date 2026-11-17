@@ -874,6 +874,23 @@ def test_act_now_takes_only_panel_items_so_one_snoozed_there_waits_in_its_panel(
     assert [a.label for a in waiting.actions if a.group == "Act now"] == ["Unsnooze"]
 
 
+def test_items_of_two_plugins_with_one_task_about_one_subject_are_set_aside_as_one() -> None:
+    def waiting(title: str) -> Item:
+        subject = Ref(kind="pull_request", id="pr")
+        return Item(title=title, subjects=[subject], signals=Signals(task="wait"), fingerprint="a1")
+
+    def plugin(key: str) -> panels.PluginPanels:
+        return panels.PluginPanels(
+            key, key, [Panel(key="p", title="P", description="", items=[waiting(key)])]
+        )
+
+    said = act_now.Feedback(action="snooze", fingerprint="a1")
+    board = panels.build(
+        NOW, [plugin("x"), plugin("y")], {}, feedback={("pull_request", "pr", "wait"): said}
+    )
+    assert [board.panel(key).items[0].set_aside for key in ("x.p", "y.p")] == [True, True]
+
+
 def test_an_item_without_a_task_has_no_snooze() -> None:
     plain = Item(title="PR", subjects=[Ref(kind="pull_request", id="pr")])
     built = panels.build(

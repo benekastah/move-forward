@@ -2,6 +2,7 @@
 plugins to publish and read."""
 
 from move_forward.kinds import (
+    AWAIT_REVIEW,
     FAMILIES,
     PERSON,
     PULL_REQUEST,
@@ -22,6 +23,7 @@ from move_forward.kinds import (
 )
 
 __all__ = [
+    "AWAIT_REVIEW",
     "FAMILIES",
     "PERSON",
     "PULL_REQUEST",

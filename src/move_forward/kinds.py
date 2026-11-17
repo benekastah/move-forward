@@ -30,6 +30,10 @@ family by its name."""
 
 REVIEW = "review"
 """The task (`Signals.task`) of reviewing a pull request, whoever publishes it."""
+AWAIT_REVIEW = "await_review"
+"""The task of getting my own pull request reviewed: waiting on its reviewers, or chasing
+them. Every item about the PR with it, whichever plugin shows it, is snoozed as one (a snooze
+is kept by an item's main subject and task), so give them the same `Item.fingerprint`."""
 
 _OWN_KIND = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")
 

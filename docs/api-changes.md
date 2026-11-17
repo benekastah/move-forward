@@ -11,6 +11,9 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 4
 
+- **`api.kinds.AWAIT_REVIEW`**: the task of getting my own PR reviewed, as `REVIEW` is of
+  reviewing one. Items with it about the same PR, whichever plugin shows them, are snoozed as
+  one: github's Ready for review and slack's Nudge reviewers.
 - **Every panel sorts by importance**: a panel's items go most important first (the priority I set
   on what they're about, else their signals' importance or their contact's), then by `Item.rank`.
   `Panel.sort_by_importance`, which only some panels set, is gone; a plugin that still passes it

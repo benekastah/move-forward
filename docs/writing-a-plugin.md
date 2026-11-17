@@ -353,7 +353,8 @@ class LinearPlugin(...):
   differently from core or another plugin is left out, and `mfd check` says so. The test
   harness declares your plugin's families while it runs it, and those of other plugins
   you read or seed when you pass them (`Harness(..., families=...)`). Task ids the family's consumers
-  share (as `REVIEW` is for PRs) can live in that package too.
+  share (as `REVIEW` and `AWAIT_REVIEW` are for PRs) can live in that package too: items of
+  several plugins with the same task about the same entity are snoozed as one.
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
   person in other tools (`graph.same_person`), and ranks and badges their items by contact type,
