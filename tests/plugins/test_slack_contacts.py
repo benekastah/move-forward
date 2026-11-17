@@ -114,3 +114,12 @@ def test_a_team_named_by_slug_is_told_its_id_on_the_host_its_teams_are_on() -> N
         refresh.perform_action(
             config, db, "slack/set_team_channel", {"team": "web", "channel_name": "#web"}
         )
+
+
+def test_a_channel_still_kept_by_slug_says_so_and_can_only_be_cleared() -> None:
+    config, db = stored(slack=True, github=snapshot())
+    SlackRepository(db).set_team_channel("web", "#team-web", None)  # from before teams had ids
+    page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
+    [row] = [r for r in page.split("<tr>") if r.startswith("<td>web</td>")]
+    assert "kept by slug: set it again by the team&#x27;s id" in row
+    assert "set_team_channel" not in row and "clear_team_channel" in row

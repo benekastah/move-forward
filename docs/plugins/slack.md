@@ -72,7 +72,7 @@ aside both, until the PR's next push or the snooze's end.
 | Path | Shows |
 | --- | --- |
 | `/slack/ping?pr=<PR URL>` | The ping page for one of my PRs. |
-| `/slack/contacts` | Where people's and teams' pings go, and whether a person's was set by hand or looked up (or read by `mfd import`, which earlier versions had), with a form to change each and a Clear button for what's kept (asking first); the ping page links to it. |
+| `/slack/contacts` | Where people's and teams' pings go (a channel still kept by a team's slug, from before teams were named by id, is marked so and only cleared), and whether a person's was set by hand or looked up (or read by `mfd import`, which earlier versions had), with a form to change each and a Clear button for what's kept (asking first); the ping page links to it. |
 
 ## Buttons
 

@@ -19,7 +19,7 @@ from move_forward.api import (
 )
 from move_forward.api.kinds import PERSON, TEAM
 from move_forward.plugins.slack import client
-from move_forward.plugins.slack.config import SlackConfig, team_id
+from move_forward.plugins.slack.config import TEAM_ID_RE, SlackConfig, team_id
 from move_forward.plugins.slack.pings import my_open_prs
 from move_forward.plugins.slack.repository import SlackRepository
 
@@ -207,18 +207,30 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     for team in sorted(teams | my_teams(graph) | set(channels) | set(ctx.config.teams)):
         channel = channels.get(team)
         configured = ctx.config.teams.get(team)
+        # A channel kept by slug alone matches no team: it's only there to clear.
+        by_slug = not TEAM_ID_RE.match(team)
         note = f"{how(f'team:{team}')}" + (
             f"; [slack.teams] says {configured}" if configured else ""
         )
+        if by_slug:
+            note = "kept by slug: set it again by the team's id, then clear this"
         team_rows += (
             f"<tr><td>{e(team)}</td><td>{e(note)}</td><td>"
-            + _form(
-                "set_team_channel",
-                {"team": team},
-                [
-                    ("channel_name", channel.channel_name or "" if channel else "", "#team-web"),
-                    ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
-                ],
+            + (
+                ""
+                if by_slug
+                else _form(
+                    "set_team_channel",
+                    {"team": team},
+                    [
+                        (
+                            "channel_name",
+                            channel.channel_name or "" if channel else "",
+                            "#team-web",
+                        ),
+                        ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
+                    ],
+                )
             )
             + (
                 html.buttons(
