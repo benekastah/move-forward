@@ -40,9 +40,6 @@ needs. Each stands alone; a plugin fix that needs a core one says so, and lands 
   conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
   force-push (with lease), which the rule against force-pushing from a button forbids unless
   that's changed.
-- **Size a todo, and say why something's on ice, from the CLI.** `todo add --size` sizes a
-  new one; nothing sizes an existing one but the page's Quick and Big, and nothing changes
-  an ice note but its Replace note, so the work-notes skill can't do either.
 - **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
   the page), status and where (not shown at all), `link`, and `remove`.
 - **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add

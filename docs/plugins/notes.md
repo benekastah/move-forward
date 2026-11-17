@@ -97,11 +97,13 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo (a leading `[quick]` or `[big]` in it sizes it, unless `--size` does); PR URLs in the text are linked. Prints its id. |
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
+| `mfd notes todo size <id> quick\|big` | Say how big an open todo is, as its Quick and Big buttons do. |
 | `mfd notes condition add <entry> <text> --pr <URL>` / `remove <entry> <text> [--pr <URL>]` | Add a merge condition holding one of the entry's PRs, or remove one (from that PR, or from every PR it holds). Conditions kept before each named its PR are given one: the PR their text names, else each of the entry's PRs; one with no PR to hold becomes a line of its entry, `- Merge condition: …`, to add again with `--pr`. |
 | `mfd notes remember <key> [--on DATE]` | Record that what `<key>` names happened, today (or on `DATE`, `YYYY-MM-DD`), replacing the day kept before. A key is any text the skill chooses; see the keys below. The daily prune forgets a day `prune_days` old. |
 | `mfd notes recall <key>` | The day `remember` last recorded for `<key>`, `YYYY-MM-DD`, or an empty line when it never did (or the prune forgot it); with `--json`, `{"key": …, "on": "YYYY-MM-DD" or null}`. |
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
-| `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
+| `mfd notes ices` | What's on ice, with the ids `thaw` and `ice-note` take. |
+| `mfd notes ice-note <id> <note>` | Say why something is on ice, in place of what's said now, as its Replace note button does. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 
 ### Keys to remember by

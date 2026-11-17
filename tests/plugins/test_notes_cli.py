@@ -149,6 +149,31 @@ def test_todos_are_changed_by_id(run: Run, config: Path) -> None:
     assert [t.text for t in entry.todos] == ["a"] and entry.todos[0].done_on is not None
 
 
+def test_size_a_todo_by_id(run: Run, config: Path) -> None:
+    run("add-entry", "APP-1 Fix")
+    run("todo", "add", "APP-1", "a")
+    assert run("todo", "size", "1", "quick")[1] == "a is quick\n"
+    assert _json(run, "todo", "size", "1", "big") == {"notice": "a is big"}
+    run("todo", "done", "1")
+    code, _, err = run("todo", "size", "1", "quick")
+    assert code == 1 and "isn't open" in err
+    [entry] = NotesRepository(_db(config)).entries()
+    assert entry.todos[0].size == "big"
+
+
+def test_say_why_something_is_on_ice(run: Run) -> None:
+    run("add-entry", "APP-1 Fix")
+    run("ice", "--item", "notes.entry", "APP-1 Fix", "--note", "waiting on infra")
+    [ice] = _json(run, "ices")
+    assert run("ice-note", str(ice["id"]), "until the freeze ends")[1] == (
+        "noted why APP-1 Fix is on ice\n"
+    )
+    assert _json(run, "ices")[0]["note"] == "until the freeze ends"
+    code, _, err = run("ice-note", "99", "x")
+    assert code == 1 and "not on ice" in err
+    assert run("ice-note", str(ice["id"]), " ")[0] == 1  # empty
+
+
 def test_ice_a_branch_and_thaw_it(run: Run, config: Path) -> None:
     repo = LocalRepo(
         dir="/src/app",

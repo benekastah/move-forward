@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Size a todo, and say why something's on ice, from `mfd notes`
+
+Two new commands, printing `{"notice": …}` with `--json` as the others do: `mfd notes todo size
+<id> quick|big` sizes an open todo (as its Quick and Big buttons do), and `mfd notes ice-note <id>
+<note>` replaces what's said of why something is on ice (its id as `mfd notes ices` gives it). Use
+them where the skill had to send you to the page for either.
+
 ### Nudge reviewers' task is `await_review`
 
 slack's Nudge reviewers was snoozed by the task `ping`; it now shares `await_review` with the PR's
