@@ -169,9 +169,9 @@ class GitPlugin(
         for repo in snapshot.repos:
             if (common := git_common_dir(Path(repo.dir))) is None:
                 continue
-            self._ids[common.resolve()] = str(common)
+            self._ids[common] = str(common)
             for wt in repo.worktrees:
-                worktrees[Path(wt.path).resolve()] = common.resolve()
+                worktrees[Path(wt.path).resolve()] = common
         self._watcher.sync(worktrees)
 
     def change_check_seconds(self, req: ContextRequest[GitConfig]) -> int | None:

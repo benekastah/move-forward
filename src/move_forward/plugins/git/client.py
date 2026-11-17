@@ -16,9 +16,11 @@ from move_forward.api.git import (
     config,
     config_key,
     git_common_dir,
+    printable,
     refs,
 )
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
+from move_forward.plugins.git.watch import git_dir
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +72,8 @@ def worktree_status(worktree: Path) -> tuple[int, int]:
     plain `git status` refreshes the index under `index.lock`, and a git command of mine
     run meanwhile would fail on it."""
     return parse_status(
-        Git(worktree).output(
-            "--no-optional-locks", "status", "--porcelain", "--untracked-files=all"
+        Git(worktree).run(
+            "--no-optional-locks", "status", "--porcelain", "--untracked-files=all", strip=False
         )
     )
 
@@ -143,13 +145,6 @@ class Remotes:
     """`owner/name` of the main remote on GitHub, else of the first remote on GitHub."""
 
 
-def _replaced(value: str) -> str:
-    """Text py-git-client read, with its bytes that aren't UTF-8 (which it keeps as
-    surrogates) replaced, as `Git.output` does: the database can't take a surrogate, so one
-    repo's odd config would fail storing every repo."""
-    return value.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
-
-
 @dataclass(frozen=True)
 class RepoConfig:
     """A repository's git config as git reads it (its own, mine and the system's), from one
@@ -163,9 +158,9 @@ class RepoConfig:
     @classmethod
     def read(cls, repo: Path) -> RepoConfig:
         # Keys too: a remote's name, from its key, is stored, and a branch's is looked up as
-        # `Git.output` read it.
+        # `Refs` read it.
         listed = config(Git(repo)).items()
-        return cls({_replaced(key): _replaced(values[-1] or "") for key, values in listed})
+        return cls({printable(key): printable(values[-1] or "") for key, values in listed})
 
     def get(self, key: str) -> str | None:
         """`key`'s value (`branch.<name>.remote`, in any case but the subsection's), or None when
@@ -199,8 +194,14 @@ class Refs:
         names: set[str] = set()
         targets: dict[str, str] = {}
         branches: list[str] = []
-        listed = Git(repo).output(
-            "for-each-ref", f"--format={_REFS_FORMAT}", "refs/heads", "refs/remotes"
+        listed = printable(
+            Git(repo).run(
+                "for-each-ref",
+                f"--format={_REFS_FORMAT}",
+                "refs/heads",
+                "refs/remotes",
+                strip=False,
+            )
         )
         for line in listed.splitlines():
             name, target, fields = (line.split("\t", 2) + ["", ""])[:3]
@@ -298,14 +299,17 @@ def _my_dirs(repo: Path, default_refs: list[str], email: str, since_days: int) -
     within `since_days`, as git names them: repo-relative and POSIX, on every system."""
     if not default_refs or not email:
         return []
-    out = Git(repo).output(
-        "log",
-        *default_refs,
-        f"--since={since_days} days ago",
-        "--fixed-strings",
-        f"--author=<{email}>",
-        "--name-only",
-        "--format=",
+    out = printable(
+        Git(repo).run(
+            "log",
+            *default_refs,
+            f"--since={since_days} days ago",
+            "--fixed-strings",
+            f"--author=<{email}>",
+            "--name-only",
+            "--format=",
+            strip=False,
+        )
     )
     return sorted({str(PurePosixPath(path).parent) for path in out.splitlines() if path})
 
@@ -316,14 +320,13 @@ def collect_repo(
     commit_history_days: int,
     ignored_worktree_globs: list[str],
     github_hosts: Sequence[str] = GITHUB_HOSTS,
-    listed: list[tuple[str, str | None]] | None = None,
 ) -> LocalRepo:
-    """`repo` as git has it. `listed` is its `git worktree list`, when that's been read."""
+    """`repo` as git has it."""
     config, refs = RepoConfig.read(repo), Refs.read(repo)
     found = _remotes(config, refs, github_hosts)
     default_branch = found.default_branch
     worktrees: list[Worktree] = []
-    for path, branch in listed if listed is not None else _worktrees(repo):
+    for path, branch in read_worktrees(repo):
         if any(fnmatch.fnmatch(path, glob) for glob in ignored_worktree_globs):
             continue
         if not Path(path).exists():  # deleted without `git worktree remove`: git lists it
@@ -378,12 +381,15 @@ def _off_default(
         return {}
     tips = [b.sha for b in branches if b.sha]
     try:
-        walked = Git(repo).output(
-            "rev-list",
-            "--format=%H %P%x09%ae",
-            *tips,
-            "--not",
-            *found.default_refs,
+        walked = printable(
+            Git(repo).run(
+                "rev-list",
+                "--format=%H %P%x09%ae",
+                *tips,
+                "--not",
+                *found.default_refs,
+                strip=False,
+            )
         )
     except GitTimeoutError:
         raise  # fails the repo's read, which keeps what was read before
@@ -431,32 +437,24 @@ def _pushed_copy(repo: Path, branch: Branch, config: RepoConfig, refs: Refs) -> 
     return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
-def _worktrees(repo: Path) -> list[tuple[str, str | None]]:
-    return parse_worktrees(Git(repo).output("worktree", "list", "--porcelain"))
+def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
+    """`git worktree list`'s worktrees: each one's path and the branch checked out there."""
+    return parse_worktrees(printable(Git(repo).run("worktree", "list", "--porcelain", strip=False)))
 
 
-Listed = list[tuple[str, str | None]] | GitTimeoutError | None
-"""A repository's `git worktree list`; the timeout reading it; or None where git can't read
-it (not a repository: left to fail, and be said, on its own)."""
-
-
-def folded(repos: list[Path]) -> dict[Path, Listed]:
-    """`repos` with one path per repository, each with its `git worktree list` (see `Listed`): a
-    path that's a worktree of another listed one is folded into it, keeping the main checkout
-    if it's listed, else the first listed."""
-    by_main: dict[Path, tuple[Path, Listed]] = {}
+def folded(repos: list[Path]) -> list[Path]:
+    """`repos` with one path per repository, by its common git directory, read without
+    running git: a path that's a worktree of another listed one is folded into it, keeping the
+    main checkout (the one whose own git directory is the repository's) if it's listed, else
+    the first listed. A path that isn't a repository is kept, to fail, and be said, on its
+    own."""
+    by_common: dict[Path, Path] = {}
     for repo in repos:
-        listed: Listed
-        try:
-            listed = _worktrees(repo)
-            main = Path(listed[0][0]).resolve()
-        except GitTimeoutError as e:  # its read fails with it, rather than wait again
-            listed, main = e, repo.resolve()
-        except GitError:
-            listed, main = None, repo.resolve()
-        if main not in by_main or repo.resolve() == main:
-            by_main[main] = (repo, listed)
-    return dict(by_main.values())
+        common = git_common_dir(repo) or repo.resolve()
+        own = git_dir(repo)
+        if common not in by_common or (own is not None and own.resolve() == common):
+            by_common[common] = repo
+    return list(by_common.values())
 
 
 def collect(
@@ -480,12 +478,9 @@ def collect(
     def one(repo: Path) -> LocalRepo | None:
         if only is not None and str(repo) in before and str(git_common_dir(repo)) not in only:
             return before[str(repo)]
-        listed = existing[repo]
         try:
-            if isinstance(listed, GitTimeoutError):
-                raise listed
             return collect_repo(
-                repo, now, commit_history_days, ignored_worktree_globs, github_hosts, listed=listed
+                repo, now, commit_history_days, ignored_worktree_globs, github_hosts
             )
         except (GitError, OSError) as e:  # a hung git (GitTimeoutError), say
             failed.append(e)

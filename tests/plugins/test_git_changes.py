@@ -1,29 +1,34 @@
 """git telling that a repository moved, from its ref files' times, or that its uncommitted
 edits changed, from `git status`."""
 
+import json
+import sys
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import NOW
+from conftest import NOW, git_directory
 from git_client import GitError
 
+from move_forward.api.git import git_common_dir
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
-from move_forward.git import Git, git_common_dir
+from move_forward.git import Git
 from move_forward.graph import Graph
 from move_forward.ids import branch_id
 from move_forward.plugin import (
     Context,
     ContextRequest,
+    Previous,
     RefreshRequest,
     Request,
 )
 from move_forward.plugins.git import changes, client
+from move_forward.plugins.git import plugin as git_plugin
 from move_forward.plugins.git.config import GitConfig
-from move_forward.plugins.git.models import LocalRepo
+from move_forward.plugins.git.models import Branch, LocalRepo
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.registry import Enabled
@@ -49,6 +54,25 @@ class _Server:
         found = self.plugin.collect(RefreshRequest(ctx, Graph(), taken.full, taken.subjects))
         self.plugin.snapshots(ContextRequest(ctx)).save(found)
         self.checks.stored(e, taken)
+
+
+def _read_as(monkeypatch: pytest.MonkeyPatch, github_repos: dict[Path, str | None]) -> None:
+    """Have the plugin's collect read each of these repos, without git, as a clone of this
+    GitHub repo (or of none), on main: for what the plugin makes of what it read."""
+
+    def read(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
+        main = Branch(name="main", sha="a" * 40, committed_at=NOW)
+        return LocalRepo(
+            dir=str(repo),
+            github_repo=github_repos[repo],
+            default_branch="main",
+            worktrees=[],
+            branches=[main],
+        )
+
+    for repo in github_repos:
+        repo.mkdir(exist_ok=True)
+    monkeypatch.setattr(client, "collect_repo", read)
 
 
 def _repo(path: Path) -> Path:
@@ -117,6 +141,38 @@ def test_the_plugin_says_changed_after_a_move_and_keeps_it_until_a_refresh_reads
     server.refresh(ctx)
     assert not server.changed(ctx)
     assert ChangeRepository(db).get("git").subjects == set()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="making a symbolic link needs a privilege")
+def test_a_repo_reached_through_a_symbolic_link_is_known_by_where_it_is(tmp_path: Path) -> None:
+    repo = _repo(tmp_path / "r")
+    (tmp_path / "link").symlink_to(repo, target_is_directory=True)
+    assert list(changes.fingerprints([tmp_path / "link", repo])) == [str(repo / ".git")]
+
+
+def test_what_was_kept_under_a_key_no_repo_has_now_reads_every_repo(tmp_path: Path) -> None:
+    """A repo is known by its common git directory, symbolic links resolved: one kept by
+    another path (as a dashboard that didn't resolve a main checkout's `.git` kept it) moves
+    to the new key at the next full collect, rather than be read as never moved."""
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    ctx = Context(
+        config=GitConfig(repos=[repo]),
+        email="me@example.com",
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "git"),
+    )
+    old = str(tmp_path / "link" / "r" / ".git")
+    previous = Previous[Any](fingerprint=json.dumps({old: "digest"}))
+    assert (
+        GitPlugin(watching=False)
+        .changed(RefreshRequest(ctx, Graph(), previous=previous))
+        .everything
+    )
+    assert git_plugin._repos_of([repo], frozenset({old})) is None  # pyright: ignore[reportPrivateUsage]
 
 
 def test_after_a_change_only_the_repos_that_moved_are_read_again(
@@ -296,13 +352,12 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
 
 @pytest.mark.parametrize("second", ["Acme/widgets", "acme/WIDGETS"])
 def test_two_clones_of_one_github_repo_are_a_problem(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, second: str
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, second: str
 ) -> None:
     """Published once, by the first's name, and warned of: GitHub's names ignore case, so remotes
     that differ in it name the same repo."""
-    clones = [_repo(tmp_path / "a"), _repo(tmp_path / "b")]
-    for clone, name in zip(clones, ["Acme/widgets", second], strict=True):
-        Git(clone).run("remote", "add", "origin", f"git@github.com:{name}.git")
+    clones = [tmp_path / "a", tmp_path / "b"]
+    _read_as(monkeypatch, dict(zip(clones, ["Acme/widgets", second], strict=True)))
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     ctx = Context(
@@ -335,7 +390,8 @@ def test_two_clones_of_one_github_repo_are_a_problem(
 def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    a, b = git_directory(tmp_path / "a"), git_directory(tmp_path / "b")
+    _read_as(monkeypatch, {a: None, b: None})
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     ctx = Context(

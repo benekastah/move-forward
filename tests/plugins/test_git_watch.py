@@ -10,9 +10,10 @@ from typing import Any
 import pytest
 from conftest import NOW
 
+from move_forward.api.git import git_common_dir
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
-from move_forward.git import Git, git_common_dir
+from move_forward.git import Git
 from move_forward.graph import Graph
 from move_forward.plugin import Context, ContextRequest, RefreshRequest
 from move_forward.plugins.git import watch

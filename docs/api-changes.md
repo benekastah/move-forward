@@ -9,6 +9,23 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 4
+
+- **py-git-client 0.0.2**: `api.git.Git` is now 0.0.2's (see its
+  [release notes](https://github.com/benekastah/py-git-client/releases/tag/v0.0.2)).
+  The dashboard's own `Git.output` is gone: call `run(..., strip=False)` for what git printed,
+  and pass it through `api.git.printable`, new here, to replace the bytes that aren't UTF-8
+  before storing or showing it. Once the dashboard is stopping, a command raises
+  py-git-client's `NotStartedError`, still a `GitError`.
+- **`api.git.git_common_dir` is py-git-client's**: the path it gives has its symbolic links
+  resolved, a main checkout's `.git` included, where the dashboard's resolved only a linked
+  worktree's; and it's None for a `.git` that isn't a repository (no `HEAD`, `objects` or
+  `refs`). A plugin that keys what it keeps by it sees a repository reached through a
+  symbolic link under a new key.
+- **More of py-git-client in `api.git`**: `CatFile` (one `git cat-file` process for many
+  names or objects), and `update_refs` with its `RefUpdate` (many refs changed in one
+  transaction), so a plugin needn't start a git for each item.
+
 ## Version 3
 
 - **git runs through py-git-client, in `api.git`**: `api.git.Git(repo)` is

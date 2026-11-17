@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import (
@@ -12,7 +13,7 @@ from conftest import (
     todo,
 )
 from git_client import GitError
-from git_client.testing import RepoTemplates
+from git_client.testing import GitCall, RepoTemplates
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -20,7 +21,7 @@ from move_forward.db import Database
 from move_forward.git import Git
 from move_forward.graph import Graph, Ref
 from move_forward.plugin import ActionError, SourceError
-from move_forward.plugins.git import client
+from move_forward.plugins.git import actions, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
@@ -677,6 +678,81 @@ def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
         run("git/restore_together", config, restore.fields)
     with pytest.raises(ActionError, match="isn't on ice"):
         run("git/restore_together", config, {"targets": f"{repo}\t--force"})
+
+
+def test_restoring_together_restores_none_when_ones_commit_is_gone(
+    config: Config, repo: Path
+) -> None:
+    Git(repo).run("switch", "-q", "-c", "lost")
+    _commit(repo, "lost.txt")
+    Git(repo).run("switch", "-q", "main")
+    lost = Git(repo).run("rev-parse", "lost")
+    _ice(config, repo, "done")  # at main's commit, which stays
+    _ice(config, repo, "lost")
+    targets = f"{repo}\tdone\n{repo}\tlost"
+    run("git/delete_together", config, {"targets": targets})
+    Git(repo).run("reflog", "expire", "--expire=now", "--all")
+    Git(repo).run("gc", "-q", "--prune=now")
+    with pytest.raises(ActionError, match=f"lost's commit {lost[:12]} is gone"):
+        run("git/restore_together", config, {"targets": targets})
+    assert Git(repo).run("branch", "--list", "done", "lost") == ""
+
+
+def test_restoring_together_never_moves_a_branch_made_since_it_looked(
+    config: Config, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ice(config, repo, "done")
+    run("git/delete_together", config, {"targets": f"{repo}\tdone"})
+    Git(repo).run("branch", "done", "wip")
+
+    def read_before_that(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        return {}
+
+    monkeypatch.setattr(actions, "refs", read_before_that)
+    with pytest.raises(ActionError, match="reference already exists"):
+        run("git/restore_together", config, {"targets": f"{repo}\tdone"})
+    assert Git(repo).run("rev-parse", "done") == Git(repo).run("rev-parse", "wip")
+
+
+def test_a_stacks_buttons_start_as_many_gits_whatever_its_size(
+    config: Config, repo: Path, git_calls: list[GitCall]
+) -> None:
+    """A git for each kind of thing a button reads or does, not one for each branch: on
+    Windows each start costs tens of ms."""
+    names = ["s1", "s2", "s3"]
+    for name in names:
+        Git(repo).run("branch", name, "main")
+        _ice(config, repo, name)
+    targets = "\n".join(f"{repo}\t{name}" for name in names)
+
+    def started(action: str, fields: dict[str, str]) -> list[str]:
+        db = _stored(config)
+        git_calls.clear()
+        refresh.run_action(config, db, action, fields)
+        return sorted(call[0] for call in git_calls)
+
+    assert started("git/delete_together", {"targets": targets}) == [
+        "branch",
+        "for-each-ref",
+        "worktree",
+    ]
+    assert started("git/restore_together", {"targets": targets}) == [
+        "cat-file",
+        "for-each-ref",
+        "update-ref",
+    ]
+    assert [Git(repo).run("rev-parse", name) for name in names] == [
+        Git(repo).run("rev-parse", "main")
+    ] * 3
+    shown = Git(repo).run("rev-parse", "main")
+    lines = "\n".join(f"{repo}\t{name}\t{shown}" for name in names)
+    assert started("git/delete_branches", {"targets": lines}) == [
+        "branch",
+        "branch",
+        "branch",
+        "for-each-ref",
+        "worktree",
+    ]
 
 
 def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refuses(

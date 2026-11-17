@@ -328,7 +328,7 @@ PageHandler = Callable[[InputRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[InputRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
-API_VERSION = 3
+API_VERSION = 4
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""
