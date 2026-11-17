@@ -461,8 +461,8 @@ On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points 
 `dev.py static` on every push (the tests are CI's). GitHub Actions
 (`.github/workflows/ci.yml`) runs `dev.py static` once, on Linux, `dev.py tests` on Linux, macOS
 and Windows, and `dev.py coverage` on Linux, for each pull request into `main` and push to
-`main` (a stacked pull request gets CI once it targets `main`), each job within a time limit
-about 20% over how long it takes; a pull request that changes only Markdown (but
+`main` (a stacked pull request gets CI once it targets `main` and is pushed), each job within
+a time limit about 20% over how long it takes; a pull request that changes only Markdown (but
 `docs/entities.md`, which a test reads) skips them. `CI passed` is the one check main's
 ruleset requires.
 
