@@ -263,6 +263,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("act_now/snooze", False, False),  # its entry's, as on the page
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
         ("notes/entry_set", False, False),  # its entry's, which focus mode doesn't show
+        ("notes/entry_set", False, False),  # Clear where
         ("notes/entry_link", False, False),
         ("notes/entry_remove", False, False),
     ]
@@ -289,6 +290,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_add",
         "notes/entry_set",
+        "notes/entry_set",  # Clear where
         "notes/entry_link",
         "notes/entry_remove",
         "act_now/snooze",
@@ -384,6 +386,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
         "notes/todo_add",
         "notes/ice_item",
         "notes/entry_set",
+        "notes/entry_set",  # Clear where
         "notes/entry_link",
         "notes/entry_remove",
     ]

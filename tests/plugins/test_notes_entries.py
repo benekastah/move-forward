@@ -44,10 +44,28 @@ def test_an_entry_sets_its_status_where_it_lives_and_what_blocks_it() -> None:
     assert (kept.status, kept.where, kept.blocked_on) == ("in review", "engineering", "Sam")
 
 
+def test_set_offers_what_the_entry_says_now_and_status_or_where_can_be_cleared() -> None:
+    said = {"Status": ["in review"], "Where": ["engineering"]}
+    config, db = stored(work_items=[entry("APP-1 Fix", [todo("a"), todo("b")], **said)])
+    item = _item(config, db)
+    assert _button(item, "Set").suggestions == ["in review", "engineering"]
+    for label, field in (("Clear status", "status"), ("Clear where", "where")):
+        clear = _button(item, label)
+        assert clear.confirm is not None
+        assert refresh.run_action(config, db, clear.name, clear.fields) == (
+            f"APP-1 Fix: {field} cleared"
+        )
+    [kept] = NotesRepository(db).entries()
+    assert (kept.status, kept.where) == (None, None)
+    labels = [a.label for a in _item(config, db).actions]
+    assert "Clear status" not in labels and "Clear where" not in labels
+
+
 def test_a_blocked_entry_can_be_unblocked() -> None:
     blocked = entry("APP-1 Fix", [todo("a"), todo("b")], **{"Blocked on": ["reviews"]})
     config, db = stored(work_items=[blocked])
     unblock = _button(_item(config, db), "Unblock")
+    assert unblock.confirm is not None and "reviews" in unblock.confirm
     assert refresh.run_action(config, db, unblock.name, unblock.fields) == (
         "APP-1 Fix: blocked-on cleared"
     )

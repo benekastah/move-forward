@@ -23,9 +23,9 @@ names are related through it.
   in focus mode nor counted; an entry with nothing left but those goes last, and isn't a
   close-out.
   Each entry says its status and where it lives, and offers what `mfd notes` can do to it: Set
-  its status, where it lives or what blocks it (by a drop-down), Unblock it when it's blocked,
-  Link entry to a PR or ticket, and Remove entry, asking first; focus mode puts them on each of
-  its todos.
+  its status, where it lives or what blocks it (by a drop-down, offering what it says now),
+  Clear status, Clear where, and Unblock when it's blocked, each asking first, Link entry to a
+  PR or ticket, and Remove entry, asking first; focus mode puts them on each of its todos.
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
   with its importance and Put on ice. While the notes are empty, it says how
   to start them.

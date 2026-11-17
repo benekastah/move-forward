@@ -130,11 +130,22 @@ ENTRY_FIELD_CHOICES = {"status": "status", "where": "where", "blocked on": "bloc
 
 def entry_actions(entry: Entry, blocked: bool) -> list[Action]:
     """What `mfd notes` can do to an entry, on its item: Set its status, where it lives or what
-    blocks it, Unblock it (when `blocked`), Link it to a PR or ticket, and Remove it, asking
-    first."""
+    blocks it (offering what it says now, to pick and edit); clear its status or where, or
+    Unblock it (when `blocked`), asking first, as what it said is lost; Link it to a PR or
+    ticket; and Remove it, asking first."""
     fields = {"entry": entry.title}
     count = len(entry.open_todos)
     todos = f"{count} open todo{'' if count == 1 else 's'}"
+    said = [text for text in (entry.status, entry.where, entry.blocked_on) if text]
+    clears = [
+        (label, field, text)
+        for label, field, text, shown in (
+            ("Clear status", "status", entry.status, entry.status),
+            ("Clear where", "where", entry.where, entry.where),
+            ("Unblock", "blocked-on", entry.blocked_on, blocked),
+        )
+        if shown
+    ]
     return [
         Action(
             name="notes/entry_set",
@@ -142,17 +153,16 @@ def entry_actions(entry: Entry, blocked: bool) -> list[Action]:
             fields=fields,
             input="Status, where it lives, or what blocks it",
             choices=ENTRY_FIELD_CHOICES,
+            suggestions=list(dict.fromkeys(said)),
         ),
         *(
-            [
-                Action(
-                    name="notes/entry_set",
-                    label="Unblock",
-                    fields={**fields, "field": "blocked-on", "text": ""},
-                )
-            ]
-            if blocked
-            else []
+            Action(
+                name="notes/entry_set",
+                label=label,
+                fields={**fields, "field": field, "text": ""},
+                confirm=f"{label} on {entry.title}? It no longer says {field}: {text}",
+            )
+            for label, field, text in clears
         ),
         Action(
             name="notes/entry_link", label="Link entry", fields=fields, input="Jira key or PR URL"
