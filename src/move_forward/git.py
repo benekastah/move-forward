@@ -29,8 +29,9 @@ class NotRunError(GitError):
 class Git(git_client.Git):
     """py-git-client's `Git`, as every git command of the dashboard's runs: the git
     `$MOVE_FORWARD_GIT` names, else the one on PATH (found once, at the first); each command
-    stopped past `timeout` seconds, unless it's given its own; and, once `shell.stop` was
-    called, none started at all, so a refresh in flight winds down fast.
+    stopped past `timeout` seconds, unless it's given its own (but a long-lived one, `popen`'s,
+    which has none); and, once `shell.stop` was called, none started at all, so a refresh in
+    flight winds down fast.
 
     Raises FileNotFoundError when there's no git to run."""
 
@@ -59,6 +60,16 @@ class Git(git_client.Git):
             env=env,
             timeout=timeout,
         )
+
+    @override
+    def popen(
+        self, *args: Arg, env: Mapping[str, EnvValue] | None = None
+    ) -> subprocess.Popen[bytes]:
+        """As py-git-client's (a long-lived git, e.g. a CatFile's, which has no timeout), but
+        raising NotRunError, without starting git, once the dashboard is stopping."""
+        if stopping():
+            raise NotRunError(args)
+        return super().popen(*args, env=env)
 
     def output(self, *args: Arg, timeout: Timeout = CLIENT_TIMEOUT) -> str:
         """git's stdout as it printed it, for a parser: not stripped, unlike `run`'s (a

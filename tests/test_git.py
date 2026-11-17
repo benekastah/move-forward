@@ -8,6 +8,7 @@ from git_client.testing import real_git
 
 from move_forward import shell
 from move_forward.git import GIT_ENV, Git, NotRunError, git_common_dir
+from move_forward.shell import DEFAULT_TIMEOUT_SECONDS
 
 
 def test_no_git_starts_once_the_dashboard_stops(
@@ -22,7 +23,16 @@ def test_no_git_starts_once_the_dashboard_stops(
         git.run("init")
     with pytest.raises(NotRunError):
         git.ok("init")
+    with pytest.raises(NotRunError):  # a long-lived one too, e.g. a CatFile's
+        git.popen("init")
     assert not (tmp_path / ".git").exists()
+
+
+def test_a_command_is_stopped_after_two_minutes_unless_given_its_own_timeout(
+    tmp_path: Path,
+) -> None:
+    assert Git(tmp_path).timeout == DEFAULT_TIMEOUT_SECONDS == 120
+    assert Git(tmp_path, timeout=600).timeout == 600
 
 
 @pytest.mark.usefixtures("fresh_find_git")
