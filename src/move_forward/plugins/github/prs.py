@@ -242,9 +242,10 @@ def _bare_approval(event: TimelineEvent) -> bool:
 
 
 def last_push_at(pr: PullRequest) -> datetime | None:
-    """When the latest push to the PR was: a force push's time, or else the head commit's
-    date (a normal push of new commits). A rebased or amended commit keeps its old date, so
-    the commit date alone would miss that push."""
+    """When the latest push to the PR was: a force push's time, or else its latest commit's
+    date (a normal push of new commits), but a merge's (the base merged in), which answers
+    nothing. A rebased or amended commit keeps its old date, so the commit date alone would
+    miss that push."""
     times = [e.at for e in pr.events if e.type == "HeadRefForcePushedEvent"]
     if pr.last_commit_at:
         times.append(pr.last_commit_at)

@@ -101,12 +101,24 @@ class _RawRollup(_Raw):
 
 
 class _RawCommit(_Raw):
-    committed_date: datetime | None = Field(default=None, alias="committedDate")
     status_check_rollup: _RawRollup | None = Field(default=None, alias="statusCheckRollup")
 
 
 class _RawCommitNode(_Raw):
     commit: _RawCommit
+
+
+class _Count(_Raw):
+    total_count: int = Field(alias="totalCount")
+
+
+class _RawRecentCommit(_Raw):
+    committed_date: datetime = Field(alias="committedDate")
+    parents: _Count
+
+
+class _RawRecentCommitNode(_Raw):
+    commit: _RawRecentCommit
 
 
 class _RawEvent(_Raw):
@@ -177,6 +189,7 @@ class RawPullRequest(_Raw):
     latest_reviews: _Nodes[_RawReview] = Field(default=_Nodes(), alias="latestReviews")
     review_threads: _Nodes[_RawThread] = Field(default=_Nodes(), alias="reviewThreads")
     commits: _Nodes[_RawCommitNode] = _Nodes()
+    recent_commits: _Nodes[_RawRecentCommitNode] = Field(default=_Nodes(), alias="recentCommits")
     timeline_items: _Nodes[_RawEvent] = Field(default=_Nodes(), alias="timelineItems")
     files: _Nodes[_RawFile] | None = None
 
@@ -366,6 +379,13 @@ def _method(name: str | None) -> MergeMethod | None:
     return known.get(name or "")
 
 
+def _last_commit_at(raw: RawPullRequest) -> datetime | None:
+    """When the latest of its recent commits that isn't a merge was made: merging the base in
+    answers no feedback. None when there's none, or they're all merges."""
+    commits = [c.commit for c in raw.recent_commits.nodes if c]
+    return max((c.committed_date for c in commits if c.parents.total_count < 2), default=None)
+
+
 def to_pull_request(raw: RawPullRequest) -> PullRequest:
     """Flatten a GraphQL PullRequest node into the domain model."""
     requested = [_reviewer(r.requested_reviewer) for r in raw.review_requests.nodes if r]
@@ -426,7 +446,7 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         threads=[_thread(t) for t in raw.review_threads.nodes if t],
         rollup_state=rollup.state if rollup else None,
         checks=[_check(c) for c in rollup.contexts.nodes if c] if rollup else [],
-        last_commit_at=commit.committed_date if commit else None,
+        last_commit_at=_last_commit_at(raw),
         events=[
             e
             for e in (_event(raw_event) for raw_event in raw.timeline_items.nodes if raw_event)

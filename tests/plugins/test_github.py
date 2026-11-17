@@ -67,7 +67,6 @@ RAW_PR: dict[str, object] = {
         "nodes": [
             {
                 "commit": {
-                    "committedDate": "2026-10-28T09:00:00Z",
                     "statusCheckRollup": {
                         "state": "FAILURE",
                         "contexts": {
@@ -98,6 +97,11 @@ RAW_PR: dict[str, object] = {
                     },
                 }
             }
+        ]
+    },
+    "recentCommits": {
+        "nodes": [
+            {"commit": {"committedDate": "2026-10-28T09:00:00Z", "parents": {"totalCount": 1}}}
         ]
     },
     "timelineItems": {
@@ -165,12 +169,34 @@ def test_to_pull_request_flattens_everything() -> None:
 def test_missing_optional_parts_are_tolerated() -> None:
     raw = dict(RAW_PR)
     raw["commits"] = {"nodes": []}
+    raw["recentCommits"] = {"nodes": []}
     raw["files"] = None
     raw["author"] = None
     del raw["labels"]
     pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
     assert pr.checks == [] and pr.last_commit_at is None and pr.rollup_state is None
     assert pr.files == [] and pr.author is None and pr.labels == []
+
+
+def test_the_last_commit_is_the_latest_that_isnt_a_merge() -> None:
+    """A merge (the base merged in, by Update branch or by hand) answers no feedback, so it
+    doesn't count as a push: its parents say which commits are merges."""
+
+    def commit(at: str, parents: int) -> dict[str, object]:
+        return {"commit": {"committedDate": at, "parents": {"totalCount": parents}}}
+
+    raw = dict(RAW_PR)
+    raw["commits"] = {"nodes": [{"commit": {"committedDate": "2026-10-29T12:00:00Z"}}]}
+    raw["recentCommits"] = {
+        "nodes": [commit("2026-10-28T09:00:00Z", 1), commit("2026-10-29T12:00:00Z", 2)]
+    }
+    pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert pr.last_commit_at == datetime(2026, 10, 28, 9, tzinfo=UTC)
+    raw["recentCommits"] = {"nodes": [commit("2026-10-29T12:00:00Z", 2)]}
+    merges_only = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert merges_only.last_commit_at is None  # what was pushed before them isn't known
+    query = github.FIELDS_PATH.read_text(encoding="utf-8")
+    assert "recentCommits: commits(last: " in query and "parents" in query
 
 
 def _response(nodes: list[object], has_next: bool, cursor: str | None) -> str:

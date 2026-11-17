@@ -13,10 +13,6 @@ wrong, add it.
   the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
   angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
   `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
-- **A base merge isn't an answer.** github counts comments as answered once they're older than my
-  last push, by the head commit's date, so merging the base into a branch (Update branch, or by
-  hand) clears them with nothing said. Read past merge commits: it needs their parents fetched.
-  Then Update branch's confirm no longer needs to warn of it.
 - **Another org's team pings my team's channel.** slack keys a team's channel and pings by the
   slug a PR requests, but github publishes a team for each org whose PRs request one. With
   `search_scope = "everywhere"`, a PR of mine in another org requesting `web` is nudged to my
