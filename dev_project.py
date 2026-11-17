@@ -1,5 +1,5 @@
 """move-forward's own additions to dev.py (see its docstring): `install` ends by writing a
-config with `mfd init` when there's none yet.
+config with `mfd init` when there's none yet, and the man page has a SYNOPSIS.
 
 Held to dev.py's rules: standard library only, and Python 3.11 syntax.
 """
@@ -29,3 +29,7 @@ def after_install() -> None:
         dev.run(dev.tool("mfd"), "init")
     else:
         print(f"no config at {config}; run `mfd init` to write one")
+
+
+# As `mfd --help` has it.
+MAN_SYNOPSIS = {"mfd": "**mfd** [**-c** *config*] [**-v**] *command* [*args*]"}

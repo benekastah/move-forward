@@ -8,6 +8,7 @@
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, the package's commands on PATH, the git hooks
     python dev.py install --replace  # ...taking the commands over from another clone
+    python dev.py man [--check]      # man/<command>.1 from README.md (--check: fail if stale)
     python dev.py pre-commit         # what the pre-commit hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
@@ -21,12 +22,25 @@ the tests by node id and keeps every Nth from the Ith, so the N shards run each 
 once between them, and as many tests each, give or take one. CI runs a system's tests in N
 jobs this way when the project's Copier answers say so (see AGENTS.md).
 
+`man` makes each of the package's commands a man page, `man/<command>.1`, from README.md,
+with pandoc (from the pypandoc_binary dev dependency, pinned since the check compares its exact
+output): NAME (the command, and pyproject.toml's description), SYNOPSIS if dev_project.py gives
+one, DESCRIPTION (the README's opening), then the README's `##` sections, but for Install,
+Installing and Development. `static` checks the pages are current, and the pre-commit hook
+makes them again from the staged README when a commit changes what they're made from, and
+stages them (or, if the commit names its files, stops it, as it can't). `install` links them
+into ~/.local/share/man/man1 (not on Windows, which has no `man`). A package with no commands,
+a library, gets none.
+
 It comes from python-template, and `copier update` replaces it: a project adds to it in
 dev_project.py, its own file, if it has one. That can define `COMMANDS`, a dict of extra
 commands (a name to a function taking the command's arguments, a list of strings),
 `install_links()`, more links for `install` to make (a list of (link, target) paths: a symlink,
 which Windows usually can't make, or a shim if the link ends in `.cmd`), and
-`after_install()`, which `install` runs last. It's held to the same rules as this file.
+`after_install()`, which `install` runs last. For the man pages, it can set
+`MAN_SKIPPED_SECTIONS`, the `##` sections to leave out (a set of their titles, in place of
+`MAN_SKIPPED_SECTIONS` here), and `MAN_SYNOPSIS`, a page's SYNOPSIS (a dict of a command to its
+Markdown). It's held to the same rules as this file.
 
 `install` makes its links only if it may make all of them, and changes nothing if not: it won't
 take one over from another clone (or install) whose target still exists, unless told to with
@@ -43,6 +57,7 @@ tools, and uv picks its own Python.
 
 import argparse
 import importlib
+import json
 import os
 import re
 import shutil
@@ -64,6 +79,12 @@ WINDOWS = sys.platform == "win32"
 BIN = VENV / ("Scripts" if WINDOWS else "bin")
 STAMP = VENV / "installed"
 """Touched after installing; older than pyproject.toml or uv.lock means install again."""
+PAGES = ROOT / "man"
+"""Where `man` writes each command's man page."""
+MAN_SOURCES = ["README.md", "pyproject.toml", "dev.py", "dev_project.py"]
+"""What the man pages are made from: a commit changing one makes them again."""
+MAN_SKIPPED_SECTIONS = {"Install", "Installing", "Development"}
+"""The README's `##` sections a man page leaves out, unless dev_project.py sets its own."""
 
 
 def required_python(pyproject: str) -> tuple[int, int]:
@@ -192,9 +213,9 @@ def check(pytest_args: list[str]) -> None:
 
 def static() -> None:
     """The checks that don't depend on the system, so CI runs them once: Ruff's formatting
-    (fix with `ruff format`) and linter (`ruff check --fix` fixes what it can), and
-    basedpyright in strict mode. Runs all of them even if one fails, then exits with the first
-    failure's code, so one run reports every failure."""
+    (fix with `ruff format`) and linter (`ruff check --fix` fixes what it can), basedpyright
+    in strict mode, and that the man pages are current (`man --check`). Runs all of them even
+    if one fails, then exits with the first failure's code, so one run reports every failure."""
     venv()
     code = _static()
     if code:
@@ -207,6 +228,7 @@ def _static() -> int:
         run_code(tool("ruff"), "format", "--check", "--quiet"),
         run_code(tool("ruff"), "check", "--quiet"),
         run_code(tool("basedpyright")),
+        _man_check(),
     ]
     return next((code for code in codes if code), 0)
 
@@ -280,13 +302,191 @@ def coverage(pytest_args: list[str]) -> None:
     print("line by line: htmlcov/index.html")
 
 
+MAN_FILTER = """
+-- dev.py's pandoc filter, which makes a man page of the README: NAME, SYNOPSIS (if given) and
+-- DESCRIPTION (the README's opening) first, then the README's ## sections as the page's (but
+-- for those skipped), their ### ones as subsections, and links within the README as plain
+-- text. dev.py passes the rest as JSON in $DEV_MAN_PAGE.
+local page = pandoc.json.decode(os.getenv("DEV_MAN_PAGE"), false)
+
+function Pandoc(doc)
+  local blocks = pandoc.List()
+  local function section(title, markdown)
+    blocks:insert(pandoc.Header(1, title))
+    blocks:extend(pandoc.read(markdown, "markdown").blocks)
+  end
+  section("NAME", page.name)
+  if page.synopsis ~= "" then
+    section("SYNOPSIS", page.synopsis)
+  end
+  section("DESCRIPTION", "")
+  local skipped = {}
+  for _, title in ipairs(page.skipped) do
+    skipped[title] = true
+  end
+  local skipping = false
+  for _, block in ipairs(doc.blocks) do
+    if block.t == "Header" and block.level == 1 then
+      -- The README's title; the page's header names it instead.
+    elseif block.t == "Header" and block.level == 2 then
+      local title = pandoc.utils.stringify(block)
+      skipping = skipped[title] or false
+      if not skipping then
+        blocks:insert(pandoc.Header(1, pandoc.text.upper(title)))
+      end
+    elseif not skipping then
+      if block.t == "Header" then
+        block.level = block.level - 1
+      end
+      blocks:insert(block)
+    end
+  end
+  doc.blocks = blocks
+  doc.meta.title = page.title
+  doc.meta.section = "1"
+  doc.meta.header = page.header
+  doc.meta.footer = page.footer
+  return doc
+end
+
+function Link(link)
+  if link.target:sub(1, 1) == "#" then
+    return link.content
+  end
+end
+"""
+
+
+def man(args: list[str]) -> None:
+    """Make each of the package's commands a man page, `man/<command>.1`, from README.md (see
+    `pages`), and remove man/'s other `.1` files; with `--check`, change nothing, and fail if
+    any of them is out of date."""
+    parser = argparse.ArgumentParser(prog="dev.py man", description=man.__doc__)
+    parser.add_argument(
+        "--check", action="store_true", help="change nothing; fail if a page is out of date"
+    )
+    if parser.parse_args(args).check:
+        code = _man_check()
+        if code:
+            sys.exit(code)
+        return
+    made = pages(ROOT / "README.md")
+    _write_pages(made)
+    for stray in _stray_pages(made):
+        stray.unlink()
+        print(f"removed {_relative(stray)}, no command's page")
+
+
+def _man_check() -> int:
+    """`man --check`: 1, saying why, if a page is missing or out of date, or man/ has one no
+    command has; else 0."""
+    made = pages(ROOT / "README.md")
+    stale = [page for page, text in made.items() if not page.exists() or page.read_bytes() != text]
+    why = [f"man: {_relative(page)} is out of date with README.md" for page in stale]
+    why += [f"man: {_relative(page)} is no command's page" for page in _stray_pages(made)]
+    if not why:
+        return 0
+    print("\n".join([*why, "man: run `python3 dev.py man` to make them again"]), file=sys.stderr)
+    return 1
+
+
+def _relative(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def _stray_pages(made: dict[Path, bytes]) -> list[Path]:
+    return sorted(page for page in PAGES.glob("*.1") if page not in made)
+
+
+def _write_pages(made: dict[Path, bytes]) -> None:
+    for page, text in made.items():
+        if page.exists() and page.read_bytes() == text:
+            continue
+        page.parent.mkdir(exist_ok=True)
+        page.write_bytes(text)
+        print(f"wrote {_relative(page)}")
+
+
+def pages(readme: Path) -> dict[Path, bytes]:
+    """Each of the package's commands' man page, `man/<command>.1`, made from `readme` (README.md,
+    or a copy of the staged one) with pandoc and `MAN_FILTER`: NAME, the command and
+    pyproject.toml's description (see `man_description`); SYNOPSIS, if dev_project.py's
+    `MAN_SYNOPSIS` has one for it; DESCRIPTION, the README's opening; then the README's `##`
+    sections but `MAN_SKIPPED_SECTIONS` (or dev_project.py's). The page's header is the
+    project's name, as in "Git Stack Manual". None at all for a package with no commands."""
+    project = tomllib.loads(_pyproject_text())["project"]
+    names = list(project.get("scripts", {}))
+    if not names:
+        return {}
+    venv()
+    # -X utf8: the path as UTF-8, rather than in Windows' code page.
+    pandoc = _output(
+        tool("python"), "-X", "utf8", "-c", "import pypandoc; print(pypandoc.get_pandoc_path())"
+    )
+    own = _project()
+    synopses: dict[str, str] = getattr(own, "MAN_SYNOPSIS", {})
+    skipped: set[str] = getattr(own, "MAN_SKIPPED_SECTIONS", MAN_SKIPPED_SECTIONS)
+    description = man_description(project.get("description", ""))
+    made: dict[Path, bytes] = {}
+    with tempfile.TemporaryDirectory() as scratch:
+        lua = Path(scratch) / "man.lua"
+        lua.write_text(MAN_FILTER, encoding="utf-8")
+        for name in names:
+            page = {
+                "name": f"{name} - {description}" if description else name,
+                "synopsis": synopses.get(name, ""),
+                "skipped": sorted(skipped),
+                "title": name.upper(),
+                "header": " ".join(w.capitalize() for w in project["name"].split("-")) + " Manual",
+                "footer": project["name"],
+            }
+            made[PAGES / f"{name}.1"] = _output(
+                pandoc.decode().strip(),
+                "--from=gfm",
+                "--to=man",
+                "--standalone",
+                "--eol=lf",
+                f"--lua-filter={lua}",
+                str(readme),
+                env={**os.environ, "DEV_MAN_PAGE": json.dumps(page)},
+            )
+    return made
+
+
+def man_description(description: str) -> str:
+    """pyproject.toml's description as a man page's NAME line has it: without a final period,
+    and starting lowercase unless its first word has a capital or a digit past its first letter
+    ("Stacked branches." is "stacked branches", "Command-line tool" is "command-line tool";
+    "PRs", "I/O" and "X11" stay)."""
+    description = description.strip().removesuffix(".")
+    word = description.split(" ", 1)[0]
+    if word[:1].isupper() and not any(c.isupper() or c.isdigit() for c in word[1:]):
+        return description[0].lower() + description[1:]
+    return description
+
+
+def _output(*args: str, env: dict[str, str] | None = None) -> bytes:
+    """A command's output; its failure ends this script with its exit code, after its
+    errors."""
+    done = subprocess.run(args, cwd=ROOT, env=env, capture_output=True, check=False)
+    if done.returncode != 0:
+        sys.stderr.write(done.stderr.decode(errors="replace"))
+        sys.exit(done.returncode)
+    return done.stdout
+
+
 def _bin_dir() -> Path:
     return Path.home() / ".local" / "bin"
 
 
+def _man_dir() -> Path:
+    return Path.home() / ".local" / "share" / "man" / "man1"
+
+
 def install(args: list[str]) -> None:
     """Set up this clone for development and use: .venv, each of the package's commands on
-    PATH (a link in ~/.local/bin, or on Windows a `.cmd` there), dev_project.py's
+    PATH (a link in ~/.local/bin, or on Windows a `.cmd` there), their man pages where `man`
+    looks (a link in ~/.local/share/man/man1, but not on Windows), dev_project.py's
     `install_links()`, and this repository's hooks. Safe to rerun, e.g. after pyproject.toml
     changes.
 
@@ -306,6 +506,8 @@ def install(args: list[str]) -> None:
         sys.exit(temporary)
     bin_dir = _bin_dir()
     links = [(bin_dir / (f"{name}.cmd" if WINDOWS else name), Path(tool(name))) for name in names]
+    man_pages = [] if WINDOWS else [p for p in (PAGES / f"{n}.1" for n in names) if p.exists()]
+    links += [(_man_dir() / page.name, page) for page in man_pages]
     install_links: Callable[[], list[tuple[Path, Path]]] | None = getattr(
         _project(), "install_links", None
     )
@@ -332,9 +534,23 @@ def install(args: list[str]) -> None:
             print(f"added {bin_dir} to your PATH; open a new terminal to use it")
         else:
             print(f"warning: {bin_dir} isn't on your PATH; add it", file=sys.stderr)
+    if man_pages and not _man_finds(man_pages[0].stem):
+        print(
+            f"warning: man doesn't look in {_man_dir().parent}, so it won't find"
+            f' {man_pages[0].stem}\'s page; add export MANPATH="$HOME/.local/share/man:" to your'
+            " shell's startup file",
+            file=sys.stderr,
+        )
     after_install = getattr(_project(), "after_install", None)
     if after_install is not None:
         after_install()
+
+
+def _man_finds(name: str) -> bool:
+    """Whether `man` finds `name`'s page."""
+    if shutil.which("man") is None:
+        return False
+    return subprocess.run(["man", "-w", name], capture_output=True, check=False).returncode == 0
 
 
 def _temporary(names: list[str]) -> str | None:
@@ -427,6 +643,62 @@ def _git(*args: str, stdin: bytes | None = None) -> bytes:
 
 
 def pre_commit() -> None:
+    """Fix the staged Python files (see `_pre_commit_python`), then make the man pages again
+    if the commit changes what they're made from (see `_pre_commit_pages`)."""
+    _pre_commit_python()
+    _pre_commit_pages()
+
+
+def _pre_commit_pages() -> None:
+    """Make the man pages again, from the staged README.md, if the commit changes one of
+    `MAN_SOURCES`, and stage them, so they're current in the commit even if only part of the
+    README is staged. Only the README is read from the index: the commands, the description
+    and dev_project.py's settings come from the working tree, so a partly staged
+    pyproject.toml or dev_project.py can leave the commit's pages stale, as can a page no
+    command has; `static`'s check catches both.
+
+    Stops the commit if a page changes and the commit names its files (`git commit PATH`):
+    git then runs the hook on an index of its own, and keeps the page staged there out of the
+    real one, which would be left staging the old page."""
+    if not _git("diff", "--cached", "--name-only", "--", *MAN_SOURCES).strip():
+        return
+    with tempfile.TemporaryDirectory() as scratch:
+        readme = Path(scratch) / "README.md"
+        readme.write_bytes(_git("show", ":README.md"))
+        made = pages(readme)
+    changed = [page for page, text in made.items() if _staged(page) != text]
+    if not changed:
+        return
+    if _temporary_index():
+        sys.exit(
+            "pre-commit: the man pages need making again, which a commit naming its files"
+            " can't stage: run `dev.py man`, `git add` the pages and the files, then commit"
+            " without naming files"
+        )
+    _write_pages(made)
+    _git("add", "--", *(_relative(page) for page in changed))
+
+
+def _staged(path: Path) -> bytes | None:
+    """The staged content of `path`, or None if it isn't staged."""
+    shown = subprocess.run(
+        ["git", "show", f":{_relative(path)}"], cwd=ROOT, capture_output=True, check=False
+    )
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def _temporary_index() -> bool:
+    """Whether git runs this hook on a temporary index, as for `git commit PATH`, rather than
+    the repository's own (or its lock, which becomes it, as for `git commit -a`)."""
+    index = os.environ.get("GIT_INDEX_FILE")
+    if index is None:
+        return False
+    # The git directory's index: `--git-path index` would name $GIT_INDEX_FILE.
+    own = (Path(_git("rev-parse", "--absolute-git-dir").decode().strip()) / "index").resolve()
+    return (ROOT / index).resolve() not in (own, own.with_name(own.name + ".lock"))
+
+
+def _pre_commit_python() -> None:
     """Format the staged Python files with Ruff and apply its safe lint fixes (e.g. import
     sorting). The staged version of each file is fixed and staged in its place, so a file
     that's only partly staged commits just its staged part, fixed; the working copy is fixed
@@ -484,6 +756,8 @@ def main(argv: list[str]) -> None:
         coverage(rest)
     elif command == "install":
         install(rest)
+    elif command == "man":
+        man(rest)
     elif command == "pre-commit":
         pre_commit()
     else:

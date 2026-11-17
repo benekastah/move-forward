@@ -1,3 +1,6 @@
 # git runs the hooks with sh, Git for Windows' too, and sh chokes on Windows line endings:
 # keep them Unix-style even where git checks files out with CRLF.
 git_hooks/* text eol=lf
+# dev.py man writes the man pages with \n endings, and `man --check` compares them byte for
+# byte: keep them so in every checkout.
+man/*.1 text eol=lf

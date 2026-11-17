@@ -52,8 +52,10 @@ concurrency:
 jobs:
   # Whether anything but docs changed. A pull request touching only Markdown skips the checks
   # (CI passed still reports); main always runs them. docs/entities.md counts as code: a test
-  # checks it against the plugins' models. Skipped, and every job after it, for a
-  # pull request whose own base isn't main (one in a GitHub stack, above its bottom).
+  # checks it against the plugins' models. `readme` is whether README.md changed, which the man
+  # pages are made from: then the static checks, which check those, run even for docs. Skipped,
+  # and every job after it, for a pull request whose own base isn't main (one in a GitHub
+  # stack, above its bottom).
   changes:
     if: >-
       (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main')
@@ -61,6 +63,7 @@ jobs:
     timeout-minutes: 1
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      readme: ${{ steps.diff.outputs.readme }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -73,6 +76,7 @@ jobs:
           set -eu
           if [ "$EVENT" != pull_request ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "readme=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Its own line, so a failing diff fails the step rather than reading as no code.
@@ -83,11 +87,17 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
+          if printf '%s\n' "$files" | grep -qx README.md; then
+            echo "readme=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "readme=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  # Formatting, lint and types are the same on every system: once, on Linux.
+  # Formatting, lint, types and the man pages are the same on every system: once, on Linux.
+  # Also for a docs-only change to the README, the pages' source.
   static:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.readme == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 1  # it takes 20-30s
     steps:
@@ -182,9 +192,10 @@ jobs:
   # The one check a ruleset on main should require, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
   # passing), and fails unless project.yml's jobs passed and, unless docs alone changed, so
-  # did every other check. Skipped when `changes` is, and then not named CI passed: a skipped
-  # check counts as passing, and the latest check of a name is the one that counts, so one
-  # named CI passed could stand in for a real run on the same commit, or pass a stacked pull
+  # did every other check (if docs alone changed, static too, if it ran for the README).
+  # Skipped when `changes` is, and then not named CI passed: a skipped check counts as
+  # passing, and the latest check of a name is the one that counts, so one named CI passed
+  # could stand in for a real run on the same commit, or pass a stacked pull
   # request (a ruleset judges one in a GitHub stack by the stack's base's rules). GitHub
   # doesn't evaluate a skipped job's name, so the check shows this expression as written,
   # never CI passed (so its 'CI not run' is never shown: the expression only has to evaluate
@@ -278,7 +289,11 @@ jobs:
         run: |
           [ "$CHANGES" = success ] || exit 1
           [ "$PROJECT" = success ] || [ "$PROJECT" = skipped ] || exit 1
-          [ "$CODE" = false ] && exit 0
+          # A docs-only change skips static unless it changed the README; then it must pass.
+          if [ "$CODE" = false ]; then
+            [ "$STATIC" = success ] || [ "$STATIC" = skipped ]
+            exit
+          fi
           [ "$STATIC" = success ] && [ "$COVERAGE" = success ] || exit 1
           [ "$TESTS" = success ] && exit 0
           # In rapid development, a pull request's test job on macOS or Windows that never
