@@ -141,7 +141,7 @@ def test_install_links_mfd_and_runs_dev_projects_after_install(
     # On PATH already, so install leaves the user's PATH alone (on Windows, the registry).
     monkeypatch.setenv("PATH", str(tmp_path))
 
-    dev.install()
+    dev.install([])
 
     assert after == [True]
     assert (tmp_path / ("mfd.cmd" if dev.WINDOWS else "mfd")).exists(follow_symlinks=False)

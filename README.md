@@ -28,6 +28,14 @@ With [uv](https://docs.astral.sh/uv/) installed, any `python3` from 3.11 on (`py
 runs `dev.py install`: uv finds Python 3.15 for `.venv`, or downloads it. Without uv, `.venv` is
 made with the Python that runs `dev.py`, so it has to be 3.15.
 
+If `~/.local/bin` already has `mfd` from another clone (or installed another way), `dev.py
+install` stops and says so, changing nothing: `dev.py install --replace` takes it over (except,
+on Windows, another install's `mfd.exe`, which you uninstall). A link to a clone that's since
+been deleted it just replaces. It won't install a clone in a temporary directory (the system's,
+`/tmp` or `/var/tmp`), which would leave `mfd` broken once it's deleted: there, run
+`python3 dev.py venv` and `git config core.hooksPath git_hooks`, and use `.venv/bin/mfd` (on
+Windows, `.venv\Scripts\mfd.exe`).
+
 The dashboard listens only on localhost, over plain HTTP. Browsers treat localhost as a
 secure context, so nothing it does needs HTTPS.
 

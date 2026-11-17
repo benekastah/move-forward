@@ -45,7 +45,14 @@ Development section says how to set up a clone and run the checks.
 
 - `dev.py` sets up a clone and runs the checks, the same on every system (on Windows, run
   it with `py`); `python3 dev.py` lists its commands. It's the template's: this project's
-  own commands and install steps go in `dev_project.py` (see `dev.py`'s docstring).
+  own commands and install steps go in `dev_project.py` (see `dev.py`'s docstring), and
+  any links it makes in `install_links()`, so `install` checks them with its own.
+- `dev.py install` points the user's commands at this clone: run it only in the clone they
+  use. It refuses to take a command over from another clone (unless given `--replace`), and
+  to install a clone in a temporary directory (the system's, /tmp or /var/tmp). In a
+  worktree or a scratch clone, use `dev.py venv` and the commands in `.venv` (a scratch clone
+  also needs `git config core.hooksPath git_hooks` for the hooks; a worktree shares its
+  clone's).
 - `dev` is a reserved module name: `dev.py tests` loads `dev.py` into pytest as `dev`, which
   would hide a test helper of that name.
 - Dev tooling goes in `dev.py` or `dev_project.py`, not shell scripts; the git hooks are
@@ -143,7 +150,9 @@ was meant. An agent says it's an agent wherever it writes as a person would: in 
 of a PR's description, a review, and each answer to a finding.
 
 - **The reviewer** reads the diff against the PR's base, its commit messages, this file and
-  `PROJECT_AGENTS.md`, and changes nothing. It looks for, most important first:
+  `PROJECT_AGENTS.md`, and changes nothing. It runs nothing that changes the user's
+  environment: no `dev.py install`, no global installs (`uv tool install`, `pipx install`,
+  `pip install --user`). It looks for, most important first:
   - correctness: obviously correct is much better than just correct;
   - security: use the right secure library rather than writing our own;
   - surprises: anything surprising that's necessary has a comment and a test, only necessary
