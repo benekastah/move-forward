@@ -31,6 +31,14 @@ made with the Python that runs `dev.py`, so it has to be 3.15.
 The dashboard listens only on localhost, over plain HTTP. Browsers treat localhost as a
 secure context, so nothing it does needs HTTPS.
 
+If `~/.local/bin` already has `mfd` from another clone (or installed another way), `dev.py
+install` stops and says so, changing nothing: `dev.py install --replace` takes it over (except,
+on Windows, another install's `mfd.exe`, which you uninstall). A link to a clone that's since
+been deleted it just replaces. It won't install a clone in a temporary directory (the system's,
+`/tmp` or `/var/tmp`), which would leave `mfd` broken once it's deleted: there, run
+`python3 dev.py venv` and `git config core.hooksPath git_hooks`, and use `.venv/bin/mfd` (on
+Windows, `.venv\Scripts\mfd.exe`).
+
 `dev.py install` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
 installed, by default; jira, mail and slack when you name them), then each chosen
@@ -43,14 +51,6 @@ commented defaults, each with the first sentence of its documentation, and the p
 left out as commented-out sections. `mfd init --example` writes the same
 for example answers without asking, with mail and jira commented out; `--force` replaces an
 existing file.
-
-If `~/.local/bin` already has `mfd` from another clone (or installed another way), `dev.py
-install` stops and says so, changing nothing: `dev.py install --replace` takes it over (except,
-on Windows, another install's `mfd.exe`, which you uninstall). A link to a clone that's since
-been deleted it just replaces. It won't install a clone in a temporary directory (the system's,
-`/tmp` or `/var/tmp`), which would leave `mfd` broken once it's deleted: there, run
-`python3 dev.py venv` and `git config core.hooksPath git_hooks`, and use `.venv/bin/mfd` (on
-Windows, `.venv\Scripts\mfd.exe`).
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `port`,
