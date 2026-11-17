@@ -176,6 +176,18 @@ def test_push_sets_upstream_then_pushes_plainly(config: Config, repo: Path) -> N
     assert Git(repo).run("rev-parse", "wip") == Git(repo).run("rev-parse", "origin/wip")
 
 
+def test_a_push_git_rejects_says_why_without_logging_a_crash(
+    config: Config, repo: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    other = _clone(repo.parent / "origin.git", tmp_path / "other", "main")
+    _commit(other, "c.txt")
+    Git(other).run("push", "-q")
+    _commit(repo, "d.txt")
+    with pytest.raises(ActionError, match=r"(?s)^git push .*\[rejected\]"):
+        run("git/push_branch", config, {"repo": str(repo), "branch": "main"})
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
 def test_push_and_pull_of_a_branch_named_like_a_tag_move_the_branch(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
