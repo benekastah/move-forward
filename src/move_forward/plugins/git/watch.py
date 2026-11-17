@@ -23,6 +23,7 @@ its thread stops on an error, what it covers is left to the polling in `changes`
 """
 
 import logging
+import os
 import sys
 import threading
 from collections.abc import Callable, Iterable
@@ -79,10 +80,12 @@ def git_dir(worktree: Path) -> Path | None:
         return dot
     if not dot.is_file():
         return None
-    text = dot.read_text(encoding="utf-8").strip()
-    if not text.startswith("gitdir:"):
+    # As git (and py-git-client's `git_common_dir`) reads it: bytes, with only the line
+    # ending taken off, so a path that isn't UTF-8 or ends in a space is kept as it is.
+    line = dot.read_bytes().rstrip(b"\r\n")
+    if not line.startswith(b"gitdir: "):
         return None
-    return (worktree / text.removeprefix("gitdir:").strip()).resolve()
+    return (worktree / os.fsdecode(line.removeprefix(b"gitdir: "))).resolve()
 
 
 def tracked_dirs(worktree: Path) -> set[Path]:

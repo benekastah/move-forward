@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -155,6 +156,15 @@ def test_a_main_checkout_with_its_git_directory_elsewhere_is_kept_over_its_workt
     second = tmp_path / "repo2"
     Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
     assert local.folded([second, repo]) == [repo]
+    if sys.platform != "win32":  # Windows' names can't end in a space
+        odd = tmp_path / "odd"
+        odd.mkdir()
+        # Ending in a space; and on Linux, where a name is any bytes, not UTF-8.
+        elsewhere = tmp_path / ("caf\udce9 " if sys.platform == "linux" else "café ")
+        Git(odd).run("init", "-q", "-b", "main", f"--separate-git-dir={elsewhere}")
+        _commit(odd, "a.txt")
+        Git(odd).run("worktree", "add", "-q", "-b", "side", str(tmp_path / "odd2"))
+        assert local.folded([tmp_path / "odd2", odd]) == [odd]
 
 
 def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(
