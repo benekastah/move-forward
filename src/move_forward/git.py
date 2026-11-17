@@ -1,5 +1,4 @@
-"""Running git as the dashboard does, through py-git-client, and finding a git checkout's
-repository."""
+"""Running git as the dashboard does, through py-git-client."""
 
 from pathlib import Path
 
@@ -22,24 +21,3 @@ class Git(git_client.Git):
 
     def __init__(self, directory: Path, *, timeout: float | None = DEFAULT_TIMEOUT_SECONDS):
         super().__init__(directory, env_var=GIT_ENV, timeout=timeout, stopping=stopping)
-
-
-def git_common_dir(repo: Path) -> Path | None:
-    """The directory holding a checkout's refs and config: its `.git`, or for a linked
-    worktree (whose `.git` is a file naming its own git directory) the main repository's.
-    None when `repo` isn't a checkout. Read from the files, without running git."""
-    dot = repo / ".git"
-    if dot.is_dir():
-        return dot
-    if not dot.is_file():
-        return None
-    text = dot.read_text(encoding="utf-8").strip()
-    if not text.startswith("gitdir:"):
-        return None
-    own = (repo / text.removeprefix("gitdir:").strip()).resolve()
-    commondir = own / "commondir"
-    return (
-        (own / commondir.read_text(encoding="utf-8").strip()).resolve()
-        if commondir.is_file()
-        else own
-    )

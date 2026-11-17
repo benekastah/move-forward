@@ -10,11 +10,12 @@ from git_client import (
     NotARepositoryError,
     config,
     config_key,
+    git_common_dir,
     printable,
     refs,
 )
 
-from move_forward.git import Git, git_common_dir
+from move_forward.git import Git
 
 __all__ = [
     "Git",

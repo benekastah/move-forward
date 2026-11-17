@@ -17,6 +17,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   and pass it through `api.git.printable`, new here, to replace the bytes that aren't UTF-8
   before storing or showing it. Once the dashboard is stopping, a command raises
   py-git-client's `NotStartedError`, still a `GitError`.
+- **`api.git.git_common_dir` is py-git-client's**: the path it gives has its symbolic links
+  resolved, a main checkout's `.git` included, where the dashboard's resolved only a linked
+  worktree's; and it's None for a `.git` that isn't a repository (no `HEAD`, `objects` or
+  `refs`). A plugin that keys what it keeps by it sees a repository reached through a
+  symbolic link under a new key.
 
 ## Version 3
 
