@@ -36,8 +36,6 @@ Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn'
 the panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
 needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
 
-- **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
-  nowhere to come back from but `mfd unsnooze`.
 - **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
   nor do those of an item that focus mode splits into parts (an entry's Put on ice).
 - **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task

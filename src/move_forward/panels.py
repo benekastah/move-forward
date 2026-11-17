@@ -8,7 +8,7 @@ other panel sits in its plugin's group. Panels and groups go in their bands' ord
 import logging
 from collections.abc import Callable, Sequence
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 
@@ -56,8 +56,12 @@ class PluginPanels:
     key: str
     title: str
     panels: list[Panel]
-    nominations: list[Item] = field(default_factory=list[Item])
-    """Its candidates for Act now (see `candidates`)."""
+
+    @property
+    def nominations(self) -> list[Item]:
+        """Its candidates for Act now (see `candidates`): only items of its panels, so what Act
+        now sets aside stays in a panel, with Unsnooze."""
+        return candidates(self.panels)
 
 
 def candidates(panels: list[Panel]) -> list[Item]:
@@ -341,22 +345,15 @@ def _as_nomination(plugin: str, panel: Panel, item: Item) -> act_now.Nomination:
 
 
 def fingerprints(plugins: list[PluginPanels]) -> dict[act_now.FeedbackKey, str]:
-    """The fingerprint of every item the plugins show or nominate, by its key, as the page
-    compares a snooze with it: Act now's nomination's, else its panel item's."""
-    found = {
+    """The fingerprint of every item the plugins show, by its key, as the page compares a
+    snooze with it; of items sharing a key, the last one's, so all of them agree."""
+    return {
         n.key: n.fingerprint
         for plugin in plugins
         for panel in plugin.panels
         for item in panel.items
         if (n := _as_nomination(plugin.key, panel, item)).key is not None
     }
-    found.update(
-        (n.key, n.fingerprint)
-        for plugin in plugins
-        for item in plugin.nominations
-        if (n := act_now.Nomination(plugin.key, item)).key is not None
-    )
-    return found
 
 
 def _with_set_aside(
@@ -364,12 +361,12 @@ def _with_set_aside(
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
-    nominated: dict[act_now.FeedbackKey, str],
+    known: dict[act_now.FeedbackKey, str],
 ) -> Panel:
     """Each of a panel's items that has a task with Snooze, as in Act now; one snoozed there or
     here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is
-    known by the fingerprint Act now has for it (`nominated`, by key), so both agree, else its
-    own; its parts without a task of their own carry its buttons, as focus mode shows them,
+    known by the fingerprint the page has for its key (`known`, from `fingerprints`), so items
+    sharing one agree; its parts without a task of their own carry its buttons, as focus mode shows them,
     and they set it aside, as a part's Put on ice does its entry."""
 
     def with_buttons(item: Item) -> Item:
@@ -377,7 +374,7 @@ def _with_set_aside(
         key = nomination.key
         if key is None:
             return item
-        fingerprint = nominated.get(key, nomination.fingerprint)
+        fingerprint = known.get(key, nomination.fingerprint)
         aside = act_now.set_aside(fingerprint, feedback.get(key), now)
         buttons = act_now.set_aside_actions(act_now.feedback_fields(key, fingerprint), aside)
         parts = [
@@ -571,7 +568,6 @@ def build(
                 )
                 for p in plugin.panels
             ],
-            [_as_given(i) for i in plugin.nominations],
         )
         for plugin in plugins
     ]
@@ -586,7 +582,7 @@ def build(
     def shows(item: Item) -> bool:
         return not wanted or carries(item, wanted, tags_of)
 
-    nominated = fingerprints(plugins)
+    known = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     # Its listed parts get the importance choices they have in their panels, as the same
@@ -634,7 +630,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_with_set_aside(panel, plugin.key, feedback or {}, now, nominated)]
+                for shown in [_with_set_aside(panel, plugin.key, feedback or {}, now, known)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),

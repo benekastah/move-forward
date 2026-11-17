@@ -700,13 +700,20 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_fields_but_acts_own_do_not
             panels.PluginPanels(
                 "github",
                 "GitHub",
-                [],
                 [
-                    Item(
-                        title="x",
-                        subjects=[Ref(kind="pull_request", id="p")],
-                        signals=Signals(verb="Go", task="go"),
-                        actions=[action],
+                    Panel(
+                        key="p",
+                        title="P",
+                        description="",
+                        act_now=True,
+                        items=[
+                            Item(
+                                title="x",
+                                subjects=[Ref(kind="pull_request", id="p")],
+                                signals=Signals(verb="Go", task="go"),
+                                actions=[action],
+                            )
+                        ],
                     )
                 ],
             )
@@ -733,7 +740,21 @@ def test_a_nomination_without_a_task_is_left_out_of_act_now_and_logged(
 
     page = panels.build(
         NOW,
-        [panels.PluginPanels("linear", "Linear", [], [nominated("a", "go"), nominated("b", "")])],
+        [
+            panels.PluginPanels(
+                "linear",
+                "Linear",
+                [
+                    Panel(
+                        key="p",
+                        title="P",
+                        description="",
+                        act_now=True,
+                        items=[nominated("a", "go"), nominated("b", "")],
+                    )
+                ],
+            )
+        ],
         {},
     )
     assert [i.title for i in page.act_now()] == ["Go: a"]
@@ -822,7 +843,7 @@ def test_an_item_with_a_task_has_snooze_in_its_panel_as_in_act_now() -> None:
         NOW,
         [
             panels.PluginPanels(
-                "x", "X", [Panel(key="p", title="P", description="", items=[tasked])], [tasked]
+                "x", "X", [Panel(key="p", title="P", description="", items=[tasked], act_now=True)]
             )
         ],
         {},
@@ -832,6 +853,25 @@ def test_an_item_with_a_task_has_snooze_in_its_panel_as_in_act_now() -> None:
         return [(a.icon, a.group) for a in built.panel(key).items[0].actions if a.label == "Snooze"]
 
     assert snooze("x.p") == snooze("act.x") == [("💤", "Act now")]
+
+
+def test_act_now_takes_only_panel_items_so_one_snoozed_there_waits_in_its_panel() -> None:
+    """What Act now shows comes from the panels, so every item it can set aside has a panel
+    item to bring it back from, with Unsnooze."""
+    tasked = Item(
+        title="PR", subjects=[Ref(kind="pull_request", id="pr")], signals=Signals(task="fix")
+    )
+    stage = Panel(key="p", title="P", description="", items=[tasked], act_now=True)
+    plugin = panels.PluginPanels("x", "X", [stage])
+    assert [i.title for i in panels.build(NOW, [plugin], {}).act_now()] == ["PR"]
+    said = act_now.Feedback(
+        action="snooze", fingerprint=act_now.Nomination("x", tasked).fingerprint
+    )
+    feedback = {("pull_request", "pr", "fix"): said}
+    board = panels.build(NOW, [plugin], {}, feedback=feedback)
+    assert board.act_now() == []
+    [waiting] = board.panel("x.p").items
+    assert [a.label for a in waiting.actions if a.group == "Act now"] == ["Unsnooze"]
 
 
 def test_an_item_without_a_task_has_no_snooze() -> None:
@@ -888,25 +928,22 @@ def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
     assert "Clear priority" in labels(1)
 
 
-def _set_aside_board(
-    until: datetime | None = NOW + timedelta(days=1), nominated_detail: str | None = None
-) -> panels.Dashboard:
-    """A panel with one item about a PR, snoozed `until` (None: until it changes), Act now
-    having nominated it (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
+def _set_aside_board(until: datetime | None = NOW + timedelta(days=1)) -> panels.Dashboard:
+    """A panel with one item about a PR, snoozed `until` (None: until it changes), which Act now
+    takes."""
     item = Item(
         title="Fix it",
         subjects=[Ref(kind="pull_request", id="pr")],
         signals=Signals(verb="Fix", task="fix"),
     )
-    nominee = item.model_copy(update={"details": [nominated_detail]}) if nominated_detail else item
-    fingerprint = act_now.Nomination("x", nominee).fingerprint
+    fingerprint = act_now.Nomination("x", item).fingerprint
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
         ("pull_request", "pr", "fix"): act_now.Feedback(
             action="snooze", fingerprint=fingerprint, until=until
         )
     }
-    panel_ = Panel(key="p", title="P", description="", items=[item])
-    plugin = panels.PluginPanels("x", "X", [panel_], [nominee])
+    panel_ = Panel(key="p", title="P", description="", items=[item], act_now=True)
+    plugin = panels.PluginPanels("x", "X", [panel_])
     return panels.build(NOW, [plugin], {}, feedback=feedback)
 
 
@@ -914,15 +951,6 @@ def test_an_item_snoozed_until_it_changes_waits_with_unsnooze() -> None:
     [item] = _set_aside_board(until=None).panel("x.p").items
     assert item.set_aside
     assert [a.label for a in item.actions if a.group == "Act now"] == ["Unsnooze"]
-
-
-def test_an_item_set_aside_in_act_now_is_set_aside_in_its_panel_though_act_now_saw_it_otherwise() -> (
-    None
-):
-    board = _set_aside_board(nominated_detail="and 2 more merged here")
-    assert board.act_now() == []
-    [item] = board.panel("x.p").items
-    assert item.set_aside
 
 
 def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> None:
@@ -960,7 +988,7 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     )
     live = Item(title="live", subjects=[Ref(kind="x.a", id="l")], signals=signals, rank=1)
     stage = Panel(key="p", title="P", description="", items=[done, live], act_now=True)
-    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage], [done, live])], {})
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
     assert [i.title for i in board.panel("x.p").items] == ["live", "done"]
     assert [i.title for i in board.act_now()] == ["Close: live"]
     entry_ = Item(title="e", parts=[Item(title="a"), Item(title="b")])
