@@ -9,6 +9,15 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 4
+
+- **py-git-client 0.0.2**: `api.git.Git` is now 0.0.2's (see its
+  [release notes](https://github.com/benekastah/py-git-client/releases/tag/v0.0.2)).
+  The dashboard's own `Git.output` is gone: call `run(..., strip=False)` for what git printed,
+  and pass it through `api.git.printable`, new here, to replace the bytes that aren't UTF-8
+  before storing or showing it. Once the dashboard is stopping, a command raises
+  py-git-client's `NotStartedError`, still a `GitError`.
+
 ## Version 3
 
 - **git runs through py-git-client, in `api.git`**: `api.git.Git(repo)` is

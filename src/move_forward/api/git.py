@@ -10,6 +10,7 @@ from git_client import (
     NotARepositoryError,
     config,
     config_key,
+    printable,
     refs,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "config",
     "config_key",
     "git_common_dir",
+    "printable",
     "refs",
 ]

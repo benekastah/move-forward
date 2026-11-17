@@ -53,13 +53,6 @@ def test_the_tests_run_gits_own_program(tmp_path: Path) -> None:
     assert Git(tmp_path).program == real_git()
 
 
-def test_output_is_what_git_printed_with_what_isnt_utf8_replaced(tmp_path: Path) -> None:
-    git = Git(tmp_path)
-    git.run("init", "-q")
-    blob = git.run("hash-object", "-w", "--stdin", input=" caf\udce9\n")
-    assert git.output("cat-file", "blob", blob) == " caf�\n"
-
-
 def _checkout(path: Path) -> Path:
     path.mkdir()
     git = Git(path)

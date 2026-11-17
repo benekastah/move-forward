@@ -38,10 +38,7 @@ def repo_path(config: GitConfig, repo_dir: str) -> Path:
 
 def worktrees(repo: Path) -> list[Path]:
     """The repo's worktrees, as `git worktree list` has them now."""
-    return [
-        Path(path)
-        for path, _ in client.parse_worktrees(Git(repo).output("worktree", "list", "--porcelain"))
-    ]
+    return [Path(path) for path, _ in client.read_worktrees(repo)]
 
 
 def branch_exists(repo: Path, branch: str) -> bool:
@@ -51,8 +48,7 @@ def branch_exists(repo: Path, branch: str) -> bool:
 
 
 def checked_out_in(repo: Path, branch: str) -> str | None:
-    listed = Git(repo).output("worktree", "list", "--porcelain")
-    for path, checked_out in client.parse_worktrees(listed):
+    for path, checked_out in client.read_worktrees(repo):
         if checked_out == branch:
             return path
     return None

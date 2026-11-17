@@ -4,7 +4,6 @@ repository."""
 from pathlib import Path
 
 import git_client
-from git_client import CLIENT_TIMEOUT, Arg, Timeout
 
 from move_forward.shell import DEFAULT_TIMEOUT_SECONDS, stopping
 
@@ -23,13 +22,6 @@ class Git(git_client.Git):
 
     def __init__(self, directory: Path, *, timeout: float | None = DEFAULT_TIMEOUT_SECONDS):
         super().__init__(directory, env_var=GIT_ENV, timeout=timeout, stopping=stopping)
-
-    def output(self, *args: Arg, timeout: Timeout = CLIENT_TIMEOUT) -> str:
-        """git's stdout as it printed it, for a parser: not stripped, unlike `run`'s (a
-        porcelain format's first line can start with a space, a file's name end with one),
-        and with bytes that aren't UTF-8 replaced (U+FFFD) rather than kept as surrogates,
-        which neither the database nor the page can take. Raises GitError as `run` does."""
-        return self.run_bytes(*args, timeout=timeout).decode("utf-8", "replace")
 
 
 def git_common_dir(repo: Path) -> Path | None:

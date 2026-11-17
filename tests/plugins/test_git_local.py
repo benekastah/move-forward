@@ -383,16 +383,16 @@ def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: P
 def _hangs(monkeypatch: pytest.MonkeyPatch, hung: Path, command: str) -> list[str]:
     """git times out on `command` in `hung`; returns the commands each run there."""
     ran: list[str] = []
-    real = Git.output
+    real = Git.run
 
-    def output(self: Git, *args: str, **kwargs: Any) -> str:
+    def run(self: Git, *args: str, **kwargs: Any) -> str:
         if Path(self.directory) == hung:
             ran.append(args[0])
             if args[0] == command:
                 raise GitTimeoutError(list(args), None, "")
         return real(self, *args, **kwargs)
 
-    monkeypatch.setattr(Git, "output", output)
+    monkeypatch.setattr(Git, "run", run)
     return ran
 
 
