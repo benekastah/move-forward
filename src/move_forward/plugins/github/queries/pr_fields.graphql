@@ -1,5 +1,5 @@
-# A pull request's fields, as `client.RawPullRequest` reads them; `$withFiles` must be a
-# variable of the query using it.
+# A pull request's fields, as `client.RawPullRequest` reads them; `$withFiles` and
+# `$withCommits` must be variables of the query using it.
 fragment PrFields on PullRequest {
   number
   title
@@ -50,6 +50,7 @@ fragment PrFields on PullRequest {
   commits(last: 1) {
     nodes {
       commit {
+        committedDate
         statusCheckRollup {
           state
           contexts(first: 100) {
@@ -63,8 +64,9 @@ fragment PrFields on PullRequest {
       }
     }
   }
-  # Its latest commits, to read past merges (the base merged in), which answer no feedback.
-  recentCommits: commits(last: 20) {
+  # Its latest commits, to read past merges (the base merged in), which answer no feedback:
+  # only for my PRs, whose feedback is mine to answer.
+  recentCommits: commits(last: 20) @include(if: $withCommits) {
     nodes { commit { committedDate parents(first: 1) { totalCount } } }
   }
   timelineItems(last: 100, itemTypes: [REVIEW_REQUESTED_EVENT, HEAD_REF_FORCE_PUSHED_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT, ADDED_TO_MERGE_QUEUE_EVENT, PULL_REQUEST_REVIEW, ISSUE_COMMENT]) {

@@ -380,5 +380,14 @@ MIGRATIONS = [
     ALTER TABLE github_prs ADD COLUMN auto_merge_method TEXT;
     """,
     ),
+    Migration(
+        "0015_last_answer_at",
+        """
+    -- The latest commit that isn't a merge, which answers feedback. Until the next refresh
+    -- fetches it, the head commit's stands in, as it did.
+    ALTER TABLE github_prs ADD COLUMN last_answer_at TEXT;
+    UPDATE github_prs SET last_answer_at = last_commit_at;
+    """,
+    ),
 ]
 """The github plugin's migrations."""

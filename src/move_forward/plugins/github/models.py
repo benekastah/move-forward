@@ -112,8 +112,11 @@ class PullRequest(Model):
     rollup_state: str | None = None
     checks: list[Check] = Field(default_factory=list)
     last_commit_at: datetime | None = None
+    """When its head commit was made."""
+    last_answer_at: datetime | None = None
     """When its latest commit that isn't a merge was made, of its last 20: merging the base in
-    answers no feedback. None when there's none, or they're all merges."""
+    answers no feedback. None when they're all merges. Only my open PRs' are read: another's is
+    `last_commit_at`."""
     events: list[TimelineEvent] = Field(default_factory=list)
     files: list[str] = Field(default_factory=list)
     """Changed paths (the first 100); only fetched for the searches that need them: my PRs and

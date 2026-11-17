@@ -1,4 +1,4 @@
-query($q: String!, $after: String, $first: Int!, $withFiles: Boolean!) {
+query($q: String!, $after: String, $first: Int!, $withFiles: Boolean!, $withCommits: Boolean!) {
   search(query: $q, type: ISSUE, first: $first, after: $after) {
     issueCount
     pageInfo { hasNextPage endCursor }

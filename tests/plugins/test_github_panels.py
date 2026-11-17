@@ -526,6 +526,7 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
         2,
         review_decision="CHANGES_REQUESTED",
         last_commit_at=pushed,
+        last_answer_at=pushed,
         events=[
             event("IssueComment", pushed - timedelta(hours=1), actor="alice"),  # before push
             event("IssueComment", pushed + timedelta(hours=1), actor="alice"),
@@ -535,6 +536,7 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     answered = pr(
         3,
         last_commit_at=pushed,
+        last_answer_at=pushed,
         events=[
             event("PullRequestReview", pushed + timedelta(hours=1), actor="alice"),
             event("IssueComment", pushed + timedelta(hours=2), actor=ME),

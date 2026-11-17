@@ -5,6 +5,7 @@ import pytest
 from conftest import pr
 
 from move_forward.plugins.github import client as github
+from move_forward.plugins.github import prs
 from move_forward.plugins.github.models import PullRequest
 
 RAW_PR: dict[str, object] = {
@@ -67,6 +68,7 @@ RAW_PR: dict[str, object] = {
         "nodes": [
             {
                 "commit": {
+                    "committedDate": "2026-10-28T09:00:00Z",
                     "statusCheckRollup": {
                         "state": "FAILURE",
                         "contexts": {
@@ -178,25 +180,42 @@ def test_missing_optional_parts_are_tolerated() -> None:
     assert pr.files == [] and pr.author is None and pr.labels == []
 
 
-def test_the_last_commit_is_the_latest_that_isnt_a_merge() -> None:
-    """A merge (the base merged in, by Update branch or by hand) answers no feedback, so it
-    doesn't count as a push: its parents say which commits are merges."""
+def test_a_base_merge_wants_a_re_review_but_answers_no_feedback() -> None:
+    """A merge (the base merged in, by Update branch or by hand) is new code to review, but no
+    answer to what reviewers said before it: its parents say which commits are merges."""
 
     def commit(at: str, parents: int) -> dict[str, object]:
         return {"commit": {"committedDate": at, "parents": {"totalCount": parents}}}
 
     raw = dict(RAW_PR)
+    raw["author"] = {"login": "alice"}
     raw["commits"] = {"nodes": [{"commit": {"committedDate": "2026-10-29T12:00:00Z"}}]}
     raw["recentCommits"] = {
         "nodes": [commit("2026-10-28T09:00:00Z", 1), commit("2026-10-29T12:00:00Z", 2)]
     }
+    raw["latestReviews"] = {
+        "nodes": [
+            {"author": {"login": "me"}, "state": "APPROVED", "submittedAt": "2026-10-29T10:00:00Z"}
+        ]
+    }
+    raw["timelineItems"] = {
+        "nodes": [
+            {
+                "__typename": "IssueComment",
+                "createdAt": "2026-10-29T11:00:00Z",
+                "author": {"login": "bob"},
+            }
+        ]
+    }
     pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
-    assert pr.last_commit_at == datetime(2026, 10, 28, 9, tzinfo=UTC)
+    assert prs.needs_re_review(pr, "me") is not None  # pushed after my approval
+    assert prs.unanswered_feedback(pr, "alice") == ["comments by bob"]
     raw["recentCommits"] = {"nodes": [commit("2026-10-29T12:00:00Z", 2)]}
     merges_only = github.to_pull_request(github.RawPullRequest.model_validate(raw))
-    assert merges_only.last_commit_at is None  # what was pushed before them isn't known
-    query = github.FIELDS_PATH.read_text(encoding="utf-8")
-    assert "recentCommits: commits(last: " in query and "parents" in query
+    assert merges_only.last_answer_at is None  # what was pushed before them isn't known
+    del raw["recentCommits"]  # not asked for: no merge is known of
+    unasked = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert unasked.last_answer_at == unasked.last_commit_at
 
 
 def _response(nodes: list[object], has_next: bool, cursor: str | None) -> str:
@@ -285,7 +304,9 @@ def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
     def run(scope: str) -> list[str]:
         queries: list[str] = []
 
-        def search_prs(host: str, query: str, with_files: bool = False) -> list[object]:
+        def search_prs(
+            host: str, query: str, with_files: bool = False, with_commits: bool = False
+        ) -> list[object]:
             queries.append(query)
             return []
 
@@ -310,12 +331,38 @@ def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
     assert not any("org:" in q for q in run("everywhere"))
 
 
+def test_only_my_prs_are_searched_with_their_recent_commits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only my PRs' feedback is mine to answer, so only theirs need what a merge is."""
+    with_commits: list[str] = []
+
+    def search_prs(
+        host: str, query: str, with_files: bool = False, with_commits_: bool = False
+    ) -> list[object]:
+        if with_commits_:
+            with_commits.append(query)
+        return []
+
+    def login(host: str) -> str:
+        return "me"
+
+    monkeypatch.setattr(github, "search_prs", search_prs)
+    monkeypatch.setattr(github, "login", login)
+    github.collect("github.com", "acme", [], 14, datetime(2026, 10, 30, tzinfo=UTC), "org")
+    assert with_commits == ["is:pr is:open author:@me archived:false org:acme"]
+    query = github.FIELDS_PATH.read_text(encoding="utf-8")
+    assert "recentCommits: commits(last: 20) @include(if: $withCommits)" in query
+
+
 def test_collect_keeps_membership_per_team_even_when_a_person_is_in_both(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mine = pr(1, requested_teams=["bacon", "eggs"])
 
-    def search(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
+    def search(
+        host: str, query: str, with_files: bool = False, with_commits: bool = False
+    ) -> list[PullRequest]:
         return [mine] if "is:open author:@me" in query else []
 
     def login(host: str) -> str:
@@ -355,7 +402,9 @@ def test_a_team_whose_members_cant_be_read_is_left_out(
     def members(host: str, org: str, team: str) -> list[str]:
         raise github.CommandError("gh: Not Found")
 
-    def search(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
+    def search(
+        host: str, query: str, with_files: bool = False, with_commits: bool = False
+    ) -> list[PullRequest]:
         return [requested] if "is:open author:@me" in query else []
 
     def login(host: str) -> str:
