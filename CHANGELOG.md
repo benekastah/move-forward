@@ -9,7 +9,8 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 move-forward now runs git through [py-git-client](https://github.com/benekastah/py-git-client),
 a new dependency, so an install from before it can't start: `mfd serve --reload` keeps running
-the old code, and a restart fails. To move:
+the old code, and a restart fails. It now needs py-git-client 0.0.2, so an install made with
+0.0.1 fails the same way: reinstall once more. To move:
 
 1. Stop `mfd serve`.
 2. Pull.
