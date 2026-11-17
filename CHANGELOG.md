@@ -5,6 +5,14 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Change a work entry on the page
+
+The Todos panel's entries say their status and where they live, and have Set (status, where or
+blocked-on), Unblock, Link entry and Remove entry, posting to the new `/actions/notes/entry_set`,
+`entry_link` and `entry_remove`. `mfd notes set`, `link` and `remove` now run those same actions:
+their output is as before, but `mfd notes set <entry> <field> ""` now clears the field and says
+`<field> cleared`, rather than `<field> is now `.
+
 ### Size a todo, and say why something's on ice, from `mfd notes`
 
 Two new commands, printing `{"notice": …}` with `--json` as the others do: `mfd notes todo size

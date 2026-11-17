@@ -40,8 +40,6 @@ needs. Each stands alone; a plugin fix that needs a core one says so, and lands 
   conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
   force-push (with lease), which the rule against force-pushing from a button forbids unless
   that's changed.
-- **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
-  the page), status and where (not shown at all), `link`, and `remove`.
 - **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
   and remove them on the PR's items.
 

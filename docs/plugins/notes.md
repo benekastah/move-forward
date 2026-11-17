@@ -22,6 +22,10 @@ names are related through it.
   off today stays listed, ticked and dimmed, to untick, as focus mode keeps it, but isn't a step
   in focus mode nor counted; an entry with nothing left but those goes last, and isn't a
   close-out.
+  Each entry says its status and where it lives, and offers what `mfd notes` can do to it: Set
+  its status, where it lives or what blocks it (by a drop-down), Unblock it when it's blocked,
+  Link entry to a PR or ticket, and Remove entry, asking first; focus mode puts them on each of
+  its todos.
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
   with its importance and Put on ice. While the notes are empty, it says how
   to start them.
@@ -69,6 +73,9 @@ are done it's badged as probably done, which brings it back if it was snoozed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/notes/entry_set` | `entry`, `field` (or `choice`: `status`, `where` or `blocked-on`), `text` (or `input`; empty clears it) | Sets the entry's status, where it lives, or what it's blocked on, as `mfd notes set` does. |
+| `/actions/notes/entry_link` | `entry`, `input` (Jira key or PR URL) | Says the entry is about the PR or ticket, as `mfd notes link` does. |
+| `/actions/notes/entry_remove` | `entry` | Forgets the entry with its todos, as `mfd notes remove` does; nothing is recorded as done. |
 | `/actions/notes/todo_new` | `input` (the todo; a leading `[quick]` or `[big]` sizes it), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`; a leading `[quick]` or `[big]` sizes it), optional `size` (or `choice`: `quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_size` | `todo`, `size` (`quick` or `big`) | Says how big an open todo is. |
@@ -92,7 +99,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
 | `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry. A ticket key in the title makes it about that ticket (with `[jira]`). |
 | `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
-| `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on. |
+| `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on; empty text clears it. |
 | `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs `[jira]`; one in a project jira hasn't seen yet is looked up in Jira, and that project's keys count from then on. |
 | `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo (a leading `[quick]` or `[big]` in it sizes it, unless `--size` does); PR URLs in the text are linked. Prints its id. |
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |

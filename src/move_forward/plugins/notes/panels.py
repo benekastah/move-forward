@@ -122,6 +122,48 @@ def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> 
     )
 
 
+ENTRY_FIELD_CHOICES = {"status": "status", "where": "where", "blocked on": "blocked-on"}
+"""What an entry's Set field sets, by what its drop-down says (`actions.entry_set`)."""
+
+
+def entry_actions(entry: Entry, blocked: bool) -> list[Action]:
+    """What `mfd notes` can do to an entry, on its item: Set its status, where it lives or what
+    blocks it, Unblock it (when `blocked`), Link it to a PR or ticket, and Remove it, asking
+    first."""
+    fields = {"entry": entry.title}
+    count = len(entry.open_todos)
+    todos = f"{count} open todo{'' if count == 1 else 's'}"
+    return [
+        Action(
+            name="notes/entry_set",
+            label="Set",
+            fields=fields,
+            input="Status, where it lives, or what blocks it",
+            choices=ENTRY_FIELD_CHOICES,
+        ),
+        *(
+            [
+                Action(
+                    name="notes/entry_set",
+                    label="Unblock",
+                    fields={**fields, "field": "blocked-on", "text": ""},
+                )
+            ]
+            if blocked
+            else []
+        ),
+        Action(
+            name="notes/entry_link", label="Link entry", fields=fields, input="Jira key or PR URL"
+        ),
+        Action(
+            name="notes/entry_remove",
+            label="Remove entry",
+            fields=fields,
+            confirm=f"Remove {entry.title} with its {todos}? Nothing is recorded as done.",
+        ),
+    ]
+
+
 def entry_for(
     entries: list[Entry], url: str | None, tickets: list[str], graph: Graph
 ) -> str | None:
@@ -462,6 +504,8 @@ class Builder:
             parts += done
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
+            said = [f"status: {entry.status}"] if entry.status else []
+            said += [f"where: {entry.where}"] if entry.where else []
             items.append(
                 Item(
                     title=entry.title,
@@ -469,11 +513,16 @@ class Builder:
                     subtitle=", ".join(keys),
                     badges=badges,
                     # Several todos are listed as its parts.
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
-                    if lone and ordered
-                    else [f"done: {lone.title}"]
-                    if lone
-                    else [],
+                    details=[
+                        *said,
+                        *(
+                            [f"[{t.size or '?'}] {t.text}" for t in ordered]
+                            if lone and ordered
+                            else [f"done: {lone.title}"]
+                            if lone
+                            else []
+                        ),
+                    ],
                     links=lone.links if lone else links,
                     rank=(0 if blocked else 100)
                     + (50 if close_out else 0)
@@ -483,6 +532,7 @@ class Builder:
                     actions=[
                         *(lone.actions if lone else []),
                         *([add_todo_action(entry.title)] if not lone or lone.done else []),
+                        *entry_actions(entry, blocked),
                     ],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals, and is a candidate for Act now.

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from move_forward.api import (
     ActionError,
+    ActionHandler,
     ActionResult,
     CliHandler,
     Context,
@@ -131,37 +132,24 @@ def cmd_add_entry(req: InputRequest[NotesConfig]) -> Result:
     return Result(f"added entry {entry_id}", {"notice": f"added {title}", "id": entry_id})
 
 
+def _on_entry(req: InputRequest[NotesConfig], action: ActionHandler, **fields: str) -> Result:
+    """Run an entry's button, `action`, on the entry `args.entry` names, with `fields`."""
+    ctx, graph = req.ctx, req.graph
+    entry = find_entry(_entries(ctx), req.args.entry, graph)
+    form = Form({"entry": entry.title, **fields})
+    return Result(_notice(action(InputRequest(ctx, graph, form=form))))
+
+
 def cmd_remove(req: InputRequest[NotesConfig]) -> Result:
-    ctx, graph, args = req.ctx, req.graph, req.args
-    notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry, graph)
-    notes.delete_entry(entry.id)
-    return Result(f"removed {entry.title}")
+    return _on_entry(req, actions.entry_remove)
 
 
 def cmd_set(req: InputRequest[NotesConfig]) -> Result:
-    ctx, graph, args = req.ctx, req.graph, req.args
-    notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry, graph)
-    if args.field == "status":
-        notes.set_status(entry.id, args.text)
-    elif args.field == "where":
-        notes.set_where(entry.id, args.text)
-    else:
-        notes.set_blocked_on(entry.id, args.text)
-    notes.touch(entry.id, ctx.today)
-    return Result(f"{entry.title}: {args.field} is now {args.text}")
+    return _on_entry(req, actions.entry_set, field=req.args.field, text=req.args.text)
 
 
 def cmd_link(req: InputRequest[NotesConfig]) -> Result:
-    ctx, graph, args = req.ctx, req.graph, req.args
-    notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry, graph)
-    link = actions.link_for(graph, args.ref)
-    if not notes.link_entry(entry.id, link):
-        raise ValueError(f"{entry.title} is already about {args.ref}")
-    notes.touch(entry.id, ctx.today)
-    return Result(f"{entry.title}: linked {args.ref}")
+    return _on_entry(req, actions.entry_link, input=req.args.ref)
 
 
 def cmd_todo_add(req: InputRequest[NotesConfig]) -> Result:
@@ -306,8 +294,8 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     add("remove", "remove an entry with its todos, for finished work").add_argument("entry")
     set_parser = add("set", "set an entry's status, where it lives, or what it's blocked on")
     set_parser.add_argument("entry")
-    set_parser.add_argument("field", choices=["status", "where", "blocked-on"])
-    set_parser.add_argument("text")
+    set_parser.add_argument("field", choices=actions.ENTRY_FIELDS)
+    set_parser.add_argument("text", help="empty clears it")
     link = add("link", "say an entry is about a PR or ticket")
     link.add_argument("entry")
     link.add_argument("ref", help="a PR URL or ticket key")

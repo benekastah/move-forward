@@ -161,6 +161,58 @@ def thaw(req: InputRequest[NotesConfig]) -> str:
     return f"thawed {found.title}"
 
 
+# Entries
+
+ENTRY_FIELDS = ("status", "where", "blocked-on")
+"""What `entry_set` sets of an entry, as `mfd notes set` names them."""
+
+
+def _entry(notes: NotesRepository, req: InputRequest[NotesConfig]) -> Entry:
+    """The entry the `entry` field names by title."""
+    title = req.field("entry")
+    found = next((e for e in notes.entries() if e.title == title), None)
+    if found is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    return found
+
+
+def entry_set(req: InputRequest[NotesConfig]) -> str:
+    """Set an entry's `status`, `where` (where the work lives) or `blocked-on`, named by
+    `field` (or `choice`, from its drop-down), to `input` (or `text`); empty clears it."""
+    ctx, fields = req.ctx, req.form.fields
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, req)
+    field = fields.get("field") or fields.get("choice") or ""
+    if field not in ENTRY_FIELDS:
+        raise ActionError(f"an entry's status, where or blocked-on is set, not {field!r}")
+    text = (fields.get("input") or fields.get("text") or "").strip() or None
+    {"status": notes.set_status, "where": notes.set_where, "blocked-on": notes.set_blocked_on}[
+        field
+    ](entry.id, text)
+    notes.touch(entry.id, ctx.today)
+    return f"{entry.title}: {field} is now {text}" if text else f"{entry.title}: {field} cleared"
+
+
+def entry_link(req: InputRequest[NotesConfig]) -> str:
+    """Say an entry is about a PR or ticket: `input`, a PR URL or ticket key."""
+    ctx, graph = req.ctx, req.graph
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, req)
+    value = req.field("input").strip()
+    if not notes.link_entry(entry.id, link_for(graph, value)):
+        raise ActionError(f"{entry.title} is already about {value}")
+    notes.touch(entry.id, ctx.today)
+    return f"{entry.title}: linked {value}"
+
+
+def entry_remove(req: InputRequest[NotesConfig]) -> str:
+    """Forget an entry with its todos, for finished work: nothing is recorded as done."""
+    notes = NotesRepository(req.ctx.db)
+    entry = _entry(notes, req)
+    notes.delete_entry(entry.id)
+    return f"removed {entry.title}"
+
+
 # Todos
 
 
@@ -326,6 +378,9 @@ def todo_new(req: InputRequest[NotesConfig]) -> str:
 
 
 ACTIONS: dict[str, ActionHandler] = {
+    "entry_set": entry_set,
+    "entry_link": entry_link,
+    "entry_remove": entry_remove,
     "todo_new": todo_new,
     "todo_done": todo_done,
     "todo_undone": todo_undone,

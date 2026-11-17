@@ -123,6 +123,12 @@ def test_set_link_and_conditions(run: Run, config: Path) -> None:
     assert entry.updated_on == datetime.now(UTC).date()
 
 
+def test_set_with_nothing_clears_a_field(run: Run, config: Path) -> None:
+    run("add-entry", "APP-1 Fix", "--status", "in review")
+    assert run("set", "APP-1", "status", "")[1] == "APP-1 Fix: status cleared\n"
+    assert NotesRepository(_db(config)).entries()[0].status is None
+
+
 def test_remove_forgets_an_entry_with_its_todos(run: Run, config: Path) -> None:
     run("add-entry", "APP-1 Fix")
     run("add-entry", "APP-2 Keep")
