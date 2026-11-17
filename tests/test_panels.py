@@ -883,21 +883,30 @@ def test_act_now_takes_only_panel_items_so_one_snoozed_there_waits_in_its_panel(
     assert [a.label for a in waiting.actions if a.group == "Act now"] == ["Unsnooze"]
 
 
-def test_items_of_two_plugins_with_one_task_about_one_subject_are_set_aside_as_one() -> None:
-    def waiting(title: str) -> Item:
-        subject = Ref(kind="pull_request", id="pr")
-        return Item(title=title, subjects=[subject], signals=Signals(task="wait"), fingerprint="a1")
+def test_items_sharing_a_task_and_subject_agree_on_the_nominated_fingerprint() -> None:
+    """Two plugins' items with one task about one subject but different fingerprints: the one
+    Act now takes gives the fingerprint, so a snooze from either sets aside both, there and in
+    Act now."""
+    subject = Ref(kind="pull_request", id="pr")
 
-    def plugin(key: str) -> panels.PluginPanels:
-        return panels.PluginPanels(
-            key, key, [Panel(key="p", title="P", description="", items=[waiting(key)])]
+    def plugin(key: str, fingerprint: str, nominated: bool) -> panels.PluginPanels:
+        item = Item(
+            title=key, subjects=[subject], signals=Signals(task="wait"), fingerprint=fingerprint
         )
+        stage = Panel(key="p", title="P", description="", items=[item], act_now=nominated)
+        return panels.PluginPanels(key, key, [stage])
 
-    said = act_now.Feedback(action="snooze", fingerprint="a1")
-    board = panels.build(
-        NOW, [plugin("x"), plugin("y")], {}, feedback={("pull_request", "pr", "wait"): said}
+    plugins = [plugin("x", "a1", True), plugin("y", "b2", False)]
+    assert panels.fingerprints(plugins) == {("pull_request", "pr", "wait"): "a1"}
+    snooze = next(
+        a
+        for a in panels.build(NOW, plugins, {}).panel("y.p").items[0].actions
+        if a.label == "Snooze"
     )
+    said = act_now.Feedback(action="snooze", fingerprint=snooze.fields["fingerprint"])
+    board = panels.build(NOW, plugins, {}, feedback={("pull_request", "pr", "wait"): said})
     assert [board.panel(key).items[0].set_aside for key in ("x.p", "y.p")] == [True, True]
+    assert board.act_now() == []
 
 
 def test_an_item_without_a_task_has_no_snooze() -> None:

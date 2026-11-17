@@ -360,15 +360,34 @@ def _as_nomination(plugin: str, panel: Panel, item: Item) -> act_now.Nomination:
 
 
 def fingerprints(plugins: list[PluginPanels]) -> dict[act_now.FeedbackKey, str]:
-    """The fingerprint of every item the plugins show, by its key, as the page compares a
-    snooze with it; of items sharing a key, the last one's, so all of them agree."""
-    return {
+    """The one fingerprint of every key the plugins' items have, as Act now and every panel
+    compare a snooze with it: of items sharing a key (one task about one subject, from
+    several plugins), the last one Act now takes, else the last one shown."""
+    found = {
         n.key: n.fingerprint
         for plugin in plugins
         for panel in plugin.panels
         for item in panel.items
         if (n := _as_nomination(plugin.key, panel, item)).key is not None
     }
+    found.update(
+        (n.key, n.fingerprint)
+        for plugin in plugins
+        for item in plugin.nominations
+        if (n := act_now.Nomination(plugin.key, item)).key is not None
+    )
+    return found
+
+
+def _agreeing(
+    nomination: act_now.Nomination, known: dict[act_now.FeedbackKey, str]
+) -> act_now.Nomination:
+    """The nomination with its key's one fingerprint (`fingerprints`), as its panel item has."""
+    fingerprint = known.get(nomination.key) if nomination.key else None
+    if fingerprint is None or fingerprint == nomination.fingerprint:
+        return nomination
+    item = nomination.item.model_copy(update={"fingerprint": fingerprint})
+    return act_now.Nomination(nomination.plugin, item)
 
 
 def _with_set_aside(
@@ -586,8 +605,9 @@ def build(
         )
         for plugin in plugins
     ]
+    known = fingerprints(plugins)
     nominations = [
-        act_now.Nomination(plugin.key, item)
+        _agreeing(act_now.Nomination(plugin.key, item), known)
         for plugin in plugins
         for item in plugin.nominations
         if not hidden(item) and _tasked(plugin.key, item)
@@ -597,7 +617,6 @@ def build(
     def shows(item: Item) -> bool:
         return not wanted or carries(item, wanted, tags_of)
 
-    known = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     # Its listed parts get the importance choices they have in their panels, as the same
