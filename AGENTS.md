@@ -14,6 +14,13 @@ Development section says how to set up a clone and run the checks.
 - **One kind of change per PR**: a refactor, a feature and a fix are separate PRs, each small
   enough to review whole. When one needs another first, that one lands first, on its own,
   with its own tests.
+- **Except in rapid development**: while `PROJECT_AGENTS.md` has the **In rapid development**
+  rule, waiting on CI costs more than a longer review, so bundle related changes (a fix, the
+  refactor it needs, a small feature) into one PR worth a CI run. Past about 800 changed
+  lines, split it into PRs that each get their CI in turn.
+- **One commit per change**, in every project, so a reviewer can go commit by commit: each
+  with its own tests and docs, and passing the checks on its own. Fixes from a review can be
+  commits of their own.
 - **Every change to behavior comes with tests**, in the same commit, that would fail without
   it, and changes the tests that cover the old behavior. Tests say what's correct, not what
   the code happens to do: don't add a test that pins down a bug.
@@ -28,6 +35,9 @@ Development section says how to set up a clone and run the checks.
 - **Keep `docs/roadmap.md` (what's left to build) and `docs/issues.md` (what's wrong with
   what's built) current**: a change removes what it finishes or fixes, and adds what it
   leaves wrong.
+- **No GitHub issues without the maintainer's approval**: don't open or comment on one unless
+  the maintainer says so (PRs and their reviews are fine). What's wrong goes in
+  `docs/issues.md`.
 - **Commit messages say why**, not just what.
 - **No new runtime dependency** without a good reason: prefer the standard library.
 
@@ -145,8 +155,8 @@ of a PR's description, a review, and each answer to a finding.
     state of the code or an idea that was rejected;
   - dead code; readability; terseness;
   - fully qualified imports rather than relative ones;
-  - size (a large PR should be split, where it can be), risk, importance (does it move the
-    needle?) and cost.
+  - size (a large PR should be split, where it can be; in rapid development, past about 800
+    lines), risk, importance (does it move the needle?) and cost.
 
   It checks each finding against the code, and gives it a severity (bug, should-fix, minor),
   a failure scenario and a fix.
@@ -171,4 +181,5 @@ of a PR's description, a review, and each answer to a finding.
 
 After a run of merges, several fresh agents review the whole code at once, each one part (a
 module, the tests, the tooling and CI, the docs against the code) at one commit of `main`,
-posting their findings on one issue; the fixes are PRs as above.
+each reporting its findings to the agent that started them, which records what isn't fixed
+yet in `docs/issues.md`; the fixes are PRs as above.

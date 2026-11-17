@@ -52,22 +52,15 @@ to expect, and each reads all of its part.
     python-template owns);
   - **the docs** (`docs`): the README, `docs/`, PROJECT_AGENTS.md, CHANGELOG and docstrings against
     what the code does, and dead or stale text.
-- **The author** (the agent running the review) opens the issue first, saying who wrote it (an
-  AI agent), and starts the reviewers, giving each only the issue's number, the commit's sha,
-  its part and its prefix. Files go in a temporary directory, never the repo:
-
-  ```sh
-  gh issue create --title "Full review of <short sha>" --body-file "$TMP/issue.md"
-  gh issue comment N --body-file "$TMP/<prefix>.md"   # each reviewer, markdown
-  ```
+- **The author** (the agent running the review) starts the reviewers, giving each only the
+  commit's sha, its part and its prefix. No GitHub issue is opened without the maintainer's
+  approval: each reviewer reports to the author.
 - **Each reviewer** reads the code at the commit (`git show <sha>:<path>`, a detached worktree),
   changes nothing, and checks each finding against the code, running it where it can, before
   reporting it, with its severity (bug, should-fix, minor), file and line, a failure scenario
-  and a fix, as a PR's reviewer does. It posts one comment, saying who wrote it (an AI agent)
-  and which part it reviewed, its findings numbered with its prefix (`core 3`, `mail 2`); one
-  over GitHub's 65,536 characters goes in several comments, numbered on.
+  and a fix, as a PR's reviewer does. It reports to the author, saying which part it reviewed,
+  its findings numbered with its prefix (`core 3`, `mail 2`).
 - **The author** then fixes what it decides to, in PRs as usual: one kind of change each,
-  reviewed as any PR, naming the findings they fix. It answers every finding in one comment on
-  the issue, saying who wrote it (an AI agent), by the finding's name: fixed, with the PR; not,
-  and why; or the same as another (`same as db 2`), since parts overlap. The issue closes once
-  every finding is answered and its fixes merged.
+  reviewed as any PR, naming the findings they fix. It records each finding it doesn't fix yet
+  in `docs/issues.md`, and tells the maintainer how each was answered, by its name: fixed, with
+  the PR; not, and why; or the same as another (`same as db 2`), since parts overlap.
