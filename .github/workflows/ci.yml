@@ -191,6 +191,10 @@ jobs:
   # to CI passed when the job runs, and differ from it as written). That run reports every
   # other job as skipped too, under its own name, and a docs-only change skips the checks:
   # so CI passed is the only check a ruleset may require.
+  #
+  # In rapid development (the project's answer rapid_development), a pull request's test jobs
+  # on macOS or Windows that never got a runner don't fail it, if the Linux ones passed: it
+  # names them in a warning and in its summary.
   passed:
     name: >-
       ${{ (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main')
@@ -209,11 +213,12 @@ jobs:
       # force-cancel can, marks it cancelled rather than failed, which blocks a merge just the
       # same. If the run was cancelled before this job started, cancelled() is false here, but
       # a job's result is cancelled, so either one runs this step. A job that ran out of time,
-      # or that GitHub never found a runner for, is cancelled too, but that's a failure, which
-      # GitHub says only in the job's annotations: then this job fails. (Matching those two
-      # rather than the supersede message: a job cancelled before it started may have none.)
-      # A run in which a job failed isn't cancelled here either: it ends red, since the commit
-      # really failed. If the force-cancel hasn't stopped this job within a minute, it fails.
+      # or that GitHub never found a runner for, is cancelled too, but that's no superseded run,
+      # which GitHub says only in the job's annotations: then this step leaves the verdict to
+      # the next. (Matching those two rather than the supersede message: a job cancelled before
+      # it started may have none.) A run in which a job failed isn't cancelled here either: it
+      # ends red, since the commit really failed. If the force-cancel hasn't stopped this job
+      # within a minute, it fails.
       #
       # A fork's pull request has a read-only token, which can't force-cancel. There, this job
       # passes if the pull request merged into the default branch (cancel.yml cancelled this
@@ -242,13 +247,14 @@ jobs:
               --jq '.[].message')
             if grep -q -e 'exceeded the maximum execution time' -e 'was not acquired by Runner' \
               <<<"$messages"; then
-              echo "A job ran out of time, or never got a runner."
-              exit 1
+              echo "A job ran out of time, or never got a runner: not a cancelled run."
+              exit 0
             fi
           done
           if [ "$FORK" = true ]; then
             test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
               --jq '.merged and .base.ref == .base.repo.default_branch')" = true
+            echo "merged=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           gh api --method POST "$run/force-cancel"
@@ -257,10 +263,9 @@ jobs:
       # project.yml's result is skipped when each of its jobs skipped itself (on a docs-only
       # change, say); once changes succeeded, nothing else skips it. always(): without it, this
       # step doesn't run in a cancelled run, so one in which a job failed would end green.
-      # Skipped only when the step above passed, which only a fork's pull request merged into
-      # the default branch does.
+      # Skipped only for a fork's pull request merged into the default branch (above).
       - name: Fail unless every check passed
-        if: always() && steps.cancel.outcome != 'success'
+        if: always() && steps.cancel.outputs.merged != 'true'
         env:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}
@@ -268,8 +273,52 @@ jobs:
           TESTS: ${{ needs.tests.result }}
           COVERAGE: ${{ needs.coverage.result }}
           PROJECT: ${{ needs.project.result }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
         run: |
           [ "$CHANGES" = success ] || exit 1
           [ "$PROJECT" = success ] || [ "$PROJECT" = skipped ] || exit 1
           [ "$CODE" = false ] && exit 0
-          [ "$STATIC" = success ] && [ "$TESTS" = success ] && [ "$COVERAGE" = success ]
+          [ "$STATIC" = success ] && [ "$COVERAGE" = success ] || exit 1
+          [ "$TESTS" = success ] && exit 0
+          # In rapid development, a pull request's test job on macOS or Windows that never
+          # started is skipped rather than failed: their runners can be unavailable for long
+          # stretches (seen often on macOS), and that says nothing about the code. GitHub
+          # cancels such a job once it has waited too long, leaving no runner, no step started,
+          # and an annotation saying it was not acquired by a runner: all three must hold, so a
+          # job that ran and timed out, or one cancelled with its run, still fails. On main it
+          # still fails, so the gap shows there. Every other finished job must have passed or
+          # skipped itself, and a Linux test job must have passed, so some system ran the
+          # tests; the systems come from the tests job's `name`.
+          [ "$EVENT" = pull_request ] || exit 1
+          api=repos/$GITHUB_REPOSITORY
+          # Every job but this one, which is still running (`needs` lists all the others, so
+          # they have finished). A job ran if it got a runner or started a step.
+          jobs=$(gh api --paginate "$api/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+            --jq '.jobs[] | select(.status == "completed") | [.id, .conclusion,
+              (.runner_name // "") != "" or any(.steps[]?; .started_at), .name] | @tsv')
+          linux=false
+          skipped=()
+          while IFS=$'\t' read -r id conclusion ran name; do
+            case $conclusion/$name in
+              success/ubuntu-*) linux=true ;;
+              success/* | skipped/*) ;;
+              cancelled/macos-* | cancelled/windows-*)
+                [ "$ran" = false ] || exit 1
+                messages=$(gh api --paginate "$api/check-runs/$id/annotations" --jq '.[].message')
+                grep -q 'was not acquired by Runner' <<<"$messages" || exit 1
+                skipped+=("$name")
+                ;;
+              *) exit 1 ;;
+            esac
+          done <<<"$jobs"
+          [ "$linux" = true ] && [ "${#skipped[@]}" -gt 0 ] || exit 1
+          message="Never started, for want of a runner, so not run: $(printf '%s; ' "${skipped[@]}")"
+          echo "::warning title=Tests skipped::${message%; }"
+          {
+            echo "### Tests skipped"
+            echo
+            echo "These test jobs never started, for want of a runner, so CI passed without them:"
+            echo
+            printf -- '- %s\n' "${skipped[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
