@@ -8,7 +8,8 @@ license-files = ["LICENSE"]
 authors = [{ name = "Paul Harper", email = "benekastah@gmail.com" }]
 requires-python = ">=3.15"
 dependencies = [
-    "py-git-client @ git+https://github.com/benekastah/py-git-client@v0.0.1",
+    # v0.0.1, by its commit: a tag can be moved, and pip (dev.py without uv) doesn't read uv.lock.
+    "py-git-client @ git+https://github.com/benekastah/py-git-client@fdd2a9f2d88c6e6f52ebff99c13212d67a056811",
     "pydantic>=2.14.3",
     "watchfiles>=1.3.0",
 ]
@@ -35,8 +36,8 @@ dev = [
 requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
-# py-git-client is installed from its git tag (it isn't on PyPI), which hatchling refuses
-# unless allowed.
+# py-git-client is installed from its git repository (it isn't on PyPI), which hatchling
+# refuses unless allowed.
 [tool.hatch.metadata]
 allow-direct-references = true
 
