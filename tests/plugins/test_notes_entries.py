@@ -92,13 +92,14 @@ def test_removing_an_entry_asks_first() -> None:
 
 
 def test_an_entrys_buttons_are_in_act_now_and_on_each_todo_in_focus_mode() -> None:
-    names = {"notes/entry_set", "notes/entry_link", "notes/entry_remove"}
-    close_out = entry("APP-1 Fix", [todo("a", "quick"), todo("b", "quick")])
+    labels = {"Set", "Clear status", "Clear where", "Unblock", "Link entry", "Remove entry"}
+    said = {"Status": ["in review"], "Where": ["engineering"], "Blocked on": ["Sam"]}
+    close_out = entry("APP-1 Fix", [todo("a", "quick"), todo("b", "quick")], **said)
     config, db = stored(work_items=[close_out])
     built = refresh.build_dashboard(config, db, NOW)
     [act] = built.act_now()
-    assert names <= {a.name for a in act.actions}
+    assert labels <= {a.label for a in act.actions}
     steps = refresh.build_dashboard(config, db, NOW, surface="focus").focus_items("notes.todos")
     assert steps is not None and len(steps) == 2
     for _, step in steps:
-        assert names <= {a.name for a in step.actions}
+        assert labels <= {a.label for a in step.actions}

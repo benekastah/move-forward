@@ -160,7 +160,7 @@ def entry_actions(entry: Entry, blocked: bool) -> list[Action]:
                 name="notes/entry_set",
                 label=label,
                 fields={**fields, "field": field, "text": ""},
-                confirm=f"{label} on {entry.title}? It no longer says {field}: {text}",
+                confirm=f"{label} of {entry.title}? It will no longer say {field}: {text}",
             )
             for label, field, text in clears
         ),
