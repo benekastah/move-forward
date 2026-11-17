@@ -662,7 +662,9 @@ def _live(panel: Panel) -> int:
 
 
 def _panel(panel: Panel, spot: Spot | None = None, where: _Where = _UNFILTERED) -> str:
-    open_attr = _open(bool(panel.items))
+    # An empty panel starts collapsed, but not one with a field to fill in (notes' New todo):
+    # that's just when the field is wanted.
+    open_attr = _open(bool(panel.items) or any(a.input is not None for a in panel.actions))
     indexed = list(enumerate(panel.items))
     children = _nesting(panel.items)
 

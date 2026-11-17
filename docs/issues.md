@@ -17,8 +17,6 @@ wrong, add it.
   last push, by the head commit's date, so merging the base into a branch (Update branch, or by
   hand) clears them with nothing said. Read past merge commits: it needs their parents fetched.
   Then Update branch's confirm no longer needs to warn of it.
-- **An empty panel with a field is hidden.** A panel with no items is drawn collapsed, so a
-  panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
 - **Another org's team pings my team's channel.** slack keys a team's channel and pings by the
   slug a PR requests, but github publishes a team for each org whose PRs request one. With
   `search_scope = "everywhere"`, a PR of mine in another org requesting `web` is nudged to my

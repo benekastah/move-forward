@@ -198,7 +198,8 @@ item about several entities, the choice applies to its first subject. Once one i
 its Snooze, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
 Reset layout, in the footer, goes back to the default order.
-Only Act now starts expanded; each panel inside a group collapses too. Items
+Only Act now starts expanded; each panel inside a group collapses too, and starts open
+but when it's empty and has no field to fill in (notes' New todo). Items
 can also nest under related items, with collapsible child lists. The page
 remembers which groups, panels and child lists you opened. Each plugin's page
 lists its panels.

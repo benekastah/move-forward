@@ -645,3 +645,23 @@ def test_a_removed_plugins_last_run_is_no_source_of_the_page() -> None:
     SnapshotRepository(db).save_error("vcard", NOW, "gone")
     built = build_dashboard(config, db, NOW)
     assert "github" in built.sources and "vcard" not in built.sources
+
+
+def test_an_empty_panel_is_open_when_it_has_a_field_to_fill_in() -> None:
+    field = page.Action(name="notes/todo_add", label="Add", fields={}, input="New todo")
+    button = page.Action(name="a", label="Clean", fields={})
+
+    def drawn(*actions: page.Action) -> str:
+        panel = page.Panel(key="p", title="P", description="", items=[], actions=list(actions))
+        dashboard = panels.Dashboard(
+            generated_at=NOW,
+            identities=[Identity(tool="GitHub", login=ME)],
+            panels=[panel],
+            groups=[page.Group(key="g", title="G", panel_keys=["p"], open=True)],
+            sources={},
+        )
+        html = render.dashboard_page(dashboard, refreshing=frozenset())
+        return re.findall(r"<details class='panel[^>]*>", html)[0]
+
+    assert drawn(button, field).endswith(" open>")
+    assert not drawn(button).endswith(" open>")
