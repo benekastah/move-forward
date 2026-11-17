@@ -43,9 +43,11 @@ from move_forward.refresh import build_dashboard, run_action, stored_graph
 from move_forward.registry import enabled
 from move_forward.repositories import FeedbackRepository
 
+WEB = "github.com/acme/web"
+
 
 def _teams() -> dict[str, TeamChannel]:
-    return {"web": TeamChannel(slug="web", channel_name="#team-web", channel_id="C1")}
+    return {WEB: TeamChannel(team=WEB, channel_name="#team-web", channel_id="C1")}
 
 
 def _users() -> dict[str, Reviewer]:
@@ -65,9 +67,9 @@ def test_ping_targets_links_and_messages() -> None:
     by_name = {t.name: t for t in ping.targets}
     assert by_name["alice"].slack_link == "https://acme.slack.com/team/U1"
     assert by_name["bob"].slack_link is None and by_name["bob"].destination == "bob (DM)"
-    assert by_name["web"].slack_link == "https://acme.slack.com/archives/C1"
-    assert by_name["web"].destination == "#team-web (C1)"
-    assert by_name["unknown"].destination == "team unknown"
+    assert by_name[WEB].slack_link == "https://acme.slack.com/archives/C1"
+    assert by_name[WEB].destination == "#team-web (C1)"
+    assert by_name["github.com/acme/unknown"].destination == "team acme/unknown"
     assert by_name["alice"].message == DEFAULT_PING_FIRST.format(url=candidate.url)
 
 
@@ -89,7 +91,7 @@ def test_follow_up_after_a_recorded_ping_and_skill_nudges_count_for_all_targets(
     targets = {t.name: t for t in found[candidate.url].targets}
     assert targets["alice"].ping_kind == "follow-up"
     assert targets["alice"].message == DEFAULT_PING_FOLLOW_UP
-    assert targets["web"].ping_kind == "first"
+    assert targets[WEB].ping_kind == "first"
     assert found[other.url].targets[0].ping_kind == "follow-up"
 
 
@@ -183,8 +185,46 @@ def test_a_team_with_no_channel_set_is_named_without_one() -> None:
     mine = pr(1, requested_teams=["web", "core"])
     found = pings(github=snapshot(mine=[mine]), teams=_teams())  # web has a channel; core doesn't
     destinations = {t.name: t.destination for t in found[mine.url].targets}
-    assert destinations["core"] == "team core"
-    assert destinations["web"].startswith("#team-web (C1)")
+    assert destinations["github.com/acme/core"] == "team acme/core"
+    assert destinations[WEB].startswith("#team-web (C1)")
+
+
+def test_another_orgs_team_of_the_same_slug_isnt_pinged_in_my_teams_channel() -> None:
+    """With search_scope = "everywhere", a PR of mine in another org can request its own
+    `web`: it's another team, keyed by its id, with no channel, and its own pings."""
+    mine = pr(1, requested_teams=["web"])
+    url = "https://github.com/other/gears/pull/2"
+    theirs = pr(2, repo="other/gears", url=url, requested_teams=["web"])
+    sent = Ping(pr_url=url, target=f"team:{WEB}", kind="first", sent_at=NOW)
+    found = pings(github=snapshot(mine=[mine, theirs]), teams=_teams(), pings=[sent])
+    [web] = found[mine.url].targets
+    assert (web.name, web.destination) == (WEB, "#team-web (C1)")
+    [other] = found[url].targets
+    assert (other.name, other.destination) == ("github.com/other/web", "team other/web")
+    assert other.slack_link is None and other.ping_kind == "first"
+
+
+def test_a_team_is_one_team_whatever_case_names_it() -> None:
+    """GitHub ignores case in an org's and a team's names, and in logins: a channel set for
+    `Acme/Web` is `acme/web`'s, and so is a ping sent to it; a ping to `BOB` is `Bob`'s."""
+    mine = pr(1, repo="Acme/widgets", requested_users=["Bob"], requested_teams=["web"])
+    shouty = TeamChannel(team="github.com/Acme/Web", channel_name="#team-web", channel_id="C1")
+    sent = [
+        Ping(pr_url=mine.url, target="team:github.com/ACME/web", kind="first", sent_at=NOW),
+        Ping(pr_url=mine.url, target="user:BOB", kind="first", sent_at=NOW),  # logins too
+    ]
+    found = pings(github=snapshot(mine=[mine]), teams={"x": shouty}, pings=sent)
+    bob, web = found[mine.url].targets
+    assert (web.destination, web.ping_kind) == ("#team-web (C1)", "follow-up")
+    assert (bob.name, bob.ping_kind) == ("Bob", "follow-up")
+    assert SlackConfig(teams={"github.com/Acme/Web": "#web"}).teams == {WEB: "#web"}
+
+
+def test_slack_teams_are_keyed_by_the_teams_id() -> None:
+    assert SlackConfig(teams={WEB: "#web"}).teams == {WEB: "#web"}
+    # slack doesn't know github's host here: the id's form, with github.com as an example
+    with pytest.raises(ValueError, match=r"keyed by a team's id.*: \"<host>/<org>/web\", e\.g\."):
+        SlackConfig.model_validate({"teams": {"web": "#web"}})
 
 
 def test_a_config_still_setting_team_channel_is_told_its_gone() -> None:
@@ -328,12 +368,12 @@ def test_a_nudge_without_a_target_counts_for_every_target_whatever_came_before_i
 
 
 def test_a_teams_channel_set_in_the_config_isnt_the_maps_old_channel() -> None:
-    known = {"web": TeamChannel(slug="web", channel_name="#web-old", channel_id="C1")}
-    config = SlackConfig(teams={"web": "#web-new"})
+    known = {WEB: TeamChannel(team=WEB, channel_name="#web-old", channel_id="C1")}
+    config = SlackConfig(teams={WEB: "#web-new"})
     [web] = slack_plugin._team_channels(config, known).values()  # pyright: ignore[reportPrivateUsage]
     assert (web.channel_name, web.channel_id) == ("#web-new", None)
-    same = SlackConfig(teams={"web": "#web-old"})
-    assert slack_plugin._team_channels(same, known)["web"].channel_id == "C1"  # pyright: ignore[reportPrivateUsage]
+    same = SlackConfig(teams={WEB: "#web-old"})
+    assert slack_plugin._team_channels(same, known)[WEB].channel_id == "C1"  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize("message", ["Ping {pr}", "Look {", "{0}"])

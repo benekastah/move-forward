@@ -114,7 +114,8 @@ on others (Ready for review, Held by merge conditions, In the merge queue), then
 - **Replies for me**: open non-draft PRs of others that mention me (updated within
   `history_days`) without asking for a review, with Act now's "Reply".
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
-  push I haven't answered. This and the next diagnostic panels remain below the three
+  push I haven't answered (merging the base in, with Update branch or by hand, isn't such a
+  push: it answers nothing). This and the next diagnostic panels remain below the three
   review stages, so their detailed links and Act now nominations remain available.
 - **CI failures**: failing checks and merge-queue evictions in the last
   `merge_queue_eviction_days` (2), unless the PR is back in the queue, was queued again, or

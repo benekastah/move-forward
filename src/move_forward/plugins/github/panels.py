@@ -853,8 +853,7 @@ class Builder:
             name=UPDATE_BRANCH,
             label="Update branch",
             fields={"pr": pr.url},
-            confirm=f"Merge {pr.base} into {pr.head} on GitHub? Pull it here afterwards. Comments"
-            " from before it stop counting as unanswered, as with any push.",
+            confirm=f"Merge {pr.base} into {pr.head} on GitHub? Pull it here afterwards.",
         )
         return item.model_copy(update={"actions": [*item.actions, update]})
 

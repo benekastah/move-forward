@@ -119,6 +119,7 @@ class PrRepository:
                         pr.delete_branch_on_merge,
                         pr.auto_merge,
                         pr.auto_merge_method,
+                        _iso(pr.last_answer_at),
                     )
                 )
                 rows["github_pr_labels"] += [(*key, i, v) for i, v in enumerate(pr.labels)]
@@ -288,6 +289,7 @@ class PrRepository:
                 for r in found["github_pr_checks"][key]
             ],
             last_commit_at=_when(row["last_commit_at"]),
+            last_answer_at=_when(row["last_answer_at"]),
             events=[
                 TimelineEvent.model_validate(
                     {

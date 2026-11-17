@@ -19,7 +19,7 @@ from move_forward.api import (
 )
 from move_forward.api.kinds import PERSON, TEAM
 from move_forward.plugins.slack import client
-from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.config import TEAM_ID_RE, SlackConfig, team_id
 from move_forward.plugins.slack.pings import my_open_prs
 from move_forward.plugins.slack.repository import SlackRepository
 
@@ -50,15 +50,22 @@ class _PersonView(Model):
 
 
 class _TeamView(Model):
-    """What slack reads of a `team`: its `handle`, which PRs name it by, and whether it's mine."""
+    """What slack reads of a `team`: its `id`, which PRs name it by, and whether it's mine."""
 
-    handle: str
+    id: str
     mine: bool = False
 
 
 def my_teams(graph: Graph) -> set[str]:
-    """The handles of the teams I'm on or review for, as the plugins publishing teams say."""
-    return {team.handle for team in graph.view(TEAM, _TeamView) if team.mine}
+    """The ids of the teams I'm on or review for, as the plugins publishing teams say,
+    casefolded (see `config.team_id`)."""
+    return {team.id.casefold() for team in graph.view(TEAM, _TeamView) if team.mine}
+
+
+def teams_host(graph: Graph) -> str | None:
+    """The host the graph's teams are on, if they're all on one: for an example of an id."""
+    hosts = {team.id.partition("/")[0] for team in graph.view(TEAM, _TeamView)}
+    return hosts.pop() if len(hosts) == 1 else None
 
 
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
@@ -79,10 +86,15 @@ def set_contact(slack: SlackRepository, login: str, slack_id: str) -> str:
     return f"{login}'s pings go to {slack_id.strip() or 'no Slack link'}"
 
 
-def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: str) -> str:
-    team = team.strip()
-    if not team:
-        raise ActionError("a team is needed")
+def set_team_channel(
+    slack: SlackRepository, team: str, name: str, channel_id: str, host: str | None = None
+) -> str:
+    """Set where a team's pings go, by hand. A team that isn't named by its id is refused,
+    with an example on `host` (see `teams_host`)."""
+    try:
+        team = team_id(team, host)
+    except ValueError as e:
+        raise ActionError(str(e)) from None
     channel_name = _optional(name, CHANNEL_NAME_RE, "channel name, e.g. #team-web")
     channel = _optional(channel_id, CHANNEL_ID_RE, "channel id, e.g. C0123456")
     if channel_name is None and channel is None:
@@ -120,16 +132,17 @@ def set_team_channel_action(req: InputRequest[SlackConfig]) -> str:
         req.field("team"),
         fields.get("channel_name", ""),
         fields.get("channel_id", ""),
+        teams_host(req.graph),
     )
 
 
 def _requested(graph: Graph) -> tuple[set[str], set[str]]:
-    """The people and teams my open PRs ask to review, by login and team."""
+    """The people and teams my open PRs ask to review, by login and team id (casefolded)."""
     users: set[str] = set()
     teams: set[str] = set()
     for pr in my_open_prs(graph):
         users.update(pr.requested_users)
-        teams.update(pr.requested_teams)
+        teams.update(team.casefold() for team in pr.requested_teams)
     return users, teams
 
 
@@ -194,18 +207,30 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     for team in sorted(teams | my_teams(graph) | set(channels) | set(ctx.config.teams)):
         channel = channels.get(team)
         configured = ctx.config.teams.get(team)
+        # A channel kept by slug alone matches no team: it's only there to clear.
+        by_slug = not TEAM_ID_RE.match(team)
         note = f"{how(f'team:{team}')}" + (
             f"; [slack.teams] says {configured}" if configured else ""
         )
+        if by_slug:
+            note = "kept by slug: set it again by the team's id, then clear this"
         team_rows += (
             f"<tr><td>{e(team)}</td><td>{e(note)}</td><td>"
-            + _form(
-                "set_team_channel",
-                {"team": team},
-                [
-                    ("channel_name", channel.channel_name or "" if channel else "", "#team-web"),
-                    ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
-                ],
+            + (
+                ""
+                if by_slug
+                else _form(
+                    "set_team_channel",
+                    {"team": team},
+                    [
+                        (
+                            "channel_name",
+                            channel.channel_name or "" if channel else "",
+                            "#team-web",
+                        ),
+                        ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
+                    ],
+                )
             )
             + (
                 html.buttons(

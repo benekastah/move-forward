@@ -251,6 +251,15 @@ def last_push_at(pr: PullRequest) -> datetime | None:
     return max(times, default=None)
 
 
+def last_answer_at(pr: PullRequest) -> datetime | None:
+    """When the latest push that could answer feedback was: as `last_push_at`, but a merge
+    (the base merged in) answers nothing, so the latest commit that isn't one counts."""
+    times = [e.at for e in pr.events if e.type == "HeadRefForcePushedEvent"]
+    if pr.last_answer_at:
+        times.append(pr.last_answer_at)
+    return max(times, default=None)
+
+
 def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
     """Review and comment events by others after my last push that I haven't followed up on.
 
@@ -262,7 +271,7 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
     A review whose author has an unresolved thread on the PR isn't listed: its inline
     comments are the feedback, and show as those threads. (A "changes requested" decision is
     its own line in Feedback to address.)"""
-    since = last_push_at(pr)
+    since = last_answer_at(pr)
     threaded = {t.author for t in unresolved_threads(pr, ignored)}
     pending: list[str] = []
     for event in sorted(pr.events, key=lambda e: e.at):

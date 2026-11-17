@@ -1,9 +1,39 @@
 """The slack plugin's tables, and the queries over them."""
 
+import sqlite3
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from move_forward.api import BY_HAND, Database, LookupCache, Migration
 from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
+
+
+def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
+    """A ping's team was its slug, which another org's team may share: name it by its id,
+    `<host>/<owner>/<slug>`, from its PR's URL (`https://<host>/<owner>/<repo>/pull/<n>`), as
+    the team is in the PR's repo's owner, casefolded, as GitHub ignores case in orgs' and
+    teams' names. A team's channel was kept by its slug alone, which
+    says no org: it's left as it was, to be set again by the team's id, but lower-cased, as
+    slack names a team now (it was kept as typed: `Platform`), so it can be cleared. Of two
+    that differ only in case, the one already lower-cased is kept."""
+    rows = conn.execute("SELECT id, pr_url, target FROM slack_pings WHERE target LIKE 'team:%'")
+    for row_id, pr_url, target in rows.fetchall():
+        url = urlsplit(str(pr_url))
+        owner = url.path.strip("/").split("/")[0]
+        slug = str(target).removeprefix("team:")
+        if url.netloc and owner and "/" not in slug:
+            conn.execute(
+                "UPDATE slack_pings SET target = ? WHERE id = ?",
+                (f"team:{url.netloc}/{owner}/{slug}".casefold(), row_id),
+            )
+    # Slugs and ids are ASCII, so SQLite's lower() is casefold() for them. Where a team is
+    # kept already lower-cased, its other spellings go; of the rest, one of each is kept.
+    conn.execute(
+        "DELETE FROM slack_team_channels WHERE team != lower(team) AND lower(team) IN"
+        " (SELECT team FROM slack_team_channels WHERE team = lower(team))"
+    )
+    conn.execute("UPDATE OR REPLACE slack_team_channels SET team = lower(team)")
+
 
 MIGRATIONS = [
     Migration(
@@ -82,6 +112,7 @@ MIGRATIONS = [
     ALTER TABLE slack_team_channels_new RENAME TO slack_team_channels;
     """,
     ),
+    Migration("0005_teams_pinged_by_id", _teams_pinged_by_id),
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 
@@ -106,7 +137,7 @@ class SlackRepository:
     def team_channels(self) -> dict[str, TeamChannel]:
         return {
             row["team"]: TeamChannel(
-                slug=row["team"], channel_name=row["channel_name"], channel_id=row["channel_id"]
+                team=row["team"], channel_name=row["channel_name"], channel_id=row["channel_id"]
             )
             for row in self._db.query("SELECT * FROM slack_team_channels")
         }
@@ -136,16 +167,21 @@ class SlackRepository:
         return self._contacts.forget(login)
 
     def set_team_channel(self, team: str, name: str | None, channel_id: str | None) -> None:
-        """Set a team's channel by hand, in place of the one set before."""
+        """Set a team's channel by hand, in place of the one set before; by its id, casefolded,
+        as GitHub ignores case in orgs' and teams' names."""
         self._db.execute(
-            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?)", (team, name, channel_id)
+            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?)",
+            (team.casefold(), name, channel_id),
         )
 
     def unset_team_channel(self, team: str) -> bool:
-        """Forget a team's channel; False if there was none."""
+        """Forget a team's channel, named in any case; False if there was none."""
         with self._db.transaction() as conn:
             return (
-                conn.execute("DELETE FROM slack_team_channels WHERE team = ?", (team,)).rowcount > 0
+                conn.execute(
+                    "DELETE FROM slack_team_channels WHERE team = ?", (team.casefold(),)
+                ).rowcount
+                > 0
             )
 
     def pings(self) -> list[Ping]:

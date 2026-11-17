@@ -13,22 +13,10 @@ wrong, add it.
   the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
   angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
   `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
-- **A base merge isn't an answer.** github counts comments as answered once they're older than my
-  last push, by the head commit's date, so merging the base into a branch (Update branch, or by
-  hand) clears them with nothing said. Read past merge commits: it needs their parents fetched.
-  Then Update branch's confirm no longer needs to warn of it.
-- **An empty panel with a field is hidden.** A panel with no items is drawn collapsed, so a
-  panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
-- **Another org's team pings my team's channel.** slack keys a team's channel and pings by the
-  slug a PR requests, but github publishes a team for each org whose PRs request one. With
-  `search_scope = "everywhere"`, a PR of mine in another org requesting `web` is nudged to my
-  org's `web` channel, and its pings count as theirs. Key them by the team's id; `Team.handle`'s
-  docstring ("unique only within its publisher") is wrong too, as one publisher has several
-  orgs' teams.
-- **Windows' accounts in another language.** On a Windows that isn't in English, `icacls` names
-  SYSTEM and Administrators in its language, so `private.is_private` wouldn't recognize them
-  and the token file would be warned about on every start: look their names up from their
-  well-known SIDs (`LookupAccountSidW`) rather than matching English ones.
+- **Another org's team takes my team's reviewer policy.** github's
+  `team_reviewer_assignment` is keyed by slug, so with `search_scope = "everywhere"` a policy
+  set for my org's `bacon` applies to another org's `bacon` requested on a PR of mine too. Key
+  it by the team's org as well (or only apply it in `org`).
 
 ## The skill and the dashboard disagree
 

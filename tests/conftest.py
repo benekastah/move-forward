@@ -477,6 +477,7 @@ def pr(number: int = 1, **overrides: object) -> PullRequest:
         "checks": [Check(name="tests", state="SUCCESS", url="https://ci/1")],
         "rollup_state": "SUCCESS",
         "last_commit_at": created,
+        "last_answer_at": created,
         "body": f"Link https://jira/browse/APP-{number}",
     }
     fields.update(overrides)
@@ -634,7 +635,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             if u.slack_id:
                 slack_repo.set_contact(u.login, u.slack_id)
         for channel in channels.values():
-            slack_repo.set_team_channel(channel.slug, channel.channel_name, channel.channel_id)
+            slack_repo.set_team_channel(channel.team, channel.channel_name, channel.channel_id)
         for ping in pings:
             slack_repo.add_ping(ping)
     return config, db

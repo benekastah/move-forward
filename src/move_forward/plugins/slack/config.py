@@ -1,5 +1,6 @@
 """`[slack]`."""
 
+import re
 from string import Formatter
 from typing import Annotated, ClassVar, cast
 
@@ -12,6 +13,23 @@ DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? 
 DEFAULT_PING_FOLLOW_UP = "Gentle bump on this review request"
 DEFAULT_SLACK_TOKEN_ENV = "SLACK_API_TOKEN"
 DEFAULT_SLACK_KEYCHAIN_SERVICE = "move-forward-slack"
+TEAM_ID_RE = re.compile(r"^[^/\s]+(/[^/\s]+){2,}$")
+"""A team's id, as the team family has it: `<host>/<org>/<slug>`, or deeper."""
+
+
+def team_id(team: str, host: str | None = None) -> str:
+    """`team` stripped and casefolded, as slack keys a team (GitHub ignores case in orgs' and
+    teams' names). A ValueError, saying what a team's id is, unless it's one: with `team` on
+    `host`, where the teams are known to be on one."""
+    team = team.strip().casefold()
+    if not TEAM_ID_RE.match(team):
+        example = (
+            f'"{host}/<org>/{team}"'
+            if host
+            else f'"<host>/<org>/{team}", e.g. "github.com/acme/{team}"'
+        )
+        raise ValueError(f"{team!r} isn't a team's id, <host>/<org>/<slug>: {example}")
+    return team
 
 
 class SlackConfig(TokenFields):
@@ -44,7 +62,8 @@ class SlackConfig(TokenFields):
     """The reminder once a reviewer has been pinged about the PR, as written: nothing in it is
     filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
-    """Where review pings to a team go, e.g. `#team-a`, by its slug, as PRs name it. Wins over a
+    """Where review pings to a team go, e.g. `#team-a`, by the team's id, `<host>/<org>/<slug>`
+    (e.g. `"github.com/acme/web"`): its slug alone may be another org's team's too. Wins over a
     channel set by hand (`mfd slack team set`)."""
 
     @model_validator(mode="before")
@@ -66,6 +85,18 @@ class SlackConfig(TokenFields):
                 " set it with `mfd slack team set <team> <#channel>`"
             )
         return settings
+
+    @field_validator("teams")
+    @classmethod
+    def _teams_by_id(cls, value: dict[str, str]) -> dict[str, str]:
+        """The teams by id, casefolded (see `team_id`)."""
+        teams: dict[str, str] = {}
+        for team, channel in value.items():
+            try:
+                teams[team_id(team)] = channel
+            except ValueError as e:
+                raise ValueError(f"[slack.teams] is keyed by a team's id now: {e}") from None
+        return teams
 
     @field_validator("workspace_url")
     @classmethod

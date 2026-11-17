@@ -49,7 +49,7 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
         tmp_path,
         'email = "me@acme.com"\n\n'
         '[github]\norg = "acme"\nteams = ["core", "web-reviewers"]\n\n'
-        '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\ncore = "#team-core"\n\n'
+        '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\n"github.com/acme/core" = "#team-core"\n\n'
         '[jira]\nsite = "https://j"\n',
     )
     assert loaded.section("git") is not None and section(loaded, "git", GitConfig).repos == [
@@ -61,7 +61,7 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
     )
     assert section(loaded, "github", GitHubConfig).teams == ["core", "web-reviewers"]
     assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
-        "core": "#team-core"
+        "github.com/acme/core": "#team-core"
     }
     assert section(loaded, "slack", SlackConfig).ping_first == DEFAULT_PING_FIRST
     assert loaded.port == config.DEFAULT_PORT

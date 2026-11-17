@@ -3,9 +3,9 @@
 from move_forward.api import Asker, Init, InitSection, InitSetup, url
 
 TABLES = """\
-# Where review pings to a team go, by its slug, as PRs name it.
+# Where review pings to a team go, by the team's id: its host, org and slug.
 # [slack.teams]
-# my-team = "#team-my-team"
+# "github.com/my-org/my-team" = "#team-my-team"
 """
 EXAMPLE = InitSection({"workspace_url": "https://example.slack.com"})
 

@@ -5,6 +5,23 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### slack names a team by its id
+
+`[slack.teams]`, `mfd slack team set` and `unset`, `mfd slack destinations`' teams, and the
+`team` of `/slack/contacts`' buttons now name a team by its id, `<host>/<org>/<slug>`
+(`github.com/acme/web`), not its slug: github publishes a team for each org whose PRs request
+one, and a slug alone sent another org's `web`'s pings to my `web`'s channel. To move:
+
+1. Rekey `[slack.teams]`: `web = "#team-web"` becomes `"github.com/acme/web" = "#team-web"`,
+   with your GitHub host and org. A config keyed by a slug is refused, saying so.
+2. Set each channel you set by hand again, by the team's id (`mfd slack team set
+   github.com/acme/web "#team-web"`), and forget the old one by its slug (`mfd slack team unset
+   web`): a slug doesn't say its org, so it's kept as it was, and matches no team.
+   `mfd slack destinations` lists them.
+
+`mfd slack destinations --json` names each team by its id in `team`, where it had `slug`, and a
+ping's `target` is `team:<id>`. Pings already sent carry over, to the team in their PR's org.
+
 ### Hold and release a PR on the page
 
 Items about my open PRs have Hold, a field adding a merge condition (to the entry covering the

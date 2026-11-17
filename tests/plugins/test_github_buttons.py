@@ -69,7 +69,8 @@ def test_a_pr_held_as_behind_its_base_can_be_updated(monkeypatch: pytest.MonkeyP
     built = dashboard(github=snapshot(mine=[behind]))
     [item] = panel(built, "github.held").items
     [button] = [a for a in item.actions if a.name == UPDATE_BRANCH]
-    assert button.confirm is not None
+    # A merge isn't a push that answers feedback, so there's nothing more to warn of.
+    assert button.confirm == f"Merge main into {behind.head} on GitHub? Pull it here afterwards."
     commands = _commands(monkeypatch)
     config, db = stored(github=snapshot(mine=[behind]))
     result = perform_action(config, db, UPDATE_BRANCH, {"pr": URL})

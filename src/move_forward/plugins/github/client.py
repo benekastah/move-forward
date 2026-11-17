@@ -109,6 +109,19 @@ class _RawCommitNode(_Raw):
     commit: _RawCommit
 
 
+class _Count(_Raw):
+    total_count: int = Field(alias="totalCount")
+
+
+class _RawRecentCommit(_Raw):
+    committed_date: datetime = Field(alias="committedDate")
+    parents: _Count
+
+
+class _RawRecentCommitNode(_Raw):
+    commit: _RawRecentCommit
+
+
 class _RawEvent(_Raw):
     typename: str = Field(alias="__typename")
     created_at: datetime | None = Field(default=None, alias="createdAt")
@@ -177,6 +190,7 @@ class RawPullRequest(_Raw):
     latest_reviews: _Nodes[_RawReview] = Field(default=_Nodes(), alias="latestReviews")
     review_threads: _Nodes[_RawThread] = Field(default=_Nodes(), alias="reviewThreads")
     commits: _Nodes[_RawCommitNode] = _Nodes()
+    recent_commits: _Nodes[_RawRecentCommitNode] | None = Field(default=None, alias="recentCommits")
     timeline_items: _Nodes[_RawEvent] = Field(default=_Nodes(), alias="timelineItems")
     files: _Nodes[_RawFile] | None = None
 
@@ -233,14 +247,15 @@ class PrId(BaseModel):
 
 
 def fetch_prs(host: str, ids: list[PrId]) -> list[PullRequest]:
-    """These PRs, in one request, with the fields the searches fetch (files included).
+    """These PRs, in one request, with the fields the searches fetch (files and recent commits
+    included).
     Raises CommandError when GitHub can't answer for one (deleted, or out of reach): `gh`
     fails on a response with errors."""
     if not ids:
         return []
     params: list[str] = []
     parts: list[str] = []
-    args = [*api(host), "graphql", "-F", "withFiles=true"]
+    args = [*api(host), "graphql", "-F", "withFiles=true", "-F", "withCommits=true"]
     for i, pr_id in enumerate(ids):
         owner, _, name = pr_id.repo.partition("/")
         params += [f"$o{i}: String!", f"$n{i}: String!", f"$p{i}: Int!"]
@@ -250,7 +265,7 @@ def fetch_prs(host: str, ids: list[PrId]) -> list[PullRequest]:
         )
         args += ["-f", f"o{i}={owner}", "-f", f"n{i}={name}", "-F", f"p{i}={pr_id.number}"]
     query = (
-        f"query($withFiles: Boolean!, {', '.join(params)}) {{\n  "
+        f"query($withFiles: Boolean!, $withCommits: Boolean!, {', '.join(params)}) {{\n  "
         + "\n  ".join(parts)
         + "\n}\n"
         + FIELDS_PATH.read_text(encoding="utf-8")
@@ -278,8 +293,11 @@ def api(host: str, *args: str) -> list[str]:
     return ["gh", "api", "--hostname", host, *args]
 
 
-def search_prs(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
-    """Run a PR search, following pagination, and return every PR it finds."""
+def search_prs(
+    host: str, query: str, with_files: bool = False, with_commits: bool = False
+) -> list[PullRequest]:
+    """Run a PR search, following pagination, and return every PR it finds: with their files,
+    and their recent commits (`PullRequest.last_answer_at`), when asked."""
     prs: list[PullRequest] = []
     after: str | None = None
     while True:
@@ -288,6 +306,8 @@ def search_prs(host: str, query: str, with_files: bool = False) -> list[PullRequ
             "graphql",
             "-F",
             f"withFiles={'true' if with_files else 'false'}",
+            "-F",
+            f"withCommits={'true' if with_commits else 'false'}",
             "-F",
             f"first={PAGE_SIZE}",
             "-f",
@@ -366,6 +386,16 @@ def _method(name: str | None) -> MergeMethod | None:
     return known.get(name or "")
 
 
+def _last_answer_at(raw: RawPullRequest, head_at: datetime | None) -> datetime | None:
+    """When the latest of its recent commits that isn't a merge was made: merging the base in
+    answers no feedback. None when they're all merges; the head commit's date (`head_at`) when
+    they weren't asked for."""
+    if raw.recent_commits is None:
+        return head_at
+    commits = [c.commit for c in raw.recent_commits.nodes if c]
+    return max((c.committed_date for c in commits if c.parents.total_count < 2), default=None)
+
+
 def to_pull_request(raw: RawPullRequest) -> PullRequest:
     """Flatten a GraphQL PullRequest node into the domain model."""
     requested = [_reviewer(r.requested_reviewer) for r in raw.review_requests.nodes if r]
@@ -427,6 +457,7 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         rollup_state=rollup.state if rollup else None,
         checks=[_check(c) for c in rollup.contexts.nodes if c] if rollup else [],
         last_commit_at=commit.committed_date if commit else None,
+        last_answer_at=_last_answer_at(raw, commit.committed_date if commit else None),
         events=[
             e
             for e in (_event(raw_event) for raw_event in raw.timeline_items.nodes if raw_event)
@@ -557,11 +588,13 @@ def collect(
     since = (now - timedelta(days=history_days)).date().isoformat()
     with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
 
-        def search(query: str, with_files: bool = False) -> Future[list[PullRequest]]:
-            return pool.submit(search_prs, host, query, with_files)
+        def search(
+            query: str, with_files: bool = False, with_commits: bool = False
+        ) -> Future[list[PullRequest]]:
+            return pool.submit(search_prs, host, query, with_files, with_commits)
 
         login_future = pool.submit(login, host)
-        mine = search(f"is:pr is:open author:@me archived:false{within}", True)
+        mine = search(f"is:pr is:open author:@me archived:false{within}", True, True)
         direct = search(f"is:pr is:open user-review-requested:@me archived:false{within}", True)
         reviewed = search(f"is:pr is:open reviewed-by:@me -author:@me archived:false{within}", True)
         team_futures = [

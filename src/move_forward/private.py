@@ -8,6 +8,7 @@ granted access. Under my user profile the inherited rules already keep other use
 but `db_path` can point anywhere.
 """
 
+import ctypes
 import getpass
 import os
 import stat
@@ -17,10 +18,19 @@ from pathlib import Path
 from move_forward.shell import run
 
 WINDOWS = sys.platform == "win32"
-SYSTEM_HOLDERS = {"nt authority\\system", "builtin\\administrators", "owner rights"}
-"""Who may hold access on Windows besides me: the system itself, administrators (who can
-take any file anyway) and the file's owner (me). Python grants them when it makes a private
-file; what matters is that no other user, nor the Users group, is listed."""
+SYSTEM_SID = "S-1-5-18"
+ADMINISTRATORS_SID = "S-1-5-32-544"
+OWNER_RIGHTS_SID = "S-1-3-4"
+SYSTEM_HOLDERS = {
+    SYSTEM_SID: "nt authority\\system",
+    ADMINISTRATORS_SID: "builtin\\administrators",
+    OWNER_RIGHTS_SID: "owner rights",
+}
+"""Who may hold access on Windows besides me, by well-known SID, with their English names: the
+system itself, administrators (who can take any file anyway) and the file's owner (me). Python
+grants them when it makes a private file; what matters is that no other user, nor the Users
+group, is listed. icacls names them in Windows' language, so they're looked up by SID, and
+the English name is used only if that fails."""
 
 
 def _me() -> str:
@@ -42,11 +52,51 @@ def make_private(path: Path) -> None:
 
 def is_private(path: Path) -> bool:
     """Whether only I can read `path`: no group or other mode bits, or on Windows an access
-    list naming no other user (see `SYSTEM_HOLDERS`)."""
+    list naming no other user (see `SYSTEM_HOLDERS`), in whatever language Windows names them."""
     if not WINDOWS:
         return stat.S_IMODE(path.stat().st_mode) & 0o077 == 0
     holders = set(_holders(run(["icacls", str(path)], encoding="oem"), str(path)))
-    return holders <= {_me().lower(), *SYSTEM_HOLDERS}
+    system = {_account(sid) or english for sid, english in SYSTEM_HOLDERS.items()}
+    return holders <= {_me().lower(), *system}
+
+
+def _account(sid: str) -> str | None:
+    """The account with the string `sid`, as `icacls` names it, lower-cased: `domain\\name`, or
+    just its name when it has no domain (OWNER RIGHTS). None if it can't be looked up."""
+    found = _lookup(sid)
+    if found is None:
+        return None
+    domain, name = found
+    return f"{domain}\\{name}".lower() if domain else name.lower()
+
+
+def _lookup(sid: str) -> tuple[str, str] | None:
+    """The domain and name of the account with the string `sid`, in Windows' language, from
+    Windows' own LookupAccountSidW; None elsewhere, or if Windows can't say."""
+    if sys.platform != "win32":
+        return None
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    binary = ctypes.c_void_p()
+    if not advapi32.ConvertStringSidToSidW(sid, ctypes.byref(binary)):
+        return None
+    try:
+        name, domain = ctypes.create_unicode_buffer(256), ctypes.create_unicode_buffer(256)
+        name_size, domain_size = wintypes.DWORD(len(name)), wintypes.DWORD(len(domain))
+        use = wintypes.DWORD()
+        found = advapi32.LookupAccountSidW(
+            None,
+            binary,
+            name,
+            ctypes.byref(name_size),
+            domain,
+            ctypes.byref(domain_size),
+            ctypes.byref(use),
+        )
+    finally:
+        ctypes.WinDLL("kernel32").LocalFree(binary)
+    return (domain.value, name.value) if found else None
 
 
 def _holders(listing: str, path: str) -> list[str]:
