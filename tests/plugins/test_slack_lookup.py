@@ -5,6 +5,7 @@ import json
 import urllib.request
 from dataclasses import replace
 from datetime import timedelta
+from html import escape
 
 import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
@@ -106,8 +107,8 @@ def test_a_lookup_that_fails_is_a_problem_until_a_refresh_has_none_fail(
     # Said on Slack's group, which its Nudge reviewers panel gives it, not in the footer.
     html = render.dashboard_page(build_dashboard(config, db, NOW), refreshing=frozenset())
     group, footer = html.split("data-key='slack'")[1].split("<footer>")
-    assert render.e(shown) in group.split("<div class='panels'>")[0]
-    assert render.e(shown) not in footer
+    assert escape(shown) in group.split("<div class='panels'>")[0]
+    assert escape(shown) not in footer
     # The token given the scope, say, but nobody left to look up: the problem still goes.
     SlackRepository(db).save_looked_up("alice", None, NOW)
     assert contacts.look_up_requested(slack.ctx, graph) == []

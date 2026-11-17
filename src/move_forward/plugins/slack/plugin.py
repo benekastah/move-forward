@@ -44,7 +44,7 @@ from move_forward.plugins.slack.setup import INIT
 PING = "ping"
 """The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""
 PING_PATH = f"/slack/{PING}"
-COPY_SCRIPT = (
+COPY_SCRIPT = html.Html(
     "function copyMessage(button) {"
     " const text = button.closest('form').querySelector('textarea').value;"
     " navigator.clipboard.writeText(text).then(() => { button.textContent = 'Copied';"
@@ -90,51 +90,48 @@ def pinger(ctx: Context[SlackConfig], graph: Graph) -> Pinger:
     )
 
 
-def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
-    e = html.e
+def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> html.Html:
     last = f" · last {age(now, target.last_ping)} ago" if target.last_ping else ""
     open_link = (
-        f"<a class='button' href='{e(target.slack_link)}' target='_blank' rel='noopener'>"
-        "Open Slack</a>"
+        t"<a class='button' href='{target.slack_link}' target='_blank' rel='noopener'>"
+        t"Open Slack</a>"
         if html.linkable(target.slack_link)
-        else "<span class='target-note'>no Slack link known for this target</span>"
+        else t"<span class='target-note'>no Slack link known for this target</span>"
     )
-    return (
-        "<section class='target'><form method='post'"
-        f" action='/actions/slack/mark_sent?{e(urlencode({'back': f'{PING_PATH}?{urlencode({"pr": ping.pr_url})}'}))}'>"
-        f"<input type='hidden' name='pr_url' value='{e(ping.pr_url)}'>"
-        f"<input type='hidden' name='target' value='{e(target.kind)}:{e(target.name)}'>"
-        f"<input type='hidden' name='kind' value='{e(target.ping_kind)}'>"
-        f"<div class='target-head'><strong>{e(target.destination)}</strong>"
-        f"<span class='target-kind'>{e(target.ping_kind)}{e(last)}</span></div>"
-        f"<textarea name='message' rows='2'>{e(target.message)}</textarea>"
-        f"<div class='target-buttons'>{open_link}"
-        "<button type='button' class='secondary' onclick='copyMessage(this)'>Copy</button>"
-        "<button type='submit' class='secondary'>Mark as sent</button></div>"
-        "</form></section>"
+    back = urlencode({"back": f"{PING_PATH}?{urlencode({'pr': ping.pr_url})}"})
+    return html.html(
+        t"<section class='target'><form method='post' action='/actions/slack/mark_sent?{back}'>"
+        t"<input type='hidden' name='pr_url' value='{ping.pr_url}'>"
+        t"<input type='hidden' name='target' value='{target.kind}:{target.name}'>"
+        t"<input type='hidden' name='kind' value='{target.ping_kind}'>"
+        t"<div class='target-head'><strong>{target.destination}</strong>"
+        t"<span class='target-kind'>{target.ping_kind}{last}</span></div>"
+        t"<textarea name='message' rows='2'>{target.message}</textarea>"
+        t"<div class='target-buttons'>{open_link}"
+        t"<button type='button' class='secondary' onclick='copyMessage(this)'>Copy</button>"
+        t"<button type='submit' class='secondary'>Mark as sent</button></div>"
+        t"</form></section>"
     )
 
 
-def ping_page(ping: PrPing, now: datetime, notice: str = "") -> str:
+def ping_page(ping: PrPing, now: datetime, notice: str = "") -> html.Html:
     """The ping page for one of my PRs, with what the last button said (`notice`)."""
-    e = html.e
     blockers = (
-        "<ul class='blockers'>" + "".join(f"<li>{e(b)}</li>" for b in ping.blockers) + "</ul>"
+        t"<ul class='blockers'>{[t'<li>{b}</li>' for b in ping.blockers]}</ul>"
         if ping.blockers
         else ""
     )
-    targets = "".join(_target_form(ping, t, now) for t in ping.targets)
-    if not targets:
-        targets = "<p>No reviewers are requested on this PR.</p>"
-    body = (
-        "<article class='panel padded'>"
-        + (f"<p class='notice'>{e(notice)}</p>" if notice else "")
-        + f"<h2>{e(ping.title)}</h2>"
-        f"<p><a href='{e(ping.pr_url)}' target='_blank' rel='noopener'>{e(ping.pr_url)}</a></p>"
-        f"{blockers}{targets}"
-        "<p class='target-note'>Copy the message, paste it in Slack, then mark it as sent so the"
-        f" next ping is a follow-up. <a href='{contacts.CONTACTS_PATH}'>Where pings go</a></p>"
-        "</article>"
+    targets = [
+        _target_form(ping, t, now) for t in ping.targets
+    ] or t"<p>No reviewers are requested on this PR.</p>"
+    said = t"<p class='notice'>{notice}</p>" if notice else ""
+    body = html.html(
+        t"<article class='panel padded'>{said}<h2>{ping.title}</h2>"
+        t"<p><a href='{ping.pr_url}' target='_blank' rel='noopener'>{ping.pr_url}</a></p>"
+        t"{blockers}{targets}"
+        t"<p class='target-note'>Copy the message, paste it in Slack, then mark it as sent so the"
+        t" next ping is a follow-up. <a href='{contacts.CONTACTS_PATH}'>Where pings go</a></p>"
+        t"</article>"
     )
     return html.page(f"Ping: {ping.title}", "ping", body, COPY_SCRIPT)
 
@@ -182,14 +179,14 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
         return ping_action
 
     def pages(self) -> dict[str, PageHandler]:
-        def ping(req: InputRequest[SlackConfig]) -> str | None:
+        def ping(req: InputRequest[SlackConfig]) -> html.Html | None:
             ctx, graph, query = req.ctx, req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             found = pinger(ctx, graph).pings().get(pr_url)
             notice = req.page.query.get("notice", [""])[0]
             return ping_page(found, ctx.now, notice) if found else None
 
-        def where_pings_go(req: InputRequest[SlackConfig]) -> str | None:
+        def where_pings_go(req: InputRequest[SlackConfig]) -> html.Html | None:
             ctx, graph = req.ctx, req.graph
             return contacts.contacts_page(ctx, graph)
 

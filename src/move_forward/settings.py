@@ -22,6 +22,7 @@ import tempfile
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
+from string.templatelib import Template
 from typing import Any, Literal, cast, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
@@ -29,6 +30,7 @@ from pydantic_core import PydanticUndefined
 
 from move_forward import registry, render, strict, tomledit
 from move_forward.config import Config
+from move_forward.markup import Html, html
 from move_forward.plugin import Plugin
 
 PATH = "/settings"
@@ -252,23 +254,22 @@ def _write(path: Path, text: str) -> None:
         raise
 
 
-def _input(setting: Setting) -> str:
-    e = render.e
+def _input(setting: Setting) -> Html:
     disabled = " disabled" if setting.locked else ""
     if setting.kind == "bool":
         checked = " checked" if setting.value else ""
-        return (
-            f"<input type='checkbox' name='{e(setting.name)}'{checked}{disabled}>"
-            f"<input type='hidden' name='{e(setting.name)}' value='off'{disabled}>"
+        return html(
+            t"<input type='checkbox' name='{setting.name}'{checked}{disabled}>"
+            t"<input type='hidden' name='{setting.name}' value='off'{disabled}>"
         )
     if setting.kind == "list":
         lines = "\n".join(str(v) for v in cast(list[object], setting.value))
         hint = _placeholder(setting)
-        return f"<textarea name='{e(setting.name)}' rows='3'{hint}{disabled}>{e(lines)}</textarea>"
-    kind = "number' step='any" if setting.kind in ("int", "float") else "text"
-    return (
-        f"<input type='{kind}' name='{e(setting.name)}' value='{e(setting.value)}'"
-        f"{_placeholder(setting)}{disabled}>"
+        return html(t"<textarea name='{setting.name}' rows='3'{hint}{disabled}>{lines}</textarea>")
+    kind, step = ("number", t" step='any'") if setting.kind in ("int", "float") else ("text", "")
+    return html(
+        t"<input type='{kind}'{step} name='{setting.name}' value='{setting.value}'"
+        t"{_placeholder(setting)}{disabled}>"
     )
 
 
@@ -282,17 +283,17 @@ def _default_text(setting: Setting) -> str | None:
     return str(default)
 
 
-def _placeholder(setting: Setting) -> str:
+def _placeholder(setting: Setting) -> Html:
     """The attribute showing the setting's example in its empty field."""
     if setting.kind == "bool" or setting.locked:
-        return ""
+        return Html()
     text = _default_text(setting) or example(setting)
     if not text:
-        return ""
-    return f" placeholder='{render.e(text).replace(chr(10), '&#10;')}'"
+        return Html()
+    return html(t" placeholder='{text}'")
 
 
-ENABLE_SCRIPT = (
+ENABLE_SCRIPT = Html(
     "<script>(() => {"
     " const button = document.getElementById('allow-notifications');"
     " const say = document.getElementById('notification-permission');"
@@ -304,28 +305,25 @@ ENABLE_SCRIPT = (
 )
 
 
-def _notifications(config: Config) -> str:
+def _notifications(config: Config) -> Html:
     """The notifications section: the browser's permission, and a checkbox per kind of event,
     grouped by where it comes from."""
-    e = render.e
     subscribed = set(config.notifications.subscribe)
-    groups: dict[str, list[str]] = {}
+    groups: dict[str, list[Template]] = {}
     for kind, says in registry.notification_kinds(config).items():
         group, _, name = kind.partition(".")
         checked = " checked" if kind in subscribed else ""
         groups.setdefault(group, []).append(
-            f"<li><label><input type='checkbox' name='{e(NOTIFY_PREFIX + kind)}'{checked}>"
-            f" {e(name)}</label> <span class='help'>{e(says)}</span></li>"
+            t"<li><label><input type='checkbox' name='{NOTIFY_PREFIX + kind}'{checked}>"
+            t" {name}</label> <span class='help'>{says}</span></li>"
         )
-    lists = "".join(
-        f"<h3>{e(group)}</h3><ul>{''.join(rows)}</ul>" for group, rows in groups.items()
-    )
-    return (
-        "<h2>Notifications</h2><p>Shown by the browser while a dashboard tab is open, and"
-        " when you open one, for what happened while none was. None are on until ticked."
-        " <button type='button' id='allow-notifications'>Allow in this browser</button>"
-        " <span id='notification-permission' class='help'></span></p>"
-        f"<input type='hidden' name='{SUBSCRIBED_FORM}' value='1'>{lists}"
+    lists = [t"<h3>{group}</h3><ul>{rows}</ul>" for group, rows in groups.items()]
+    return html(
+        t"<h2>Notifications</h2><p>Shown by the browser while a dashboard tab is open, and"
+        t" when you open one, for what happened while none was. None are on until ticked."
+        t" <button type='button' id='allow-notifications'>Allow in this browser</button>"
+        t" <span id='notification-permission' class='help'></span></p>"
+        t"<input type='hidden' name='{SUBSCRIBED_FORM}' value='1'>{lists}"
     )
 
 
@@ -336,27 +334,25 @@ def _why_locked(setting: Setting) -> str:
     return " Not changed here: it says where a credential goes or comes from, or where commands run, so only the config file sets it."
 
 
-def page(config: Config, notice: str = "") -> str:
+def page(config: Config, notice: str = "") -> Html:
     """The form, a table of settings per section."""
-    e = render.e
-    rows: dict[str | None, list[str]] = {}
+    rows: dict[str | None, list[Template]] = {}
     for setting in settings(config):
+        locked = _why_locked(setting) if setting.locked else ""
         rows.setdefault(setting.section, []).append(
-            f"<tr><th><label>{e(setting.key)}</label></th><td>{_input(setting)}"
-            f"<p class='help'>{e(setting.help)}"
-            + (_why_locked(setting) if setting.locked else "")
-            + "</p></td></tr>"
+            t"<tr><th><label>{setting.key}</label></th><td>{_input(setting)}"
+            t"<p class='help'>{setting.help}{locked}</p></td></tr>"
         )
-    tables = "".join(
-        f"<h2>{e(f'[{section}]' if section else 'Top level')}</h2><table>{''.join(r)}</table>"
+    tables = [
+        t"<h2>{f'[{section}]' if section else 'Top level'}</h2><table>{r}</table>"
         for section, r in rows.items()
-    )
-    body = (
-        (f"<p class='notice'>{e(notice)}</p>" if notice else "")
-        + "<article class='panel padded settings'>"
-        "<p>Saving writes the config file, keeping its comments, and the dashboard restarts"
-        " with it. Tables like <code>[slack.teams]</code> are edited in the file.</p>"
-        f"<form method='post' action='{PATH}'>{tables}{_notifications(config)}"
-        f"<p><button type='submit'>Save</button></p></form>{ENABLE_SCRIPT}</article>"
+    ]
+    said = t"<p class='notice'>{notice}</p>" if notice else ""
+    body = html(
+        t"{said}<article class='panel padded settings'>"
+        t"<p>Saving writes the config file, keeping its comments, and the dashboard restarts"
+        t" with it. Tables like <code>[slack.teams]</code> are edited in the file.</p>"
+        t"<form method='post' action='{PATH}'>{tables}{_notifications(config)}"
+        t"<p><button type='submit'>Save</button></p></form>{ENABLE_SCRIPT}</article>"
     )
     return render.page("Settings", "settings", body)

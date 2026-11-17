@@ -12,6 +12,8 @@ from pydantic import BaseModel, JsonValue
 
 from move_forward import cli, localtime, refresh, registry, render
 from move_forward.act_now import ActNowConfig
+from move_forward.api import html
+from move_forward.api.html import Html
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
@@ -63,11 +65,13 @@ class Hooked(JiraPlugin):
         return additions
 
     def pages(self) -> dict[str, PageHandler]:
-        def hello(req: InputRequest[JiraConfig]) -> str | None:
+        def hello(req: InputRequest[JiraConfig]) -> Html | None:
             graph, query = req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             entity = graph.get("pull_request", pr_url)
-            return render.page("Hello", "hello", render.e(entity.title)) if entity else None
+            if entity is None:
+                return None
+            return html.page("Hello", "hello", html.html(t"<p>{entity.title}</p>"))
 
         return {"hello": hello}
 
@@ -127,7 +131,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     registry.migrate(config, db)
     PrRepository(db).save(snapshot(mine=[pr(1, title="Fix <it>")]))
     page = refresh.plugin_page(config, db, "/jira/hello", {"pr": [pr(1).url]})
-    assert isinstance(page, str) and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
+    assert isinstance(page, str) and "<p>Fix &lt;it&gt;</p>" in page and "/ hello</h1>" in page
     assert refresh.plugin_page(config, db, "/jira/hello", {"pr": ["nope"]}) is None
     assert refresh.plugin_page(config, db, "/nowhere", {}) is None
 

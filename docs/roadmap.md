@@ -24,7 +24,6 @@ the 8 hooks of its four mixins (`Collector`, `ChangeChecker`, `Command`, `Fetche
 1. **Buttons**: see [Buttons](#buttons), below.
 2. **Gmail links that open the message**: see issues.md's [Bugs](issues.md#bugs).
 3. **Read the address book where it lives**: see [Contacts](#contacts), below.
-4. **HTML escaped by construction**: see [The page](#the-page), below.
 
 ## Slack as a source of work
 
@@ -232,14 +231,6 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### The page
 
-- **HTML escaped by construction.** The page is built from f-strings, escaping each value
-  by hand: `render.py` calls `_e(...)` at every interpolation (some 70 of them), core's
-  settings page calls `render.e(...)`, and plugins' pages `api.html.e(...)`. One forgotten
-  call puts a PR title, a commit message or a mail subject into the page as HTML. Build it
-  from t-strings (PEP 750, Python 3.14) instead, through one function that escapes every
-  interpolated value unless it's already HTML (a small marker type for what another builder
-  returned), so a forgotten escape can't happen. `_e` and `e` go, and `api.html` offers the
-  t-string builder to plugins' pages in place of `e` (an API change).
 - **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
   without one could open a form to make it (still behind the token and same-site checks,
   writing only the config file), filling in what can be fetched as it goes (the org's

@@ -23,6 +23,7 @@ from move_forward.change_checks import ChangeChecks, said
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
+from move_forward.markup import Html, html
 from move_forward.notifications import NotificationRepository
 from move_forward.page import Item
 from move_forward.panels import Layout, focus_key
@@ -53,13 +54,15 @@ STATIC_FILES = {
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
-FRAME_HEADERS = {
+SAFETY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
 }
 """Sent with every answer. `frame-ancestors` is the modern form; `X-Frame-Options` covers older
-browsers. A fuller policy (`script-src`) would have to allow the pages' inline scripts, which
-need a nonce per page: not worth the risk of breaking them here."""
+browsers. `nosniff` keeps a browser to the content type an answer says (a plugin page's JSON
+isn't read as HTML). A fuller policy (`script-src`) would have to allow the pages' inline
+scripts, which need a nonce per page: not worth the risk of breaking them here."""
 REQUEST_TIMEOUT_SECONDS = 30
 """How long a connection can sit silent while a request is read before it is dropped, so a
 client that opens one and sends a byte at a time can't hold a thread for ever. Regular
@@ -94,7 +97,9 @@ RESERVED_PATHS = frozenset(
 )
 """The first segments of core's own paths: no plugin may be named one, since its pages are
 served at `/<plugin>/…`."""
-NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
+NOT_SIGNED_IN = html(
+    t"<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
+)
 LOCAL_HOSTS = (auth.HOST, "127.0.0.1", "localhost")
 """Names the server answers to. A request naming any other host is refused, which stops a web
 page from reaching the server through a DNS name it controls (DNS rebinding). Browsers are
@@ -311,7 +316,7 @@ class App:
 
     def dashboard_page(
         self, notice: str = "", spot: render.Spot | None = None, tags: Sequence[str] = ()
-    ) -> str:
+    ) -> Html:
         """The page from stored data, filtered by `tags` (see `tag_view`)."""
         built = build_dashboard(self.config, self.db, selected=tags)
         return render.dashboard_page(built, self.refreshing, notice, spot, tags)
@@ -342,7 +347,7 @@ class App:
         found = NotificationRepository(self.db).take(datetime.now(UTC), keep)
         return json.dumps([n.model_dump() for n in found])
 
-    def plugin_page(self, path: str, query: str, notice: str = "") -> str | Response | None:
+    def plugin_page(self, path: str, query: str, notice: str = "") -> Html | Response | None:
         """An enabled plugin's page, with `notice` as its query's; None when there's none at
         `path`."""
         params = parse_qs(query, keep_blank_values=True)
@@ -358,7 +363,7 @@ class App:
         notice: str = "",
         kept: str = "",
         tags: Sequence[str] = (),
-    ) -> str | None:
+    ) -> Html | None:
         """The category list without a category, else that category's item at `index`; with
         `tags`, of only what carries one of them (see `tag_view`).
 
@@ -401,7 +406,7 @@ MAX_SHOWN = 50
 """How many items focus pages showed the server remembers: more than the focus pages anyone
 has open."""
 NOTICE = "notice"
-PAGE_FAILED = "<p>This page failed; the log says why.</p>"
+PAGE_FAILED = html(t"<p>This page failed; the log says why.</p>")
 """What a plugin's page answers when its handler raised."""
 """The query parameter a plugin's page reads its notice from (see `App.plugin_page`)."""
 
@@ -428,6 +433,8 @@ def _back_to_page(query: str) -> str:
 AT_RE = re.compile(r"[\w.-]+")
 """A panel's key, which a redirect may name in its `#` link."""
 
+HEADER_NAME_RE = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+"""A header name: an HTTP token (RFC 9110's `tchar`s), so no space or colon can disguise one."""
 TOKEN_PARAM_RE = re.compile(r"([?&](?:token|code)=)[^&\s]*")
 """Query parameters that carry secrets: the dashboard's token, and `/login`'s one-time
 code."""
@@ -453,14 +460,22 @@ def _int(query_params: dict[str, list[str]], name: str) -> int:
 
 
 def _bad_response(response: Response) -> str | None:
-    """What's wrong with a plugin page's `Response`, or None: a status HTTP has, and header
-    names and values on one line each (a newline in one would let a value from the page's
-    query, say a redirect's URL, add headers of its own)."""
+    """What's wrong with a plugin page's `Response`, or None. It needs a content type (without
+    one, a browser guesses), and its headers mustn't set another (which would get around the
+    escaping of a markup type's body) or a length; a status HTTP has; header names that are
+    HTTP tokens (`HEADER_NAME_RE`), and header values on one line each (a newline in one would
+    let a value from the page's query, say a redirect's URL, add headers of its own)."""
     try:
         HTTPStatus(response.status)
     except ValueError:
         return f"no HTTP status {response.status}"
-    texts = [response.content_type, *response.headers, *response.headers.values()]
+    if not response.content_type.strip():
+        return "no content type"
+    if not all(HEADER_NAME_RE.fullmatch(name) for name in response.headers):
+        return "a header name that isn't an HTTP token"
+    if set(map(str.lower, response.headers)) & {"content-type", "content-length"}:
+        return "a Content-Type or Content-Length in its headers, which the server sets"
+    texts = [response.content_type, *response.headers.values()]
     if any("\r" in text or "\n" in text for text in texts):
         return "a header with a line break"
     return None
@@ -487,9 +502,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 log.debug("browser disconnected during a request")
 
         def end_headers(self) -> None:
-            """Every answer, redirects and errors included, forbids being framed by another
-            page, which would let it overlay the dashboard's buttons (clickjacking)."""
-            for name, value in FRAME_HEADERS.items():
+            """Every answer, redirects and errors included, sends `SAFETY_HEADERS`: it forbids
+            being framed by another page, which would let it overlay the dashboard's buttons
+            (clickjacking), and says `nosniff`, so a browser keeps to its content type."""
+            for name, value in SAFETY_HEADERS.items():
                 self.send_header(name, value)
             super().end_headers()
 
@@ -518,7 +534,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(data)
 
-        def _html(self, status: HTTPStatus, body: str) -> None:
+        def _html(self, status: HTTPStatus, body: Html) -> None:
             self._send(status, body, "text/html; charset=utf-8")
 
         def _notification_stream(self) -> None:
@@ -564,7 +580,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             port = cast(HTTPServer, self.server).server_port
             if _from_this_dashboard(self.headers.get("Host"), origin, port):
                 return False
-            self._html(HTTPStatus.FORBIDDEN, "<p>Forbidden: not from this dashboard.</p>")
+            self._html(HTTPStatus.FORBIDDEN, html(t"<p>Forbidden: not from this dashboard.</p>"))
             return True
 
         def _refuse_strangers(self) -> bool:
@@ -640,7 +656,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 tags = tag_view.selected(params)
                 page = app.focus_page(category, _int(params, "i"), notice, kept, tags)
                 if page is None:
-                    self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
+                    self._html(HTTPStatus.NOT_FOUND, html(t"<p>No such focus category.</p>"))
                 else:
                     self._html(HTTPStatus.OK, page)
             else:
@@ -654,7 +670,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
                 return
             if page is None:
-                self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+                self._html(HTTPStatus.NOT_FOUND, html(t"<p>Not found.</p>"))
             elif isinstance(page, str):
                 self._html(HTTPStatus.OK, page)
             elif (problem := _bad_response(page)) is not None:
@@ -719,7 +735,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if self._refuse_strangers():
                 return
             if body is None:
-                self._html(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "<p>Too large.</p>")
+                self._html(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, html(t"<p>Too large.</p>"))
                 return
             url = urlsplit(self.path)
             if url.path == "/refresh":
@@ -729,14 +745,14 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 elif plugin in app.refreshable():
                     app.request_refresh({plugin})
                 else:
-                    self._html(HTTPStatus.BAD_REQUEST, "<p>No such plugin to refresh.</p>")
+                    self._html(HTTPStatus.BAD_REQUEST, html(t"<p>No such plugin to refresh.</p>"))
                     return
                 self._redirect(_back_to_page(url.query))
             elif url.path == SUBJECTS_PATH:
                 try:
                     refs = _SUBJECTS.validate_json(body)
                 except ValidationError:
-                    self._html(HTTPStatus.BAD_REQUEST, "<p>Not a list of entities.</p>")
+                    self._html(HTTPStatus.BAD_REQUEST, html(t"<p>Not a list of entities.</p>"))
                     return
                 app.request_refresh_subjects(refs)
                 self.send_response(HTTPStatus.NO_CONTENT)
@@ -747,7 +763,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 try:
                     layout = Layout.model_validate_json(body)
                 except ValidationError:
-                    self._html(HTTPStatus.BAD_REQUEST, "<p>Not a layout.</p>")
+                    self._html(HTTPStatus.BAD_REQUEST, html(t"<p>Not a layout.</p>"))
                     return
                 LayoutRepository(app.db).save(layout)
                 self.send_response(HTTPStatus.NO_CONTENT)
@@ -765,7 +781,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 notice = app.run_action(name, fields, back if render.local_path(back) else None)
                 self._redirect(_back_to_page(url.query), notice)
             else:
-                self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+                self._html(HTTPStatus.NOT_FOUND, html(t"<p>Not found.</p>"))
 
     return Handler
 

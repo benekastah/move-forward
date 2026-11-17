@@ -28,6 +28,7 @@ from move_forward.db import Database, Migration
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.keychain import TokenSettings
 from move_forward.kinds import FAMILIES, Family, is_url
+from move_forward.markup import Html
 from move_forward.notifications import Event
 from move_forward.page import Item, ItemAdditions, Panel, Surface
 from move_forward.repositories import KvRepository, ProblemRepository, SnapshotRepository
@@ -305,7 +306,11 @@ class Changed:
 
 @dataclass(frozen=True)
 class Response:
-    """What a page answers when it's more than HTML to show: a redirect, another status."""
+    """What a page answers when it's more than HTML to show: a redirect, another status. A
+    body of a type a browser renders as markup (HTML, XHTML, SVG, any XML) is markup only if it's
+    `Html` (built with `api.html.html`): text is escaped, to show as text. A body of another type
+    goes out as it is, and every answer says `nosniff`, so a browser keeps to its type. The
+    content type can't be empty, and `headers` can't set it, or `Content-Length`."""
 
     body: str = ""
     status: int = 200
@@ -324,8 +329,9 @@ def page_path(plugin: str, key: str) -> str:
     return f"/{plugin}/{key}" if key else f"/{plugin}"
 
 
-PageHandler = Callable[[InputRequest[Any]], str | Response | None]
-"""Renders a page, as HTML or a `Response`; None means not found."""
+PageHandler = Callable[[InputRequest[Any]], Html | Response | None]
+"""Renders a page, as HTML built with `api.html` or a `Response`; None means not found. A bare
+t-string is built with `html`, and text that isn't `Html` is shown as text."""
 CliHandler = Callable[[InputRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 API_VERSION = 5

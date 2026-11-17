@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from string.templatelib import Template
 from typing import Any, ClassVar
 from urllib.parse import quote, urlencode
 from xml.etree import ElementTree
@@ -18,11 +19,12 @@ import pytest
 from conftest import ME, NOW, pr, serving, snapshot
 from pydantic import BaseModel
 
-from move_forward import auth, registry, server, settings
+from move_forward import auth, markup, registry, server, settings
 from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
+from move_forward.markup import Html
 from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Item
 from move_forward.panels import Layout
@@ -1023,7 +1025,7 @@ def test_a_connection_that_stalls_mid_request_is_dropped(
         assert stalled.recv(1024) == b""  # the server gave up and closed
 
 
-def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
+def test_every_answer_forbids_framing_and_sniffing(client: HTTPConnection) -> None:
     pages: list[tuple[str, dict[str, str]]] = [
         ("/", SIGNED_IN),  # HTML
         ("/nope", SIGNED_IN),  # an error
@@ -1035,10 +1037,12 @@ def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
         response.read()
         assert response.getheader("X-Frame-Options") == "DENY"
         assert response.getheader("Content-Security-Policy") == "frame-ancestors 'none'"
+        assert response.getheader("X-Content-Type-Options") == "nosniff"
     for response in [post(client, "/layout/reset", {})]:  # a redirect
         response.read()
         assert response.getheader("X-Frame-Options") == "DENY"
         assert response.getheader("Content-Security-Policy") == "frame-ancestors 'none'"
+        assert response.getheader("X-Content-Type-Options") == "nosniff"
 
 
 def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
@@ -1077,8 +1081,8 @@ def test_an_action_refreshes_its_plugin_and_fetches_what_it_touched_again(
 def test_a_plugin_page_knows_its_path(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def where(req: InputRequest[Any]) -> str:
-        return f"<p>at {req.page.path}</p>"
+    def where(req: InputRequest[Any]) -> Html:
+        return markup.html(t"<p>at {req.page.path}</p>")
 
     def pages(self: SlackPlugin) -> dict[str, object]:
         return {"where": where}
@@ -1087,12 +1091,85 @@ def test_a_plugin_page_knows_its_path(
     assert "at /slack/where" in get(client, "/slack/where").read().decode()
 
 
+def test_a_plugin_page_of_text_not_built_as_html_shows_as_text(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def raw(req: InputRequest[Any]) -> str:
+        return "<b>Fix</b>"
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"raw": raw}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    assert get(client, "/slack/raw").read().decode() == "&lt;b&gt;Fix&lt;/b&gt;"
+
+
+def test_a_plugin_page_of_a_bare_t_string_is_built_as_html(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def bare(req: InputRequest[Any]) -> Template:
+        return t"<p>{req.page.query['q'][0]}</p>"
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"bare": bare}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    assert get(client, "/slack/bare?q=%3Cb%3E").read().decode() == "<p>&lt;b&gt;</p>"
+
+
+def test_a_responses_html_body_shows_as_text_unless_it_is_html(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    answers = {
+        "text": Response("<b>x</b>", status=404),
+        "html": Response(markup.html(t"<b>{'<x>'}</b>")),
+        "json": Response("<b>x</b>", content_type="application/json"),
+        "upper": Response("<b>x</b>", content_type="TEXT/HTML; charset=utf-8"),
+        "svg": Response("<b>x</b>", content_type="image/svg+xml"),
+        "xhtml": Response("<b>x</b>", content_type="application/xhtml+xml"),
+        "xml": Response("<b>x</b>", content_type="text/xml"),
+        "appxml": Response("<b>x</b>", content_type="application/xml"),
+        "atom": Response("<b>x</b>", content_type="application/atom+xml; charset=utf-8"),
+        "untyped": Response("<b>x</b>", content_type=""),
+    }
+
+    def answering(answer: Response) -> Callable[[object], Response]:
+        return lambda req: answer
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {key: answering(answer) for key, answer in answers.items()}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    text = get(client, "/slack/text")
+    assert (text.status, text.read().decode()) == (404, "&lt;b&gt;x&lt;/b&gt;")
+    assert get(client, "/slack/html").read().decode() == "<b>&lt;x&gt;</b>"
+    assert get(client, "/slack/json").read().decode() == "<b>x</b>"
+    for markup_type in ("upper", "svg", "xhtml", "xml", "appxml", "atom"):
+        assert get(client, f"/slack/{markup_type}").read().decode() == "&lt;b&gt;x&lt;/b&gt;"
+    untyped = get(client, "/slack/untyped")
+    assert untyped.status == 500 and "<b>x</b>" not in untyped.read().decode()
+
+
+def test_a_plugin_page_that_fails_to_build_answers_500(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(req: InputRequest[Any]) -> Template:
+        return t"<p>{None}</p>"
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"broken": broken}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    failed = get(client, "/slack/broken")
+    assert failed.status == 500 and "failed" in failed.read().decode()
+
+
 def test_two_plugins_pages_of_one_name_are_each_their_own(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def pages_of(name: str) -> Callable[[object], dict[str, object]]:
-        def ping(req: InputRequest[Any]) -> str:
-            return f"<p>{name}'s ping</p>"
+        def ping(req: InputRequest[Any]) -> Html:
+            return markup.html(t"<p>{name}'s ping</p>")
 
         return lambda self: {"ping": ping}
 
@@ -1209,13 +1286,25 @@ def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(
     def odd(req: InputRequest[Any]) -> Response:
         return Response(status=999)
 
+    def retyped(req: InputRequest[Any]) -> Response:
+        named = req.page.query["name"][0]
+        headers = {named: "text/html"}
+        return Response("<b>x</b>", content_type="application/json", headers=headers)
+
+    def resized(req: InputRequest[Any]) -> Response:
+        return Response("x", headers={"Content-Length": "0"})
+
     def pages(self: SlackPlugin) -> dict[str, object]:
-        return {"away": injected, "odd": odd}
+        return {"away": injected, "odd": odd, "retyped": retyped, "resized": resized}
 
     monkeypatch.setattr(SlackPlugin, "pages", pages)
     response = get(client, "/slack/away?to=" + quote("/x\r\nSet-Cookie: evil=1"))
     assert response.status == 500 and response.getheader("Set-Cookie") is None
     response.read()
-    response = get(client, "/slack/odd")
-    assert response.status == 500
-    response.read()
+    retyped_paths = [
+        f"/slack/retyped?name={quote(n)}"
+        for n in ("content-TYPE", "Content-Type ", "X-A:b", "", "X-A\n")
+    ]
+    for path in ("/slack/odd", *retyped_paths, "/slack/resized"):
+        response = get(client, path)
+        assert response.status == 500 and "<b>x</b>" not in response.read().decode()

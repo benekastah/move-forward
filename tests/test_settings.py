@@ -149,12 +149,9 @@ def test_fields_show_their_default_as_a_placeholder_else_the_example_from_their_
         {"email": "me@x", "jira": {"site": "https://x.atlassian.net"}}
     )
     page = settings.page(jira)
+    assert "name='jira:escalation_levels' rows='3' placeholder='manager\ndirector\nvp'" in page
     assert (
-        "name='jira:escalation_levels' rows='3' placeholder='manager&#10;director&#10;vp'" in page
-    )
-    assert (
-        "name='jira:priorities' rows='3' placeholder='Lowest&#10;Low&#10;Medium&#10;High&#10;Highest'"
-        in page
+        "name='jira:priorities' rows='3' placeholder='Lowest\nLow\nMedium\nHigh\nHighest'" in page
     )
     assert "name='jira:status_in_progress' rows='3' placeholder='In Progress'" in page
 

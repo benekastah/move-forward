@@ -276,7 +276,7 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
     )
     html = render.dashboard_page(dashboard, refreshing=frozenset(), notice="deleted 1 <branch>")
     assert (
-        "<form method='post' action='/actions/delete_branch?at=cleanup&pos=0' class='action'"
+        "<form method='post' action='/actions/delete_branch?at=cleanup&amp;pos=0' class='action'"
         in html
     )
     assert "onsubmit='return confirm(&#x27;Sure?&#x27;)'" in html
@@ -344,7 +344,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
         in html
     )
     assert "<span class='notice'>done</span>" in html
-    assert "/actions/delete_branch?at=cleanup&pos=0' class='action'" in render.dashboard_page(
+    assert "/actions/delete_branch?at=cleanup&amp;pos=0' class='action'" in render.dashboard_page(
         dashboard, refreshing=frozenset()
     )
 
@@ -552,7 +552,7 @@ def test_a_panels_buttons_return_to_that_panel_instead_of_the_top() -> None:
     )
     html = render.dashboard_page(dashboard, refreshing=frozenset())
     assert "id='jira.jira_next'" in html
-    assert "action='/actions/a?at=jira.jira_next&pos=0'" in html
+    assert "action='/actions/a?at=jira.jira_next&amp;pos=0'" in html
 
 
 def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:

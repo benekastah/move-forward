@@ -216,7 +216,7 @@ def test_what_comes_back_to_the_page_keeps_the_selection() -> None:
     assert "action='/refresh?tag=urgent'" in html  # the header's, and each group's
     assert "action='/layout/reset?tag=urgent'" in html
     assert "href='/focus?tag=urgent'" in html and "<a href='/?tag=urgent' class='logo'>" in html
-    assert "action='/actions/act_now/tag?at=github.needs_reviewer&pos=0&tag=urgent'" in html
+    assert "action='/actions/act_now/tag?at=github.needs_reviewer&amp;pos=0&amp;tag=urgent'" in html
     focus = render.focus_categories_page(board, ["urgent"])
     assert "href='/focus?cat=act&amp;i=0&amp;tag=urgent'" in focus
     step = render.focus_page(board, ACT_NOW, 0, tags=["urgent"]) or ""

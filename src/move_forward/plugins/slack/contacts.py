@@ -2,6 +2,7 @@
 what `mfd slack` shares with them."""
 
 import re
+from string.templatelib import Template
 
 from move_forward.api import (
     BY_HAND,
@@ -146,27 +147,23 @@ def _requested(graph: Graph) -> tuple[set[str], set[str]]:
     return users, teams
 
 
-def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]]) -> str:
-    e = html.e
-    fields = "".join(
-        f"<input type='hidden' name='{e(k)}' value='{e(v)}'>" for k, v in hidden.items()
-    )
-    fields += "".join(
-        f"<input type='text' name='{e(name)}' value='{e(value)}' placeholder='{e(hint)}'>"
+def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]]) -> html.Html:
+    fields = [t"<input type='hidden' name='{k}' value='{v}'>" for k, v in hidden.items()]
+    fields += [
+        t"<input type='text' name='{name}' value='{value}' placeholder='{hint}'>"
         for name, value, hint in inputs
-    )
-    return (
-        f"<form method='post' action='/actions/slack/{action}?back={CONTACTS_PATH}'"
-        f" class='action'>{fields}<button type='submit' class='secondary small'>Save</button>"
-        "</form>"
+    ]
+    return html.html(
+        t"<form method='post' action='/actions/slack/{action}?back={CONTACTS_PATH}'"
+        t" class='action'>{fields}<button type='submit' class='secondary small'>Save</button>"
+        t"</form>"
     )
 
 
-def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
+def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> html.Html:
     """Everyone and every team pings can go to: the ones my open PRs ask for, my teams, and the
     ones imported or set, with where their pings go and an edit form each; and why the last
     lookup by email failed, if it did."""
-    e = html.e
     slack = SlackRepository(ctx.db)
     contacts, channels, sources = slack.contacts(), slack.team_channels(), slack.sources()
     users, teams = _requested(graph)
@@ -177,33 +174,22 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
             source or "", "not known"
         )
 
-    people_rows = "".join(
-        f"<tr><td>{e(login)}</td><td>{e(how(f'user:{login}'))}</td><td>"
-        + _form(
-            "set_contact",
-            {"login": login},
-            [("slack_id", contacts[login].slack_id or "" if login in contacts else "", "U0123456")],
+    def clear(name: str, fields: dict[str, str], confirm: str) -> html.Html:
+        action = Action(name=name, label="Clear", fields=fields, confirm=confirm)
+        return html.buttons([action], back=CONTACTS_PATH)
+
+    people_rows: list[Template] = []
+    for login in sorted(users | set(contacts)):
+        slack_id = contacts[login].slack_id or "" if login in contacts else ""
+        form = _form("set_contact", {"login": login}, [("slack_id", slack_id, "U0123456")])
+        forget = f"Forget what's kept for {login}? They're imported or looked up again."
+        cleared = (
+            clear("slack/clear_contact", {"login": login}, forget) if login in contacts else ""
         )
-        + (
-            html.buttons(
-                [
-                    Action(
-                        name="slack/clear_contact",
-                        label="Clear",
-                        fields={"login": login},
-                        confirm=f"Forget what's kept for {login}? They're imported or looked up"
-                        " again.",
-                    )
-                ],
-                back=CONTACTS_PATH,
-            )
-            if login in contacts
-            else ""
+        people_rows.append(
+            t"<tr><td>{login}</td><td>{how(f'user:{login}')}</td><td>{form}{cleared}</td></tr>"
         )
-        + "</td></tr>"
-        for login in sorted(users | set(contacts))
-    )
-    team_rows = ""
+    team_rows: list[Template] = []
     for team in sorted(teams | my_teams(graph) | set(channels) | set(ctx.config.teams)):
         channel = channels.get(team)
         configured = ctx.config.teams.get(team)
@@ -214,49 +200,29 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
         )
         if by_slug:
             note = "kept by slug: set it again by the team's id, then clear this"
-        team_rows += (
-            f"<tr><td>{e(team)}</td><td>{e(note)}</td><td>"
-            + (
-                ""
-                if by_slug
-                else _form(
-                    "set_team_channel",
-                    {"team": team},
-                    [
-                        (
-                            "channel_name",
-                            channel.channel_name or "" if channel else "",
-                            "#team-web",
-                        ),
-                        ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
-                    ],
-                )
+        form = (
+            ""
+            if by_slug
+            else _form(
+                "set_team_channel",
+                {"team": team},
+                [
+                    ("channel_name", channel.channel_name or "" if channel else "", "#team-web"),
+                    ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
+                ],
             )
-            + (
-                html.buttons(
-                    [
-                        Action(
-                            name="slack/clear_team_channel",
-                            label="Clear",
-                            fields={"team": team},
-                            confirm=f"Forget {team}'s channel?",
-                        )
-                    ],
-                    back=CONTACTS_PATH,
-                )
-                if channel
-                else ""
-            )
-            + "</td></tr>"
         )
-    body = (
-        "<article class='panel padded'>"
-        "<h2>People</h2>"
-        "<p class='target-note'>Their Slack member id links the ping page to a DM.</p>"
-        f"<table>{people_rows}</table>"
-        "<h2>Teams</h2><p class='target-note'>The channel a team's pings go to;"
-        " <code>[slack.teams]</code> in the config wins over what's here.</p>"
-        f"<table>{team_rows}</table></article>"
+        forget = f"Forget {team}'s channel?"
+        cleared = clear("slack/clear_team_channel", {"team": team}, forget) if channel else ""
+        team_rows.append(t"<tr><td>{team}</td><td>{note}</td><td>{form}{cleared}</td></tr>")
+    body = html.html(
+        t"<article class='panel padded'>"
+        t"<h2>People</h2>"
+        t"<p class='target-note'>Their Slack member id links the ping page to a DM.</p>"
+        t"<table>{people_rows}</table>"
+        t"<h2>Teams</h2><p class='target-note'>The channel a team's pings go to;"
+        t" <code>[slack.teams]</code> in the config wins over what's here.</p>"
+        t"<table>{team_rows}</table></article>"
     )
     return html.page("Where pings go", "where pings go", body)
 
