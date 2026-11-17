@@ -22,9 +22,9 @@ from move_forward.api import (
     Signals,
     age,
 )
+from move_forward.api.kinds import AWAIT_REVIEW, TICKET
 from move_forward.api.kinds import PULL_REQUEST as PR
 from move_forward.api.kinds import REVIEW as REVIEW_TASK
-from move_forward.api.kinds import TICKET
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
     DerivedSnapshot,
@@ -410,6 +410,10 @@ class Builder:
                     pr,
                     details=["waiting on " + ", ".join(who)],
                     rank=-pr.updated_at.timestamp(),
+                    # A task, so it can be snoozed until a push; what chases its reviewers
+                    # shares it, and the fingerprint, so one snooze sets aside both.
+                    signals=Signals(verb="Wait for review", task=AWAIT_REVIEW),
+                    fingerprint=pr.head_oid,
                 )
                 awaiting.append(self._with_auto_merge(item, pr))
         return (
