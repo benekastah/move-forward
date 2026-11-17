@@ -205,14 +205,18 @@ def test_another_orgs_team_of_the_same_slug_isnt_pinged_in_my_teams_channel() ->
 
 
 def test_a_team_is_one_team_whatever_case_names_it() -> None:
-    """GitHub ignores case in an org's and a team's names: a channel set for `Acme/Web` is
-    `acme/web`'s, and so is a ping sent to it."""
-    mine = pr(1, repo="Acme/widgets", requested_teams=["web"])
+    """GitHub ignores case in an org's and a team's names, and in logins: a channel set for
+    `Acme/Web` is `acme/web`'s, and so is a ping sent to it; a ping to `BOB` is `Bob`'s."""
+    mine = pr(1, repo="Acme/widgets", requested_users=["Bob"], requested_teams=["web"])
     shouty = TeamChannel(team="github.com/Acme/Web", channel_name="#team-web", channel_id="C1")
-    sent = Ping(pr_url=mine.url, target="team:github.com/ACME/web", kind="first", sent_at=NOW)
-    found = pings(github=snapshot(mine=[mine]), teams={"x": shouty}, pings=[sent])
-    [web] = found[mine.url].targets
+    sent = [
+        Ping(pr_url=mine.url, target="team:github.com/ACME/web", kind="first", sent_at=NOW),
+        Ping(pr_url=mine.url, target="user:BOB", kind="first", sent_at=NOW),  # logins too
+    ]
+    found = pings(github=snapshot(mine=[mine]), teams={"x": shouty}, pings=sent)
+    bob, web = found[mine.url].targets
     assert (web.destination, web.ping_kind) == ("#team-web (C1)", "follow-up")
+    assert (bob.name, bob.ping_kind) == ("Bob", "follow-up")
     assert SlackConfig(teams={"github.com/Acme/Web": "#web"}).teams == {WEB: "#web"}
 
 
