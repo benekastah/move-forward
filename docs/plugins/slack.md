@@ -58,7 +58,9 @@ PRs with a reviewer requested and without the approval it needs.
 
 ## Act now
 
-slack nominates the reviews to nudge: a quick ping, or a bump.
+slack nominates the reviews to nudge: a quick ping, or a bump. Their task is `await_review`
+(`api.kinds.AWAIT_REVIEW`), which github's Ready for review shares, so snoozing either sets
+aside both, until the PR's next push or the snooze's end.
 
 ## Pages
 

@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Nudge reviewers' task is `await_review`
+
+slack's Nudge reviewers was snoozed by the task `ping`; it now shares `await_review` with the PR's
+item in github's Ready for review, so one snooze sets aside both. `mfd snooze <PR> --task ping`
+and `mfd unsnooze <PR> --task ping` find nothing now: pass `--task await_review`, and read
+`await_review` for it in `mfd snoozes`. A nudge snoozed under `ping` comes back once.
+
 ### Reinstall: move-forward depends on py-git-client
 
 move-forward now runs git through [py-git-client](https://github.com/benekastah/py-git-client),

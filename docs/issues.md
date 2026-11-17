@@ -36,11 +36,6 @@ Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn'
 the panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
 needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
 
-- **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task
-  `ping`), with Snooze, but the PR's item in github's Ready for review has no task, so it
-  has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
-  task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
-  decide whether snoozing it sets aside the nudge too.
 - **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
   conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
   force-push (with lease), which the rule against force-pushing from a button forbids unless

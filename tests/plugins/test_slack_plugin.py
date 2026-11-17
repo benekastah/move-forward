@@ -24,6 +24,7 @@ from conftest import (
 
 from move_forward import render, server
 from move_forward.graph import Graph
+from move_forward.page import Item
 from move_forward.plugin import Context, InputRequest, Page, Request
 from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack import plugin as slack_plugin
@@ -36,7 +37,7 @@ from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.pings import Pinger
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
-from move_forward.refresh import stored_graph
+from move_forward.refresh import build_dashboard, run_action, stored_graph
 from move_forward.registry import enabled
 
 
@@ -371,3 +372,24 @@ def test_the_ping_page_says_what_its_last_button_did() -> None:
         InputRequest(slack.ctx, graph, page=Page(query, "/slack/ping"))
     )
     assert isinstance(page, str) and "marked the first ping to alice as sent" in page
+
+
+def test_one_snooze_sets_aside_a_pr_waiting_on_review_and_its_nudge() -> None:
+    config, db = stored(
+        slack=True, github=snapshot(mine=[pr(1, requested_users=["alice"], head_oid="a1")])
+    )
+
+    def items() -> tuple[Item, Item]:
+        built = build_dashboard(config, db, NOW)
+        [waiting] = panel(built, "github.ready_for_review").items
+        [nudge] = panel(built, "slack.nudges").items
+        return waiting, nudge
+
+    snooze = next(a for a in items()[0].actions if a.label == "Snooze")
+    run_action(config, db, snooze.name, snooze.fields)
+    waiting, nudge = items()
+    assert waiting.set_aside and nudge.set_aside
+    assert build_dashboard(config, db, NOW).act_now() == []
+    unsnooze = next(a for a in nudge.actions if a.label == "Unsnooze")
+    run_action(config, db, unsnooze.name, unsnooze.fields)
+    assert [i.set_aside for i in items()] == [False, False]

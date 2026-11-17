@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import Field
 
 from move_forward.api import Band, Graph, Item, Model, Panel, Ref, Signals, age
+from move_forward.api.kinds import AWAIT_REVIEW
 from move_forward.api.kinds import PULL_REQUEST as PR
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
@@ -59,6 +60,7 @@ class PrView(Model):
     repo: str
     handle: str
     head: str
+    head_oid: str | None = None
     draft: bool
     mine: bool
     created_at: str
@@ -216,11 +218,14 @@ class Pinger:
                     details=details,
                     rank=-since.timestamp(),
                     subjects=[Ref(kind=PR, id=pr.id)],
+                    # Chasing the reviewers is getting the PR reviewed, as whatever shows it
+                    # waiting on them has it: one snooze, until a push, sets aside both.
                     signals=Signals(
                         verb="Bump the review" if follow_up else "Ping the reviewers",
-                        task="ping",
+                        task=AWAIT_REVIEW,
                         effort="minutes",
                     ),
+                    fingerprint=pr.head_oid,
                 )
             )
         return Panel(
