@@ -4,10 +4,11 @@ import threading
 from pathlib import Path
 
 import pytest
+from git_client import NotStartedError
 from git_client.testing import real_git
 
 from move_forward import shell
-from move_forward.git import GIT_ENV, Git, NotRunError, git_common_dir
+from move_forward.git import GIT_ENV, Git, git_common_dir
 from move_forward.shell import DEFAULT_TIMEOUT_SECONDS
 
 
@@ -19,11 +20,11 @@ def test_no_git_starts_once_the_dashboard_stops(
     monkeypatch.setattr(shell, "_stopping", threading.Event())  # don't stop other tests
     shell.stop()
     git = Git(tmp_path)
-    with pytest.raises(NotRunError, match="^git: not run, shutting down$"):
+    with pytest.raises(NotStartedError):
         git.run("init")
-    with pytest.raises(NotRunError):
+    with pytest.raises(NotStartedError):
         git.ok("init")
-    with pytest.raises(NotRunError):  # a long-lived one too, e.g. a CatFile's
+    with pytest.raises(NotStartedError):  # a long-lived one too, e.g. a CatFile's
         git.popen("init")
     assert not (tmp_path / ".git").exists()
 

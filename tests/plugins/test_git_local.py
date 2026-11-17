@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from git_client import GitError, GitTimeoutError
+from git_client.testing import GitCall
 
 from move_forward.db import Database
 from move_forward.git import Git
@@ -230,7 +231,7 @@ def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path
 
 
 def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
-    tmp_path: Path, git_calls: list[list[str]]
+    tmp_path: Path, git_calls: list[GitCall]
 ) -> None:
     """Not one for each remote, key, ref or branch: on Windows each start costs tens of ms."""
     origin = tmp_path / "origin"
