@@ -28,6 +28,12 @@ def test_no_git_starts_once_the_dashboard_stops(
     assert not (tmp_path / ".git").exists()
 
 
+def test_a_long_lived_git_starts_until_then(tmp_path: Path) -> None:
+    with Git(tmp_path).popen("version") as git:
+        out, _ = git.communicate()
+    assert out.startswith(b"git version ")
+
+
 def test_a_command_is_stopped_after_two_minutes_unless_given_its_own_timeout(
     tmp_path: Path,
 ) -> None:
