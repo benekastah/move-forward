@@ -7,6 +7,7 @@
     python dev.py tests --shard I/N  # the Ith of N even parts of the tests, as CI splits them
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, the package's commands on PATH, the git hooks
+    python dev.py install --replace  # ...taking the commands over from another clone
     python dev.py pre-commit         # what the pre-commit hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
@@ -22,8 +23,18 @@ jobs this way when the project's Copier answers say so (see AGENTS.md).
 
 It comes from python-template, and `copier update` replaces it: a project adds to it in
 dev_project.py, its own file, if it has one. That can define `COMMANDS`, a dict of extra
-commands (a name to a function taking the command's arguments, a list of strings), and
+commands (a name to a function taking the command's arguments, a list of strings),
+`install_links()`, more links for `install` to make (a list of (link, target) paths: a symlink,
+which Windows usually can't make, or a shim if the link ends in `.cmd`), and
 `after_install()`, which `install` runs last. It's held to the same rules as this file.
+
+`install` makes its links only if it may make all of them, and changes nothing if not: it won't
+take one over from another clone (or install) whose target still exists, unless told to with
+`--replace`, and won't install a clone in a temporary directory (the system's, /tmp or
+/var/tmp) at all, which would leave the user's commands broken once it's deleted. So
+`after_install()` makes no links of its own: links go in `install_links()`, which `install`
+checks with its own.
+
 Standard library only: it runs before .venv exists. It runs under any Python from 3.11 (the
 first with tomllib; ruff checks it as 3.11), whatever the package needs, so the hooks work
 whichever `python3` comes first: everything but making .venv with venv and pip runs .venv's
@@ -33,6 +44,7 @@ tools, and uv picks its own Python.
 import argparse
 import importlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -272,28 +284,46 @@ def _bin_dir() -> Path:
     return Path.home() / ".local" / "bin"
 
 
-def install() -> None:
+def install(args: list[str]) -> None:
     """Set up this clone for development and use: .venv, each of the package's commands on
-    PATH (a link in ~/.local/bin, or on Windows a `.cmd` there), and this repository's
-    hooks. Safe to rerun, e.g. after pyproject.toml changes."""
+    PATH (a link in ~/.local/bin, or on Windows a `.cmd` there), dev_project.py's
+    `install_links()`, and this repository's hooks. Safe to rerun, e.g. after pyproject.toml
+    changes.
+
+    Refuses, before changing anything, if a link it would make runs another clone's (or
+    install's) file that still exists, unless `--replace` says to take it over; if any is a
+    file it didn't make; or, on Windows, if ~/.local/bin has a command's `.exe` (e.g. from
+    `uv tool install`), which Windows would run instead of the `.cmd`. Refuses outright in a
+    temporary clone (see `_temporary`)."""
+    parser = argparse.ArgumentParser(prog="dev.py install", description=install.__doc__)
+    parser.add_argument(
+        "--replace", action="store_true", help="take over links another clone or install has"
+    )
+    replace: bool = parser.parse_args(args).replace
+    names = scripts(_pyproject_text())
+    temporary = _temporary(names)
+    if temporary:
+        sys.exit(temporary)
+    bin_dir = _bin_dir()
+    links = [(bin_dir / (f"{name}.cmd" if WINDOWS else name), Path(tool(name))) for name in names]
+    install_links: Callable[[], list[tuple[Path, Path]]] | None = getattr(
+        _project(), "install_links", None
+    )
+    if install_links is not None:
+        links += install_links()
+    refusals = [why for link, _ in links if (why := refusal(link, replace))]
+    if WINDOWS:  # e.g. from `uv tool install`, which Windows would run rather than the `.cmd`
+        refusals += [
+            f"{exe} is another install's, which Windows runs before {exe.stem}.cmd; uninstall it"
+            for exe in (bin_dir / f"{name}.exe" for name in names)
+            if exe.exists()
+        ]
+    if refusals:
+        sys.exit("\n".join(f"install: {why}" for why in refusals))
     venv()
     print(f"set up {VENV}")
-    bin_dir = _bin_dir()
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    for name in scripts(_pyproject_text()):
-        if WINDOWS:
-            shim = bin_dir / f"{name}.cmd"
-            shim.write_text(f'@"{tool(name)}" %*\r\n', encoding="utf-8")
-            print(f"wrote {shim}")
-        else:
-            link = bin_dir / name
-            if link.exists() and not link.is_symlink():
-                sys.exit(
-                    f"install: {link} exists and isn't a link; move it out of the way and rerun"
-                )
-            link.unlink(missing_ok=True)
-            link.symlink_to(tool(name))
-            print(f"linked {link} -> {tool(name)}")
+    for link, target in links:
+        _link(link, target)
     run("git", "config", "core.hooksPath", "git_hooks")
     print("set this repository's hooks to git_hooks/")
     if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
@@ -305,6 +335,64 @@ def install() -> None:
     after_install = getattr(_project(), "after_install", None)
     if after_install is not None:
         after_install()
+
+
+def _temporary(names: list[str]) -> str | None:
+    """Why `install` won't install this clone, if it's in the temporary directory (or, outside
+    Windows, /tmp or /var/tmp, which $TMPDIR may not be, e.g. on macOS), or None: whatever made
+    it there will delete it, leaving the user's commands broken."""
+    dirs = [tempfile.gettempdir(), *([] if WINDOWS else ["/tmp", "/var/tmp"])]
+    temps = [Path(d).resolve() for d in dirs]
+    temp = next((d for d in temps if ROOT.is_relative_to(d)), None)
+    if temp is None:
+        return None
+    run_one = f", e.g. {tool(names[0])}" if names else ""
+    return (
+        f"install: {ROOT} is in a temporary directory ({temp}), so it isn't installed:"
+        f" it would take your commands over, then leave them broken once it's deleted. To use"
+        f" this clone without installing it, run `python dev.py venv` (and, for its hooks,"
+        f" `git config core.hooksPath git_hooks`), then its commands in {BIN}{run_one}."
+    )
+
+
+SHIM = re.compile(r'@"(?P<target>[^"]+)" %\*\s*')
+"""A `.cmd` that `install` wrote, which runs `target`."""
+
+
+def refusal(link: Path, replace: bool) -> str | None:
+    """Why `install` won't point `link` at this clone, or None if it may (see `install`): a
+    link, or a `.cmd` shim it wrote, that runs a file outside this clone that still exists,
+    unless `replace`; or a file that's neither. A link whose file is gone (its clone deleted)
+    is taken over."""
+    if link.is_symlink():
+        current = link.parent / link.readlink()
+    elif not link.exists():
+        return None
+    elif link.suffix == ".cmd" and (
+        shim := SHIM.fullmatch(link.read_text(encoding="utf-8", errors="replace"))
+    ):
+        current = Path(shim["target"])
+    else:
+        return f"{link} exists, and install didn't make it; move it out of the way and rerun"
+    if replace or not current.exists() or current.resolve().is_relative_to(ROOT):
+        return None
+    return (
+        f"{link} points at {current.resolve()}, another clone's or install's, not this one's"
+        f" ({ROOT}); rerun with --replace to take it over"
+    )
+
+
+def _link(link: Path, target: Path) -> None:
+    """Point `link` at `target`: with a `.cmd` that runs it, if `link` is one, or else a
+    symlink."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if link.suffix == ".cmd":
+        link.write_text(f'@"{target}" %*\r\n', encoding="utf-8")
+        print(f"wrote {link}")
+    else:
+        link.unlink(missing_ok=True)
+        link.symlink_to(target)
+        print(f"linked {link} -> {target}")
 
 
 def _add_to_user_path(folder: Path) -> None:
@@ -395,7 +483,7 @@ def main(argv: list[str]) -> None:
     elif command == "coverage":
         coverage(rest)
     elif command == "install":
-        install()
+        install(rest)
     elif command == "pre-commit":
         pre_commit()
     else:

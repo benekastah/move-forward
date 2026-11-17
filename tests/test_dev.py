@@ -138,10 +138,17 @@ def test_install_links_mfd_and_runs_dev_projects_after_install(
     monkeypatch.setattr(dev, "venv", lambda: None)
     monkeypatch.setattr(dev, "run", run)
     monkeypatch.setattr(dev, "_bin_dir", lambda: tmp_path)
+
+    # The clone running the tests may be a scratch one in a temporary directory, which install
+    # refuses outright; this install goes to tmp_path anyway.
+    def not_temporary(names: list[str]) -> None:
+        return None
+
+    monkeypatch.setattr(dev, "_temporary", not_temporary)
     # On PATH already, so install leaves the user's PATH alone (on Windows, the registry).
     monkeypatch.setenv("PATH", str(tmp_path))
 
-    dev.install()
+    dev.install([])
 
     assert after == [True]
     assert (tmp_path / ("mfd.cmd" if dev.WINDOWS else "mfd")).exists(follow_symlinks=False)
