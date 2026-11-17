@@ -13,7 +13,9 @@ def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
     `<host>/<owner>/<slug>`, from its PR's URL (`https://<host>/<owner>/<repo>/pull/<n>`), as
     the team is in the PR's repo's owner, casefolded, as GitHub ignores case in orgs' and
     teams' names. A team's channel was kept by its slug alone, which
-    says no org: it's left as it was, to be set again by the team's id."""
+    says no org: it's left as it was, to be set again by the team's id, but lower-cased, as
+    slack names a team now (it was kept as typed: `Platform`), so it can be cleared. Of two
+    that differ only in case, one is kept."""
     rows = conn.execute("SELECT id, pr_url, target FROM slack_pings WHERE target LIKE 'team:%'")
     for row_id, pr_url, target in rows.fetchall():
         url = urlsplit(str(pr_url))
@@ -24,6 +26,8 @@ def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
                 "UPDATE slack_pings SET target = ? WHERE id = ?",
                 (f"team:{url.netloc}/{owner}/{slug}".casefold(), row_id),
             )
+    # Slugs and ids are ASCII, so SQLite's lower() is casefold() for them.
+    conn.execute("UPDATE OR REPLACE slack_team_channels SET team = lower(team)")
 
 
 MIGRATIONS = [

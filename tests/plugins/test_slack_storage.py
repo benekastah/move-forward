@@ -73,3 +73,18 @@ def test_the_migration_names_a_team_in_one_case_whatever_its_pr_url_says() -> No
     )
     db.migrate("slack", MIGRATIONS)
     assert [p.target for p in SlackRepository(db).pings()] == ["team:github.com/acme/web"]
+
+
+def test_the_migration_lower_cases_channels_kept_by_slug_so_they_can_be_cleared() -> None:
+    """A channel set by hand was kept as typed (`Platform`); slack clears a team by its name
+    lower-cased, as GitHub ignores case in it."""
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS[:4])
+    db.execute("INSERT INTO slack_team_channels VALUES ('Platform', '#p', NULL)")
+    db.execute("INSERT INTO slack_team_channels VALUES ('WEB', '#web-old', NULL)")
+    db.execute("INSERT INTO slack_team_channels VALUES ('web', '#web', NULL)")
+    db.migrate("slack", MIGRATIONS)
+    slack = SlackRepository(db)
+    assert sorted(slack.team_channels()) == ["platform", "web"]
+    assert slack.unset_team_channel("Platform")
+    assert list(slack.team_channels()) == ["web"]
