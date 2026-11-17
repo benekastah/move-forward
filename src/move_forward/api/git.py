@@ -5,26 +5,32 @@ none started once it's stopping): run every git command through it, never py-git
 `Git`. The rest is py-git-client's (its README says what each does), and what it raises."""
 
 from git_client import (
+    CatFile,
     GitError,
     GitTimeoutError,
     NotARepositoryError,
+    RefUpdate,
     config,
     config_key,
     git_common_dir,
     printable,
     refs,
+    update_refs,
 )
 
 from move_forward.git import Git
 
 __all__ = [
+    "CatFile",
     "Git",
     "GitError",
     "GitTimeoutError",
     "NotARepositoryError",
+    "RefUpdate",
     "config",
     "config_key",
     "git_common_dir",
     "printable",
     "refs",
+    "update_refs",
 ]

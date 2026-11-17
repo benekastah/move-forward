@@ -22,6 +22,9 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   worktree's; and it's None for a `.git` that isn't a repository (no `HEAD`, `objects` or
   `refs`). A plugin that keys what it keeps by it sees a repository reached through a
   symbolic link under a new key.
+- **More of py-git-client in `api.git`**: `CatFile` (one `git cat-file` process for many
+  names or objects), and `update_refs` with its `RefUpdate` (many refs changed in one
+  transaction), so a plugin needn't start a git for each item.
 
 ## Version 3
 

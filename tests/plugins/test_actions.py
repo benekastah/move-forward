@@ -12,7 +12,7 @@ from conftest import (
     todo,
 )
 from git_client import GitError
-from git_client.testing import RepoTemplates
+from git_client.testing import GitCall, RepoTemplates
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -677,6 +677,47 @@ def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
         run("git/restore_together", config, restore.fields)
     with pytest.raises(ActionError, match="isn't on ice"):
         run("git/restore_together", config, {"targets": f"{repo}\t--force"})
+
+
+def test_a_stacks_buttons_start_as_many_gits_whatever_its_size(
+    config: Config, repo: Path, git_calls: list[GitCall]
+) -> None:
+    """A git for each kind of thing a button reads or does, not one for each branch: on
+    Windows each start costs tens of ms."""
+    names = ["s1", "s2", "s3"]
+    for name in names:
+        Git(repo).run("branch", name, "main")
+        _ice(config, repo, name)
+    targets = "\n".join(f"{repo}\t{name}" for name in names)
+
+    def started(action: str, fields: dict[str, str]) -> list[str]:
+        db = _stored(config)
+        git_calls.clear()
+        refresh.run_action(config, db, action, fields)
+        return sorted(call[0] for call in git_calls)
+
+    assert started("git/delete_together", {"targets": targets}) == [
+        "branch",
+        "for-each-ref",
+        "worktree",
+    ]
+    assert started("git/restore_together", {"targets": targets}) == [
+        "cat-file",
+        "for-each-ref",
+        "update-ref",
+    ]
+    assert [Git(repo).run("rev-parse", name) for name in names] == [
+        Git(repo).run("rev-parse", "main")
+    ] * 3
+    shown = Git(repo).run("rev-parse", "main")
+    lines = "\n".join(f"{repo}\t{name}\t{shown}" for name in names)
+    assert started("git/delete_branches", {"targets": lines}) == [
+        "branch",
+        "branch",
+        "branch",
+        "for-each-ref",
+        "worktree",
+    ]
 
 
 def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refuses(

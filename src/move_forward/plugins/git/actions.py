@@ -4,12 +4,14 @@ Every action checks its repo is one of the configured checkouts and returns a on
 notice for the page. Nothing here ever forces a push, resets, or stashes.
 """
 
+from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field
 
-from move_forward.api import ActionError, Form, Graph, InputRequest, Model
-from move_forward.api.git import Git, GitError
+from move_forward.api import ActionError, Graph, InputRequest, Model
+from move_forward.api.git import CatFile, Git, GitError, RefUpdate, refs, update_refs
 from move_forward.api.ids import branch_parts
 from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
@@ -54,32 +56,51 @@ def checked_out_in(repo: Path, branch: str) -> str | None:
     return None
 
 
-def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
-    """Raise unless the branch can go: it exists, isn't checked out, and if it's on ice, has
-    no commits since it was iced (they'd be lost with it)."""
-    if not branch_exists(repo, branch):
+@dataclass(frozen=True)
+class _Branches:
+    """A repo's branches as the actions check them, read once for however many branches an
+    action names: from one `git for-each-ref` and one `git worktree list`."""
+
+    tips: dict[str, str]
+    """The commit each branch points at, by its name: the branch's, never a tag's of the same
+    name."""
+    checked_out: dict[str, str]
+    """The worktree each branch is checked out in, by its name."""
+
+    @classmethod
+    def read(cls, repo: Path) -> _Branches:
+        found = refs(Git(repo), "refs/heads/")
+        return cls(
+            {name.removeprefix("refs/heads/"): ref.object for name, ref in found.items()},
+            {branch: path for path, branch in client.read_worktrees(repo) if branch},
+        )
+
+
+def _check_deletable(
+    graph: Graph, repo: Path, branch: str, branches: _Branches, sha: str | None = None
+) -> None:
+    """Raise unless the branch can go: it exists, isn't checked out, is at `sha` if given (the
+    commit the page judged safe to lose: one made since would be lost unseen), and if it's
+    on ice, has no commits since it was iced (they'd be lost with it)."""
+    tip = branches.tips.get(branch)
+    if tip is None:
         raise ActionError(f"{branch} doesn't exist in {repo}")
-    if worktree := checked_out_in(repo, branch):
+    if worktree := branches.checked_out.get(branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
     iced_sha = _iced_sha(graph, repo, branch)
-    if iced_sha and _tip(repo, branch) != iced_sha:
+    if iced_sha and tip != iced_sha:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
-
-
-def _tip(repo: Path, branch: str) -> str:
-    """The commit the branch points at: the branch's, never a tag of the same name's."""
-    return Git(repo).run("rev-parse", "--verify", f"refs/heads/{branch}")
+    if sha and tip != sha:
+        raise ActionError(f"{branch} has moved since the page showed it: look again")
 
 
 def delete_branch(req: InputRequest[GitConfig]) -> str:
-    """`git branch -D`, refused where `_check_deletable` says, or when it no longer points at
-    `sha`, the commit the page judged safe to lose: one made since would be lost unseen."""
+    """`git branch -D`, refused where `_check_deletable` says, given the commit the page
+    showed, `sha`."""
     ctx, graph = req.ctx, req.graph
     repo = repo_path(ctx.config, req.field("repo"))
     branch = req.field("branch")
-    _check_deletable(graph, repo, branch)
-    if (sha := req.form.fields.get("sha")) and _tip(repo, branch) != sha:
-        raise ActionError(f"{branch} has moved since the page showed it: look again")
+    _check_deletable(graph, repo, branch, _Branches.read(repo), req.form.fields.get("sha"))
     Git(repo).run("branch", "-D", branch)
     return f"deleted {branch} in {repo}"
 
@@ -95,10 +116,15 @@ def delete_together(req: InputRequest[GitConfig]) -> str:
             targets.append((repo_path(ctx.config, repo_dir), branch))
     if not targets:
         raise ActionError("no branches to delete")
+    by_repo: dict[Path, list[str]] = defaultdict(list)
     for repo, branch in targets:
-        _check_deletable(graph, repo, branch)
-    for repo, branch in targets:
-        Git(repo).run("branch", "-D", branch)
+        by_repo[repo].append(branch)
+    for repo, names in by_repo.items():
+        branches = _Branches.read(repo)
+        for branch in names:
+            _check_deletable(graph, repo, branch, branches)
+    for repo, names in by_repo.items():
+        Git(repo).run("branch", "-D", *names)
     return f"deleted {', '.join(branch for _, branch in targets)}"
 
 
@@ -124,15 +150,25 @@ def restore_together(req: InputRequest[GitConfig]) -> str:
         sha = _iced_sha(graph, repo, branch)
         if sha is None:
             raise ActionError(f"{branch} isn't on ice with a commit to restore it at")
-        if branch_exists(repo, branch):
-            raise ActionError(f"{branch} already exists in {repo}")
-        if Git(repo).resolve(f"{sha}^{{commit}}") is None:
-            raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}")
         targets.append((repo, branch, sha))
     if not targets:
         raise ActionError("no branches to restore")
+    by_repo: dict[Path, list[tuple[str, str]]] = defaultdict(list)
     for repo, branch, sha in targets:
-        Git(repo).run("branch", branch, sha)
+        by_repo[repo].append((branch, sha))
+    gits = {repo: Git(repo) for repo in by_repo}
+    for repo, restored in by_repo.items():
+        existing = refs(gits[repo], "refs/heads/")
+        with CatFile(gits[repo]) as objects:
+            for branch, sha in restored:
+                if f"refs/heads/{branch}" in existing:
+                    raise ActionError(f"{branch} already exists in {repo}")
+                if objects.resolve(f"{sha}^{{commit}}") is None:
+                    raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}")
+    for repo, restored in by_repo.items():
+        # Each only while it doesn't exist (an `old` of all zeros), all or none in a repo.
+        updates = [RefUpdate(f"refs/heads/{b}", sha, "0" * len(sha)) for b, sha in restored]
+        update_refs(gits[repo], updates, "move-forward: restored from ice")
     return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
@@ -143,17 +179,18 @@ def delete_branches(req: InputRequest[GitConfig]) -> str:
     ctx, graph, fields = req.ctx, req.graph, req.form.fields
     done: list[str] = []
     failed: list[str] = []
+    read: dict[Path, _Branches] = {}
     for line in fields.get("targets", "").splitlines():
         target, sha = line.rsplit("\t", 1) if line.count("\t") >= 2 else (line, "")
         repo_dir, branch = branch_parts(target)
         if not branch:
             continue
         try:
-            delete_branch(
-                InputRequest(
-                    ctx, graph, form=Form({"repo": repo_dir, "branch": branch, "sha": sha})
-                )
-            )
+            repo = repo_path(ctx.config, repo_dir)
+            if repo not in read:
+                read[repo] = _Branches.read(repo)
+            _check_deletable(graph, repo, branch, read[repo], sha)
+            Git(repo).run("branch", "-D", branch)
             done.append(branch)
         except (ActionError, GitError) as e:
             failed.append(f"{branch}: {e}")
