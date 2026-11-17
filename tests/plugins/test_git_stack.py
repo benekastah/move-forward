@@ -4,12 +4,14 @@
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import (
     NOW,
     dashboard,
     events_between,
+    git_directory,
     iced,
     local_branch,
     local_snapshot,
@@ -30,6 +32,8 @@ from move_forward.db import Database
 from move_forward.git import Git
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError, RefreshRequest
+from move_forward.plugins.git import client as git_client
+from move_forward.plugins.git.models import LocalRepo
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, changes, client
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -616,13 +620,6 @@ def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name()
     assert Ref(kind="pull_request", id=reopened.url) not in item.subjects
 
 
-def _repo(path: Path) -> Path:
-    path.mkdir()
-    Git(path).run("init", "-q", "-b", "main")
-    Git(path).run("commit", "-q", "--allow-empty", "-m", "first")
-    return path
-
-
 @pytest.mark.parametrize("server", [False, True], ids=["mfd refresh", "server"])
 def test_a_repo_git_newly_finds_reaches_git_stack_in_the_same_refresh(
     server: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -630,8 +627,14 @@ def test_a_repo_git_newly_finds_reaches_git_stack_in_the_same_refresh(
     """Both collect from the graph as it was; git_stack, watching git, is asked once git has
     stored, and collected again with git's new repo, before the refresh ends. A refresh in
     which nothing of git's moved collects it once, and one of git alone collects it too."""
-    a, b, c = _repo(tmp_path / "a"), _repo(tmp_path / "b"), _repo(tmp_path / "c")
+    a, b, c = (git_directory(tmp_path / name) for name in ("a", "b", "c"))
     asked: list[list[str]] = []
+
+    def read(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:  # no git needed
+        main = local_branch("main")
+        return LocalRepo(dir=str(repo), default_branch="main", worktrees=[], branches=[main])
+
+    monkeypatch.setattr(git_client, "collect_repo", read)
 
     def collect(repos: list[Path]) -> GitStackSnapshot:  # no `git stack` needed
         asked.append([r.name for r in repos])

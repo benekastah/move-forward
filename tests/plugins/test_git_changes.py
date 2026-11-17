@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import NOW
+from conftest import NOW, git_directory
 from git_client import GitError
 
 from move_forward.api.git import git_common_dir
@@ -28,7 +28,7 @@ from move_forward.plugin import (
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git import plugin as git_plugin
 from move_forward.plugins.git.config import GitConfig
-from move_forward.plugins.git.models import LocalRepo
+from move_forward.plugins.git.models import Branch, LocalRepo
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.registry import Enabled
@@ -54,6 +54,25 @@ class _Server:
         found = self.plugin.collect(RefreshRequest(ctx, Graph(), taken.full, taken.subjects))
         self.plugin.snapshots(ContextRequest(ctx)).save(found)
         self.checks.stored(e, taken)
+
+
+def _read_as(monkeypatch: pytest.MonkeyPatch, github_repos: dict[Path, str | None]) -> None:
+    """Have the plugin's collect read each of these repos, without git, as a clone of this
+    GitHub repo (or of none), on main: for what the plugin makes of what it read."""
+
+    def read(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
+        main = Branch(name="main", sha="a" * 40, committed_at=NOW)
+        return LocalRepo(
+            dir=str(repo),
+            github_repo=github_repos[repo],
+            default_branch="main",
+            worktrees=[],
+            branches=[main],
+        )
+
+    for repo in github_repos:
+        repo.mkdir(exist_ok=True)
+    monkeypatch.setattr(client, "collect_repo", read)
 
 
 def _repo(path: Path) -> Path:
@@ -333,13 +352,12 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
 
 @pytest.mark.parametrize("second", ["Acme/widgets", "acme/WIDGETS"])
 def test_two_clones_of_one_github_repo_are_a_problem(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, second: str
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, second: str
 ) -> None:
     """Published once, by the first's name, and warned of: GitHub's names ignore case, so remotes
     that differ in it name the same repo."""
-    clones = [_repo(tmp_path / "a"), _repo(tmp_path / "b")]
-    for clone, name in zip(clones, ["Acme/widgets", second], strict=True):
-        Git(clone).run("remote", "add", "origin", f"git@github.com:{name}.git")
+    clones = [tmp_path / "a", tmp_path / "b"]
+    _read_as(monkeypatch, dict(zip(clones, ["Acme/widgets", second], strict=True)))
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     ctx = Context(
@@ -372,7 +390,8 @@ def test_two_clones_of_one_github_repo_are_a_problem(
 def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    a, b = git_directory(tmp_path / "a"), git_directory(tmp_path / "b")
+    _read_as(monkeypatch, {a: None, b: None})
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     ctx = Context(

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from git_client import GitError, GitTimeoutError
-from git_client.testing import GitCall
+from git_client.testing import GitCall, RepoTemplates
 
 from move_forward.api.git import git_common_dir
 from move_forward.db import Database
@@ -85,6 +85,20 @@ def _commit(path: Path, name: str) -> None:
     Git(path).run("commit", "-q", "-m", name)
 
 
+def _origin_and_clone(root: Path) -> None:
+    """`origin`, with a commit of `src/a.txt` on main, and `repo`, a clone of it."""
+    origin = root / "origin"
+    _init_repo(origin)
+    _commit(origin, "src/a.txt")
+    Git(root).run("clone", "-q", str(origin), str(root / "repo"))
+
+
+def _clone(repo_templates: RepoTemplates, tmp_path: Path) -> Path:
+    """A clone, `repo`, of `origin` beside it, with one commit: built once for the run."""
+    repo_templates.build("origin-and-clone", _origin_and_clone)
+    return repo_templates.copy("origin-and-clone", tmp_path / "repos") / "repo"
+
+
 def test_worktree_status_counts_files_inside_untracked_directories(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
@@ -101,12 +115,8 @@ def test_worktree_status_counts_files_inside_untracked_directories(tmp_path: Pat
     assert local.worktree_status(repo) == (0, 3)
 
 
-def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "src/a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+def test_collect_repo_against_a_real_repo(tmp_path: Path, repo_templates: RepoTemplates) -> None:
+    repo = _clone(repo_templates, tmp_path)
     Git(repo).run("switch", "-q", "-c", "feature")
     _commit(repo, "b.txt")
     (repo / "dirty.txt").write_text("x")
@@ -134,12 +144,10 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     assert list(local.folded([second, other])) == [second, other]  # the first listed, without it
 
 
-def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) -> None:
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(
+    tmp_path: Path, repo_templates: RepoTemplates
+) -> None:
+    repo = _clone(repo_templates, tmp_path)
     Git(repo).run("switch", "-q", "-c", "mine")
     _commit(repo, "m.txt")
     Git(repo).run("switch", "-q", "-c", "stacked")  # on mine, with someone else's commit on top
@@ -158,12 +166,10 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     assert counted == {"main": None, "mine": 1, "stacked": 1, "theirs": 0}
 
 
-def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+def test_a_merge_counts_the_commits_of_both_its_sides(
+    tmp_path: Path, repo_templates: RepoTemplates
+) -> None:
+    repo = _clone(repo_templates, tmp_path)
     Git(repo).run("switch", "-q", "-c", "side")
     (repo / "s.txt").write_text("s")
     Git(repo).run("add", "s.txt")
@@ -178,13 +184,11 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
     assert counted == {"main": (None, None), "side": (1, 0), "topic": (3, 2)}
 
 
-def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Path) -> None:
+def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(
+    tmp_path: Path, repo_templates: RepoTemplates
+) -> None:
     """git's short name for such a branch is `heads/v1`, which is no branch's ref."""
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    repo = _clone(repo_templates, tmp_path)
     for branch in ("v1", "good"):
         Git(repo).run("switch", "-q", "-c", branch, "main")
         _commit(repo, f"{branch}.txt")
@@ -203,15 +207,11 @@ def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Pa
 
 
 def test_an_upstream_is_named_as_its_remote_branch_even_beside_a_branch_named_like_it(
-    tmp_path: Path,
+    tmp_path: Path, repo_templates: RepoTemplates
 ) -> None:
     """git's short name for `origin/main` is `remotes/origin/main` while a branch is
     `origin/main` too."""
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    repo = _clone(repo_templates, tmp_path)
     Git(repo).run("branch", "-q", "--no-track", "origin/main", "main")
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert next(b for b in result.branches if b.name == "main").upstream == "origin/main"
@@ -232,15 +232,11 @@ def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path
 
 
 def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
-    tmp_path: Path, git_calls: list[GitCall]
+    tmp_path: Path, git_calls: list[GitCall], repo_templates: RepoTemplates
 ) -> None:
     """Not one for each remote, key, ref or branch: on Windows each start costs tens of ms."""
-    origin = tmp_path / "origin"
-    _init_repo(origin)
-    _commit(origin, "a.txt")
-    repo = tmp_path / "repo"
-    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
-    Git(repo).run("remote", "add", "fork", str(origin))
+    repo = _clone(repo_templates, tmp_path)
+    Git(repo).run("remote", "add", "fork", str(repo.parent / "origin"))
     Git(repo).run("fetch", "-q", "fork")
     for name in ("one", "two", "three"):
         Git(repo).run("switch", "-q", "-c", name, "main")
