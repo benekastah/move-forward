@@ -20,8 +20,10 @@ REFRESHING_RELOAD_SECONDS = 10
 OPEN_SECTIONS_SCRIPT = (
     # The server renders each <details> in its default state. This restores the state the
     # browser last saw, from localStorage, and keeps it current on each toggle. Only
-    # sections it has a state for are touched, so a new panel keeps its default. Browsers
-    # fire toggle at load for sections that start open, and for the ones restored here;
+    # sections it has a state for are touched, so a new panel keeps its default; and never an
+    # empty panel with a field to fill in (`data-field`), open whatever was saved while it had
+    # items. Browsers fire toggle at load for sections that start open, and for the ones
+    # restored here;
     # saving then just writes the same state again. Saving replaces the state with the page's,
     # dropping sections gone for good, but while the tag view leaves some off the page
     # (`data-filtered` on `main`), it keeps theirs too. Without localStorage (a private window,
@@ -32,7 +34,8 @@ OPEN_SECTIONS_SCRIPT = (
     " const read = () => {"
     "  try { return JSON.parse(localStorage.getItem('mfd.open') || '{}'); } catch { return {}; } };"
     " const saved = read();"
-    " for (const s of sections) if (s.dataset.key in saved) s.open = saved[s.dataset.key];"
+    " for (const s of sections)"
+    "  if (s.dataset.key in saved && !('field' in s.dataset)) s.open = saved[s.dataset.key];"
     " const kept = () => (document.querySelector('main[data-filtered]') ? read() : {});"
     " const save = () => { try { localStorage.setItem('mfd.open', JSON.stringify({ ...kept(),"
     "  ...Object.fromEntries(sections.map((s) => [s.dataset.key, s.open])) })); }"
@@ -663,8 +666,9 @@ def _live(panel: Panel) -> int:
 
 def _panel(panel: Panel, spot: Spot | None = None, where: _Where = _UNFILTERED) -> str:
     # An empty panel starts collapsed, but not one with a field to fill in (notes' New todo):
-    # that's just when the field is wanted.
-    open_attr = _open(bool(panel.items) or any(a.input is not None for a in panel.actions))
+    # that's just when the field is wanted, so it's open whatever the browser saved.
+    field = not panel.items and any(a.input is not None for a in panel.actions)
+    open_attr = _open(bool(panel.items) or field)
     indexed = list(enumerate(panel.items))
     children = _nesting(panel.items)
 
@@ -689,7 +693,7 @@ def _panel(panel: Panel, spot: Spot | None = None, where: _Where = _UNFILTERED) 
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' id='{_e(panel.key)}'"
         f" data-key='{_e(panel.key)}'"
-        f"{'' if where.tags else ' data-drag'}{open_attr}>"
+        f"{'' if where.tags else ' data-drag'}{' data-field' if field else ''}{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{_live(panel)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
         f"{_buttons(panel.actions, at=panel.key, tags=where.tags)}"

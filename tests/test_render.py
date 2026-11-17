@@ -663,5 +663,7 @@ def test_an_empty_panel_is_open_when_it_has_a_field_to_fill_in() -> None:
         html = render.dashboard_page(dashboard, refreshing=frozenset())
         return re.findall(r"<details class='panel[^>]*>", html)[0]
 
-    assert drawn(button, field).endswith(" open>")
+    assert drawn(button, field).endswith(" data-field open>")
     assert not drawn(button).endswith(" open>")
+    # Marked so, the page opens it whatever the browser saved of it while it had items.
+    assert "!('field' in s.dataset)" in render.OPEN_SECTIONS_SCRIPT
