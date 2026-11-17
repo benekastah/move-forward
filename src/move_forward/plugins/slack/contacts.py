@@ -62,6 +62,12 @@ def my_teams(graph: Graph) -> set[str]:
     return {team.id.casefold() for team in graph.view(TEAM, _TeamView) if team.mine}
 
 
+def teams_host(graph: Graph) -> str | None:
+    """The host the graph's teams are on, if they're all on one: for an example of an id."""
+    hosts = {team.id.partition("/")[0] for team in graph.view(TEAM, _TeamView)}
+    return hosts.pop() if len(hosts) == 1 else None
+
+
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
     """`value` stripped, or None when blank; raises unless it matches `pattern`."""
     value = value.strip()
@@ -80,9 +86,13 @@ def set_contact(slack: SlackRepository, login: str, slack_id: str) -> str:
     return f"{login}'s pings go to {slack_id.strip() or 'no Slack link'}"
 
 
-def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: str) -> str:
+def set_team_channel(
+    slack: SlackRepository, team: str, name: str, channel_id: str, host: str | None = None
+) -> str:
+    """Set where a team's pings go, by hand. A team that isn't named by its id is refused,
+    with an example on `host` (see `teams_host`)."""
     try:
-        team = team_id(team)
+        team = team_id(team, host)
     except ValueError as e:
         raise ActionError(str(e)) from None
     channel_name = _optional(name, CHANNEL_NAME_RE, "channel name, e.g. #team-web")
@@ -122,6 +132,7 @@ def set_team_channel_action(req: InputRequest[SlackConfig]) -> str:
         req.field("team"),
         fields.get("channel_name", ""),
         fields.get("channel_id", ""),
+        teams_host(req.graph),
     )
 
 

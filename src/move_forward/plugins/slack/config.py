@@ -17,14 +17,18 @@ TEAM_ID_RE = re.compile(r"^[^/\s]+(/[^/\s]+){2,}$")
 """A team's id, as the team family has it: `<host>/<org>/<slug>`, or deeper."""
 
 
-def team_id(team: str) -> str:
+def team_id(team: str, host: str | None = None) -> str:
     """`team` stripped and casefolded, as slack keys a team (GitHub ignores case in orgs' and
-    teams' names). A ValueError, saying what a team's id is, unless it's one."""
+    teams' names). A ValueError, saying what a team's id is, unless it's one: with `team` on
+    `host`, where the teams are known to be on one."""
     team = team.strip().casefold()
     if not TEAM_ID_RE.match(team):
-        raise ValueError(
-            f"{team!r} isn't a team's id, `<host>/<org>/<slug>`: e.g. \"github.com/<org>/{team}\""
+        example = (
+            f'"{host}/<org>/{team}"'
+            if host
+            else f'"<host>/<org>/{team}", e.g. "github.com/acme/{team}"'
         )
+        raise ValueError(f"{team!r} isn't a team's id, <host>/<org>/<slug>: {example}")
     return team
 
 

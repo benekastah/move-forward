@@ -106,3 +106,11 @@ def test_clear_forgets_a_persons_slack_id_so_its_looked_up_again() -> None:
     assert "bob" not in slack.contacts()
     with pytest.raises(ActionError, match="nothing is kept for bob"):
         refresh.perform_action(config, db, "slack/clear_contact", {"login": "bob"})
+
+
+def test_a_team_named_by_slug_is_told_its_id_on_the_host_its_teams_are_on() -> None:
+    config, db = stored(slack=True, github=snapshot(), my_teams=["core"])  # on github.com
+    with pytest.raises(ActionError, match=r"<host>/<org>/<slug>: \"github.com/<org>/web\"$"):
+        refresh.perform_action(
+            config, db, "slack/set_team_channel", {"team": "web", "channel_name": "#web"}
+        )

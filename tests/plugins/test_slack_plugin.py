@@ -218,7 +218,8 @@ def test_a_team_is_one_team_whatever_case_names_it() -> None:
 
 def test_slack_teams_are_keyed_by_the_teams_id() -> None:
     assert SlackConfig(teams={WEB: "#web"}).teams == {WEB: "#web"}
-    with pytest.raises(ValueError, match=r"keyed by a team's id.*\"github.com/<org>/web\""):
+    # slack doesn't know github's host here: the id's form, with github.com as an example
+    with pytest.raises(ValueError, match=r"keyed by a team's id.*: \"<host>/<org>/web\", e\.g\."):
         SlackConfig.model_validate({"teams": {"web": "#web"}})
 
 

@@ -45,7 +45,7 @@ def list_destinations(
             else None,
             "source": "config",
         }
-    teams = [team_id(t) for t in teams]
+    teams = [team_id(t, contacts.teams_host(graph)) for t in teams]
     selected = (
         list(dict.fromkeys(teams))
         if teams
@@ -110,7 +110,9 @@ def run_command(ctx: Context[SlackConfig], graph: Graph, args: argparse.Namespac
             raise ValueError(f"no Slack id is set for {args.login}")
         return f"forgot {args.login}'s Slack id"
     if args.team_command == "set":
-        return contacts.set_team_channel(slack, args.team, args.channel, args.id or "")
+        return contacts.set_team_channel(
+            slack, args.team, args.channel, args.id or "", contacts.teams_host(graph)
+        )
     if not slack.unset_team_channel(args.team):
         raise ValueError(f"no channel is set for {args.team}")
     return f"forgot {args.team}'s channel"
