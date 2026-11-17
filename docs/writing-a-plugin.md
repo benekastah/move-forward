@@ -58,9 +58,14 @@ plugin needs, so a new py-git-client changes the API's version rather than break
 quietly. Ruff refuses an import of `git_client` in a plugin, as `tests/test_api.py` does. Run
 a command with `run` (its output stripped), `ok` (a yes-or-no answer, as `merge-base
 --is-ancestor` gives), `resolve` (an object id, or None) or `output` (as git printed it, for a
-parser); a failure raises `GitError`, with git's `stderr` and `stdout`. Its tests use
-py-git-client's pytest plugin (loaded for every test), whose `FakeGit` stands in for `Git`
-where a test checks the commands a plugin runs.
+parser); a failure raises `GitError`, with git's `stderr` and `stdout`.
+
+The built-ins' tests use py-git-client's pytest plugin, `git_client.testing` (this repo loads
+it in `pyproject.toml`'s `addopts`); a plugin of your own loads it in its own tests, with `-p
+git_client.testing` or `pytest_plugins`, for a git kept from your config and the network, and
+for repos built once a session. Its `FakeGit` stands in for `Git` where a test checks the
+commands a plugin runs, but only for py-git-client's own methods (`run`, `run_bytes`, `ok`,
+`resolve`), not the dashboard's `output`: test code that calls `output` on real repos.
 
 ## Versions
 
