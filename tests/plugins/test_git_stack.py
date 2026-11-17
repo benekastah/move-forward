@@ -267,14 +267,19 @@ def _json_lines(events: Sequence[JsonEvent], last: Mapping[str, object]) -> str:
     return "\n".join(json.dumps(e) for e in [*events, {**last, "events": events}]) + "\n"
 
 
+class _FakeGit(Git, FakeGit):
+    """The dashboard's `Git`, answering from its responses rather than starting git."""
+
+
 def _git_stack(
     monkeypatch: pytest.MonkeyPatch, stdout: str, stderr: str = "", returncode: int = 0
-) -> FakeGit:
+) -> _FakeGit:
     """The actions' git, answering `git stack` with this output and exit status."""
-    git = FakeGit()
+    git = _FakeGit(Path("/src/widgets"))
     git.respond(["stack"], stdout=stdout, stderr=stderr, returncode=returncode)
 
-    def made(_repo: Path, *, timeout: int) -> FakeGit:
+    def made(repo: Path, *, timeout: int) -> _FakeGit:
+        assert repo == Path(git.directory)
         return git
 
     monkeypatch.setattr(actions, "Git", made)
