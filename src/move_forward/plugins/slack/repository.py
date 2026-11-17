@@ -1,9 +1,29 @@
 """The slack plugin's tables, and the queries over them."""
 
+import sqlite3
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from move_forward.api import BY_HAND, Database, LookupCache, Migration
 from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
+
+
+def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
+    """A ping's team was its slug, which another org's team may share: name it by its id,
+    `<host>/<owner>/<slug>`, from its PR's URL (`https://<host>/<owner>/<repo>/pull/<n>`), as
+    the team is in the PR's repo's owner. A team's channel was kept by its slug alone, which
+    says no org: it's left as it was, to be set again by the team's id."""
+    rows = conn.execute("SELECT id, pr_url, target FROM slack_pings WHERE target LIKE 'team:%'")
+    for row_id, pr_url, target in rows.fetchall():
+        url = urlsplit(str(pr_url))
+        owner = url.path.strip("/").split("/")[0]
+        slug = str(target).removeprefix("team:")
+        if url.netloc and owner and "/" not in slug:
+            conn.execute(
+                "UPDATE slack_pings SET target = ? WHERE id = ?",
+                (f"team:{url.netloc}/{owner}/{slug}", row_id),
+            )
+
 
 MIGRATIONS = [
     Migration(
@@ -82,6 +102,7 @@ MIGRATIONS = [
     ALTER TABLE slack_team_channels_new RENAME TO slack_team_channels;
     """,
     ),
+    Migration("0005_teams_pinged_by_id", _teams_pinged_by_id),
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 
@@ -106,7 +127,7 @@ class SlackRepository:
     def team_channels(self) -> dict[str, TeamChannel]:
         return {
             row["team"]: TeamChannel(
-                slug=row["team"], channel_name=row["channel_name"], channel_id=row["channel_id"]
+                team=row["team"], channel_name=row["channel_name"], channel_id=row["channel_id"]
             )
             for row in self._db.query("SELECT * FROM slack_team_channels")
         }

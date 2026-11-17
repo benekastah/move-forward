@@ -214,7 +214,7 @@ def test_ping_page_lists_targets(client: HTTPConnection) -> None:
     response = get(client, "/slack/ping?pr=" + quote(pr(1).url, safe=""))
     body = response.read().decode()
     assert response.status == 200
-    assert "alice (DM)" in body and "team web" in body
+    assert "alice (DM)" in body and "team acme/web" in body
     assert "copyMessage" in body
     assert get(client, "/ping?pr=https://github.com/acme/widgets/pull/99").status == 404
 

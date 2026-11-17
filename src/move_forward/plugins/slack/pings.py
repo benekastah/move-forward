@@ -23,7 +23,7 @@ ALREADY_APPROVED = "already approved"
 class PingTarget(Model):
     kind: Literal["user", "team"]
     name: str
-    """Login or team name."""
+    """A person's login, or a team's id."""
     slack_link: str | None = None
     """Where to paste the message: the channel or the person's profile."""
     destination: str
@@ -66,6 +66,7 @@ class PrView(Model):
     created_at: str
     requested_users: list[str] = Field(default_factory=list[str])
     requested_teams: list[str] = Field(default_factory=list[str])
+    """The ids of the teams it requests."""
     review_blockers: list[str] | None = None
     review_stale: bool | None = None
     stale_review_hours: int | None = None
@@ -88,6 +89,11 @@ def _quiet(prs: list[PrView]) -> str:
 
 def _datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
+
+
+def _shown(team_id: str) -> str:
+    """A team as it's shown: its id without its host, `<org>/<slug>`."""
+    return team_id.partition("/")[2]
 
 
 def _slack_link(workspace: str, path: str) -> str | None:
@@ -147,18 +153,19 @@ class Pinger:
                     "user", login, link, f"{login} (DM)", last_by_target.get(f"user:{login}"), pr
                 )
             )
-        for name in pr.requested_teams:
-            team = self.teams.get(name)
+        for team_id in pr.requested_teams:
+            team = self.teams.get(team_id)
             link = None
-            destination = f"team {name}"
+            shown = _shown(team_id)
+            destination = f"team {shown}"
             if team and team.channel_id:
                 link = _slack_link(workspace, f"archives/{team.channel_id}")
-                destination = f"{team.channel_name or name} ({team.channel_id})"
+                destination = f"{team.channel_name or shown} ({team.channel_id})"
             elif team and team.channel_name:
                 destination = team.channel_name
             targets.append(
                 self._target(
-                    "team", name, link, destination, last_by_target.get(f"team:{name}"), pr
+                    "team", team_id, link, destination, last_by_target.get(f"team:{team_id}"), pr
                 )
             )
         return targets

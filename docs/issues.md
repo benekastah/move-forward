@@ -13,12 +13,10 @@ wrong, add it.
   the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
   angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
   `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
-- **Another org's team pings my team's channel.** slack keys a team's channel and pings by the
-  slug a PR requests, but github publishes a team for each org whose PRs request one. With
-  `search_scope = "everywhere"`, a PR of mine in another org requesting `web` is nudged to my
-  org's `web` channel, and its pings count as theirs. Key them by the team's id; `Team.handle`'s
-  docstring ("unique only within its publisher") is wrong too, as one publisher has several
-  orgs' teams.
+- **Another org's team takes my team's reviewer policy.** github's
+  `team_reviewer_assignment` is keyed by slug, so with `search_scope = "everywhere"` a policy
+  set for my org's `bacon` applies to another org's `bacon` requested on a PR of mine too. Key
+  it by the team's org as well (or only apply it in `org`).
 
 ## The skill and the dashboard disagree
 

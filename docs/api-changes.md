@@ -9,6 +9,13 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 5
+
+- **A pull request's `requested_teams` are the teams' ids**, `<host>/<org>/<slug>`, not their
+  handles: a team's handle isn't unique, even within one publisher (github publishes the teams
+  of every org whose PRs request one). Key a requested team by its id, and show its `team`
+  entity's handle or title.
+
 ## Version 4
 
 - **`api.kinds.AWAIT_REVIEW`**: the task of getting my own PR reviewed, as `REVIEW` is of

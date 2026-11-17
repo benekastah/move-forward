@@ -8,23 +8,28 @@ section.
 
 `workspace_url` makes the ping page link to channels and people, `ping_first` and
 `ping_follow_up` are the messages, and `[slack.teams]` the channel each team's pings go to, by
-the team's slug, as PRs name it.
+the team's id, `<host>/<org>/<slug>`, as PRs name it (`"github.com/acme/web" = "#team-web"`): a
+slug alone may be several orgs' teams', as github publishes the teams of every org whose PRs
+request one. A key that isn't a team's id is refused.
+
+A team, wherever it's named (`[slack.teams]`, `/slack/contacts`, `mfd slack`), is named by its
+id.
 
 A team's channel comes from `[slack.teams]`, or is set by hand on `/slack/contacts` or with
 `mfd slack team set`; `[slack.teams]` wins. A team named in neither has no channel, and its
-ping says only `team <name>`. `mfd init` asks only for the workspace: `/slack/contacts` offers a
+ping says only `team <org>/<slug>`. `mfd init` asks only for the workspace: `/slack/contacts` offers a
 channel field for each of my teams (the `team`s published as mine, e.g. github's `teams`) as
 well as each team my PRs request, and `mfd slack destinations --discover` looks for theirs.
 
-For missing destinations, `mfd slack destinations bacon ai-agents --discover --json`
-searches active Slack channels by exact team/channel name or the team's words in a topic
-or purpose. It lists public and accessible private channels through
+For missing destinations, `mfd slack destinations github.com/acme/bacon
+github.com/acme/ai-agents --discover --json` searches active Slack channels by exact
+team/channel name or the team's slug's words in a topic or purpose. It lists public and accessible private channels through
 [`conversations.list`](https://docs.slack.dev/reference/methods/conversations.list/),
 which needs `channels:read` and `groups:read` on the token in addition to the email lookup
 scope. It reads channel metadata only. No token is needed when all requested teams
 already have destinations. Known mappings win; discovery never overwrites or saves them.
 
-Pass several GitHub team slugs to limit the result to those teams (and omit people).
+Pass several teams' ids to limit the result to those teams (and omit people).
 Without team arguments, `--discover` checks my teams (from the graph) plus known mappings;
 without `--discover`, the command stays offline. Discovery lists Slack channels once for
 the whole batch, following pagination. A single match has `source: "discovered"`; missing
@@ -73,16 +78,16 @@ aside both, until the PR's next push or the snooze's end.
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
+| `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<id>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 | `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over a lookup, and blank keeps them unlinked. |
 | `/actions/slack/clear_contact` | `login` | Forgets where a person's pings go, asking first on the page, so they're looked up again. |
-| `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
+| `/actions/slack/set_team_channel` | `team` (its id), `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
 | `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins. |
 
 ## Commands
 
 | Command | Does |
 | --- | --- |
-| `mfd slack destinations [TEAM ...] [--discover] [--json]` | Where people's and teams' pings go, with their source (`config` for a configured team); optional team slugs filter to just those teams. `--discover` searches channel metadata for missing mappings, returning candidates without saving them. |
+| `mfd slack destinations [TEAM ...] [--discover] [--json]` | Where people's and teams' pings go, with their source (`config` for a configured team); optional teams' ids filter to just those teams. Each team is `team`, its id. `--discover` searches channel metadata for missing mappings, returning candidates without saving them. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
-| `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
+| `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel, by the team's id (`github.com/acme/web`). |

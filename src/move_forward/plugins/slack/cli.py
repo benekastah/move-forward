@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import re
 import sys
 
 from move_forward.api import (
@@ -15,7 +14,7 @@ from move_forward.api import (
     http,
 )
 from move_forward.plugins.slack import client, contacts, discovery
-from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.config import SlackConfig, team_id
 from move_forward.plugins.slack.repository import SlackRepository
 
 
@@ -32,22 +31,21 @@ def list_destinations(
         for c in slack.contacts().values()
     ]
     team_rows: list[dict[str, object]] = [
-        {**t.model_dump(), "source": sources.get(f"team:{t.slug}")}
+        {**t.model_dump(), "source": sources.get(f"team:{t.team}")}
         for t in slack.team_channels().values()
     ]
-    known = {str(t["slug"]): t for t in team_rows}
+    known = {str(t["team"]): t for t in team_rows}
     for team, name in ctx.config.teams.items():
         current = known.get(team, {})
         known[team] = {
-            "slug": team,
+            "team": team,
             "channel_name": name,
             "channel_id": current.get("channel_id")
             if current.get("channel_name") == name
             else None,
             "source": "config",
         }
-    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in teams):
-        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
+    teams = [team_id(t) for t in teams]
     selected = (
         list(dict.fromkeys(teams))
         if teams
@@ -61,13 +59,13 @@ def list_destinations(
             team_rows.append(known[team])
             continue
         row: dict[str, object] = {
-            "slug": team,
+            "team": team,
             "channel_name": None,
             "channel_id": None,
             "source": None,
         }
         if discover:
-            matches = discovery.candidates(team, channels)
+            matches = discovery.candidates(_slug(team), channels)
             row["candidates"] = matches
             row["status"] = (
                 "discovered" if len(matches) == 1 else "ambiguous" if matches else "missing"
@@ -82,17 +80,22 @@ def list_destinations(
         return json.dumps({"people": people, "teams": team_rows}, indent=2)
     lines = [f"{p['login']}  {p['slack_id'] or '-'}  ({p['source']})" for p in people]
     lines += [
-        f"team {t['slug']}  {t['channel_name'] or ''} {t['channel_id'] or ''}  ({t['source']})"
+        f"team {t['team']}  {t['channel_name'] or ''} {t['channel_id'] or ''}  ({t['source']})"
         + (f" [{t['status']}]" if "status" in t else "")
         for t in team_rows
     ]
     for row in team_rows:
         if row.get("status") == "ambiguous":
-            for match in discovery.candidates(str(row["slug"]), channels):
+            for match in discovery.candidates(_slug(str(row["team"])), channels):
                 lines.append(
                     f"  {match['channel_name']} ({match['channel_id']}); {match['matched_on']}"
                 )
     return "\n".join(lines)
+
+
+def _slug(team: str) -> str:
+    """A team's slug: the last part of its id, which channels are named for."""
+    return team.rpartition("/")[2]
 
 
 def run_command(ctx: Context[SlackConfig], graph: Graph, args: argparse.Namespace) -> str:
@@ -116,7 +119,9 @@ def run_command(ctx: Context[SlackConfig], graph: Graph, args: argparse.Namespac
 def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     commands = parser.add_subparsers(dest="slack_command", required=True)
     destinations = commands.add_parser("destinations", help="where people's and teams' pings go")
-    destinations.add_argument("teams", nargs="*", help="GitHub team slugs to look up")
+    destinations.add_argument(
+        "teams", nargs="*", help="the ids of the teams to look up, e.g. github.com/acme/web"
+    )
     destinations.add_argument(
         "--discover",
         action="store_true",
@@ -132,7 +137,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     team = commands.add_parser("team", help="set or forget a team's channel")
     team_commands = team.add_subparsers(dest="team_command", required=True)
     team_set = team_commands.add_parser("set")
-    team_set.add_argument("team", help="the team as PRs name it")
+    team_set.add_argument("team", help="the team's id, e.g. github.com/acme/web")
     team_set.add_argument("channel", help="its channel's name, e.g. #team-web")
     team_set.add_argument("--id", help="the channel's id, e.g. C0123456")
     team_commands.add_parser("unset").add_argument("team")

@@ -1,5 +1,6 @@
 """`[slack]`."""
 
+import re
 from string import Formatter
 from typing import Annotated, ClassVar, cast
 
@@ -12,6 +13,18 @@ DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? 
 DEFAULT_PING_FOLLOW_UP = "Gentle bump on this review request"
 DEFAULT_SLACK_TOKEN_ENV = "SLACK_API_TOKEN"
 DEFAULT_SLACK_KEYCHAIN_SERVICE = "move-forward-slack"
+TEAM_ID_RE = re.compile(r"^[^/\s]+(/[^/\s]+){2,}$")
+"""A team's id, as the team family has it: `<host>/<org>/<slug>`, or deeper."""
+
+
+def team_id(team: str) -> str:
+    """`team` stripped. A ValueError, saying what a team's id is, unless it's one."""
+    team = team.strip()
+    if not TEAM_ID_RE.match(team):
+        raise ValueError(
+            f"{team!r} isn't a team's id, `<host>/<org>/<slug>`: e.g. \"github.com/<org>/{team}\""
+        )
+    return team
 
 
 class SlackConfig(TokenFields):
@@ -44,7 +57,8 @@ class SlackConfig(TokenFields):
     """The reminder once a reviewer has been pinged about the PR, as written: nothing in it is
     filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
-    """Where review pings to a team go, e.g. `#team-a`, by its slug, as PRs name it. Wins over a
+    """Where review pings to a team go, e.g. `#team-a`, by the team's id, `<host>/<org>/<slug>`
+    (e.g. `"github.com/acme/web"`): its slug alone may be another org's team's too. Wins over a
     channel set by hand (`mfd slack team set`)."""
 
     @model_validator(mode="before")
@@ -66,6 +80,16 @@ class SlackConfig(TokenFields):
                 " set it with `mfd slack team set <team> <#channel>`"
             )
         return settings
+
+    @field_validator("teams")
+    @classmethod
+    def _teams_by_id(cls, value: dict[str, str]) -> dict[str, str]:
+        for team in value:
+            try:
+                team_id(team)
+            except ValueError as e:
+                raise ValueError(f"[slack.teams] is keyed by a team's id now: {e}") from None
+        return value
 
     @field_validator("workspace_url")
     @classmethod

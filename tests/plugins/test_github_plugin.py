@@ -64,7 +64,7 @@ def _context(**config: object) -> Context[GitHubConfig]:
     )
 
 
-def test_pr_entities_carry_state_ownership_mentions_and_team_slugs() -> None:
+def test_pr_entities_carry_state_ownership_mentions_and_team_ids() -> None:
     mine = pr(1, requested_teams=["web-reviewers"])
     merged = pr(2, state="MERGED")
     closed = pr(3)  # the closed list, not the PR's own state, says it's closed
@@ -87,7 +87,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_slugs() -> None:
     # What alice's PR names can't hide it from me: she wrote it.
     assert [e.mentions_hide for e in entities.values()] == [True, True, True, False]
     first = entities[mine.url]
-    assert first.attrs["requested_teams"] == ["web-reviewers"]
+    assert first.attrs["requested_teams"] == ["github.com/acme/web-reviewers"]
     assert first.attrs["head_oid"] == mine.head_oid  # for git, to see a checkout fall behind
     assert first.mentions == [mine.head, mine.title, mine.body]  # where ticket keys turn up
     assert first.attrs["review_blockers"] == []
@@ -643,10 +643,9 @@ def test_a_team_of_my_org_spelt_another_way_is_one_team_and_mine() -> None:
     shouty = pr(2, author="alice", requested_teams=["web"])
     shouty = shouty.model_copy(update={"repo": "Acme/widgets"})
     gh = snapshot(direct_requests=[shouty])
-    teams = {
-        e.ref.id: e.attrs
-        for e in GitHubPlugin().entities(Request(_context(), Graph(), gh))
-        if e.ref.kind == "team"
-    }
+    entities = GitHubPlugin().entities(Request(_context(), Graph(), gh))
+    teams = {e.ref.id: e.attrs for e in entities if e.ref.kind == "team"}
     assert teams["github.com/acme/web"] == {"handle": "web", "mine": True}
     assert "github.com/Acme/web" not in teams
+    [requesting] = [e for e in entities if e.ref.kind == "pull_request"]
+    assert requesting.attrs["requested_teams"] == ["github.com/acme/web"]  # the team's id

@@ -19,7 +19,7 @@ from move_forward.api import (
 )
 from move_forward.api.kinds import PERSON, TEAM
 from move_forward.plugins.slack import client
-from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.config import SlackConfig, team_id
 from move_forward.plugins.slack.pings import my_open_prs
 from move_forward.plugins.slack.repository import SlackRepository
 
@@ -50,15 +50,15 @@ class _PersonView(Model):
 
 
 class _TeamView(Model):
-    """What slack reads of a `team`: its `handle`, which PRs name it by, and whether it's mine."""
+    """What slack reads of a `team`: its `id`, which PRs name it by, and whether it's mine."""
 
-    handle: str
+    id: str
     mine: bool = False
 
 
 def my_teams(graph: Graph) -> set[str]:
-    """The handles of the teams I'm on or review for, as the plugins publishing teams say."""
-    return {team.handle for team in graph.view(TEAM, _TeamView) if team.mine}
+    """The ids of the teams I'm on or review for, as the plugins publishing teams say."""
+    return {team.id for team in graph.view(TEAM, _TeamView) if team.mine}
 
 
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
@@ -80,9 +80,10 @@ def set_contact(slack: SlackRepository, login: str, slack_id: str) -> str:
 
 
 def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: str) -> str:
-    team = team.strip()
-    if not team:
-        raise ActionError("a team is needed")
+    try:
+        team = team_id(team)
+    except ValueError as e:
+        raise ActionError(str(e)) from None
     channel_name = _optional(name, CHANNEL_NAME_RE, "channel name, e.g. #team-web")
     channel = _optional(channel_id, CHANNEL_ID_RE, "channel id, e.g. C0123456")
     if channel_name is None and channel is None:
@@ -124,7 +125,7 @@ def set_team_channel_action(req: InputRequest[SlackConfig]) -> str:
 
 
 def _requested(graph: Graph) -> tuple[set[str], set[str]]:
-    """The people and teams my open PRs ask to review, by login and team."""
+    """The people and teams my open PRs ask to review, by login and team id."""
     users: set[str] = set()
     teams: set[str] = set()
     for pr in my_open_prs(graph):

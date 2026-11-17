@@ -20,8 +20,8 @@ class Contact(Model):
 class TeamChannel(Model):
     """Where a team's review pings go."""
 
-    slug: str
-    """The team as PRs name it."""
+    team: str
+    """The team's id, `<host>/<org>/<slug>`, as PRs name it."""
     channel_name: str | None = None
     channel_id: str | None = None
 
@@ -31,7 +31,7 @@ class Ping(Model):
 
     pr_url: str
     target: str
-    """`user:<login>`, `team:<name>`, or what the skill logged."""
+    """`user:<login>`, `team:<id>`, or what the skill logged."""
     kind: PingKind
     message: str = ""
     sent_at: datetime

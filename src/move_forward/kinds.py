@@ -64,7 +64,7 @@ class PullRequest(KindModel):
     merged_at: str | None
     requested_users: list[str] = Field(default_factory=list[str])
     requested_teams: list[str] = Field(default_factory=list[str])
-    """The `handle`s of the teams it requests (`team`s)."""
+    """The ids of the teams it requests (`team`s): their handles aren't unique."""
     review_blockers: list[str] | None = None
     """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order.
     `already approved` says it has the approval it needs, so there's nobody to chase."""
@@ -106,9 +106,10 @@ class Team(KindModel):
     """What every team has, whoever publishes it."""
 
     handle: str
-    """Its name in the tool, e.g. a GitHub team's slug. Unlike its id, it's unique only within
-    its publisher (two orgs may each have a `web`): a consumer keying by handle takes two teams
-    of one handle for one."""
+    """Its name in the tool, e.g. a GitHub team's slug: for display, not identity. Unlike its
+    id, it isn't unique even within one publisher (github publishes the teams of every org whose
+    PRs request one, and two orgs may each have a `web`): a consumer keying by handle takes two
+    teams of one handle for one."""
     mine: bool = False
     """I'm on it or review for it, as its plugin's section says."""
 

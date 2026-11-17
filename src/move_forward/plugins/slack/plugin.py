@@ -58,20 +58,20 @@ class PingForm(BaseModel):
 
     pr_url: str
     target: str = Field(pattern=r"^(user|team):\S+$")
-    """`user:<login>` or `team:<name>`, as the ping targets name them."""
+    """`user:<login>` or `team:<id>`, as the ping targets name them."""
     kind: Literal["first", "follow-up"]
     message: str = ""
 
 
 def _team_channels(config: SlackConfig, known: dict[str, TeamChannel]) -> dict[str, TeamChannel]:
-    """The team channels set by hand, with `[slack.teams]` winning by name."""
+    """The team channels set by hand, with `[slack.teams]` winning, by team id."""
     teams = dict(known)
-    for name, channel in config.teams.items():
-        current = teams.get(name)
+    for team, channel in config.teams.items():
+        current = teams.get(team)
         # The id set by hand is its channel's: it's kept only for the same channel.
         same = current is not None and current.channel_name == channel
-        teams[name] = TeamChannel(
-            slug=name,
+        teams[team] = TeamChannel(
+            team=team,
             channel_name=channel,
             channel_id=current.channel_id if same and current else None,
         )

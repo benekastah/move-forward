@@ -120,7 +120,7 @@ The pull request family, modeled in core (`api.kinds.PullRequest`); github adds 
 | `created_at` | ISO datetime | |
 | `merged_at` | ISO datetime or null | |
 | `requested_users` | list of logins | reviewers requested as people |
-| `requested_teams` | list of strings | the `handle`s (slugs) of the teams requested, each a `team` in the repo's owner |
+| `requested_teams` | list of strings | the ids of the teams requested, each a `team` in the repo's owner |
 
 On my open PRs only:
 
@@ -155,7 +155,7 @@ The team family, modeled in core (`api.kinds.Team`).
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | its name in the tool, a slug; unique only within its publisher, unlike its id, so keying by it takes two teams of one handle for one |
+| `handle` | string | its name in the tool, a slug: for display, not identity. Unlike its id it isn't unique, even within one publisher (github publishes the teams of every org whose PRs request one), so keying by it takes two teams of one handle for one |
 | `mine` | bool | I'm on it or review for it, as its plugin's section says |
 
 ### `mail.thread`

@@ -12,13 +12,15 @@ from move_forward.db import Database
 from move_forward.plugin import ActionError
 from move_forward.plugins.slack.repository import SlackRepository
 
+WEB = "github.com/acme/web"
+
 
 def test_the_page_lists_requested_reviewers_and_where_their_pings_go() -> None:
     mine = pr(1, requested_users=["alice", "<b>"], requested_teams=["web"])
     config, db = stored(
         github=snapshot(mine=[mine]), users={"alice": Reviewer(login="alice", slack_id="U111111")}
     )
-    SlackRepository(db).set_team_channel("web", "#team-web", None)
+    SlackRepository(db).set_team_channel(WEB, "#team-web", None)
     page = refresh.plugin_page(config, db, "/slack/contacts", {})
     assert isinstance(page, str)
     assert "alice" in page and "value='U111111'" in page and "imported" in page
@@ -30,7 +32,8 @@ def test_the_page_lists_requested_reviewers_and_where_their_pings_go() -> None:
 def test_the_page_offers_a_channel_for_each_of_my_teams() -> None:
     config, db = stored(slack=True, github=snapshot(), my_teams=["core"])  # github's teams
     page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
-    assert "<td>core</td>" in page and "name='team' value='core'" in page
+    core = "github.com/acme/core"
+    assert f"<td>{core}</td>" in page and f"name='team' value='{core}'" in page
 
 
 def test_setting_by_hand_checks_the_ids_and_wins_over_a_lookup() -> None:
@@ -55,7 +58,8 @@ def test_mfd_slack_destinations(tmp_path: Path, capsys: pytest.CaptureFixture[st
         return cli.main(["-c", str(config), "slack", *args])
 
     assert mfd("contact", "set", "alice", "U111111") == 0
-    assert mfd("team", "set", "web", "#team-web", "--id", "C123456") == 0
+    assert mfd("team", "set", "web", "#team-web") == 1  # a slug may be any org's team's
+    assert mfd("team", "set", WEB, "#team-web", "--id", "C123456") == 0
     capsys.readouterr()
     assert mfd("destinations", "--json") == 0
     listed = json.loads(capsys.readouterr().out)
@@ -63,30 +67,30 @@ def test_mfd_slack_destinations(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert listed["teams"][0]["channel_id"] == "C123456"
     assert mfd("contact", "set", "alice", "nope") == 1
     assert mfd("contact", "unset", "alice") == 0 and mfd("contact", "unset", "alice") == 1
-    assert mfd("team", "unset", "web") == 0
+    assert mfd("team", "unset", WEB) == 0
     assert SlackRepository(Database(tmp_path / "d.db")).contacts() == {}
 
 
 def test_clear_forgets_a_teams_channel_but_a_blank_form_does_not() -> None:
     config, db = stored(slack=True, github=snapshot())
     slack = SlackRepository(db)
-    slack.set_team_channel("web", "#team-web", None)
+    slack.set_team_channel(WEB, "#team-web", None)
     with pytest.raises(ActionError, match="a channel name or id is needed"):
-        refresh.perform_action(config, db, "slack/set_team_channel", {"team": "web"})
-    assert "web" in slack.team_channels()
-    notice = refresh.run_action(config, db, "slack/clear_team_channel", {"team": "web"})
-    assert notice == "forgot web's channel"
-    assert "web" not in slack.team_channels()
+        refresh.perform_action(config, db, "slack/set_team_channel", {"team": WEB})
+    assert WEB in slack.team_channels()
+    notice = refresh.run_action(config, db, "slack/clear_team_channel", {"team": WEB})
+    assert notice == f"forgot {WEB}'s channel"
+    assert WEB not in slack.team_channels()
     with pytest.raises(ActionError, match="has no channel set"):
-        refresh.perform_action(config, db, "slack/clear_team_channel", {"team": "web"})
+        refresh.perform_action(config, db, "slack/clear_team_channel", {"team": WEB})
 
 
 def test_the_contacts_page_offers_clear_with_a_confirm_for_a_team_with_a_channel() -> None:
     config, db = stored(slack=True, github=snapshot())
-    SlackRepository(db).set_team_channel("web", "#team-web", None)
+    SlackRepository(db).set_team_channel(WEB, "#team-web", None)
     page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
-    assert "/actions/slack/clear_team_channel" in page and "Forget web" in page
-    SlackRepository(db).unset_team_channel("web")
+    assert "/actions/slack/clear_team_channel" in page and f"Forget {WEB}" in page
+    SlackRepository(db).unset_team_channel(WEB)
     assert "clear_team_channel" not in str(refresh.plugin_page(config, db, "/slack/contacts", {}))
 
 

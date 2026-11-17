@@ -36,3 +36,26 @@ def test_the_migration_keeps_imported_team_channels_as_set_by_hand() -> None:
         "core": ("#core", "C1"),
         "web": ("#web", None),
     }
+
+
+def test_the_migration_names_the_teams_pinged_by_their_id() -> None:
+    """A ping's team was its slug, in its PR's repo's owner; it's that team's id now. A team's
+    channel was kept by slug alone, whose org nothing says: it's kept as it was."""
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS[:4])
+    pr = "https://github.example.com/acme/widgets/pull/1"
+    for target in ("team:web", "user:alice", "unknown (from work notes)"):
+        db.execute(
+            "INSERT INTO slack_pings (pr_url, target, kind, message, sent_at, source)"
+            " VALUES (?, ?, 'first', '', ?, 'dashboard')",
+            (pr, target, NOW.isoformat()),
+        )
+    db.execute("INSERT INTO slack_team_channels VALUES ('web', '#web', NULL)")
+    db.migrate("slack", MIGRATIONS)
+    slack = SlackRepository(db)
+    assert [p.target for p in slack.pings()] == [
+        "team:github.example.com/acme/web",
+        "user:alice",
+        "unknown (from work notes)",
+    ]
+    assert list(slack.team_channels()) == ["web"]

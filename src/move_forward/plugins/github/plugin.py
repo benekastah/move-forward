@@ -95,23 +95,31 @@ def wants_reviewer(config: GitHubConfig, pr: PullRequest) -> bool:
     return not pr.in_merge_queue and (not pr.is_draft or config.has_primary_reviewer(pr.repo))
 
 
+def _org(config: GitHubConfig, owner: str) -> str:
+    """`owner`, spelt as `org` is where it's the same org: GitHub ignores case in both."""
+    return config.org if owner.casefold() == config.org.casefold() else owner
+
+
+def _requested_teams(config: GitHubConfig, pr: PullRequest) -> list[tuple[str, str]]:
+    """The teams `pr` requests, each in its repo's owner: (org, slug)."""
+    org = _org(config, pr.repo.partition("/")[0])
+    return [(org, slug) for slug in pr.requested_teams]
+
+
+def _team_id(config: GitHubConfig, org: str, slug: str) -> str:
+    """A team's id, `<host>/<org>/<slug>`."""
+    return f"{config.host}/{org}/{slug}"
+
+
 def _teams(config: GitHubConfig, groups: list[tuple[list[PullRequest], str, bool]]) -> list[Entity]:
     """A `team` for each of mine (in `org`) and each a PR in `groups` requests (in its repo's
     owner)."""
-
-    def org(owner: str) -> str:
-        """`owner`, spelt as `org` is where it's the same org: GitHub ignores case in both."""
-        return config.org if owner.casefold() == config.org.casefold() else owner
-
     owned = [(config.org, slug) for slug in config.teams] + [
-        (org(pr.repo.partition("/")[0]), slug)
-        for prs, _, _ in groups
-        for pr in prs
-        for slug in pr.requested_teams
+        team for prs, _, _ in groups for pr in prs for team in _requested_teams(config, pr)
     ]
     return [
         Entity(
-            ref=Ref(kind=TEAM, id=f"{config.host}/{owner}/{slug}"),
+            ref=Ref(kind=TEAM, id=_team_id(config, owner, slug)),
             title=f"{owner}/{slug}",
             url=f"https://{config.host}/orgs/{owner}/teams/{slug}",
             attrs=attrs(GitHubTeam(handle=slug, mine=owner == config.org and slug in config.teams)),
@@ -382,7 +390,9 @@ class GitHubPlugin(
             "created_at": pr.created_at.isoformat(),
             "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
             "requested_users": list(pr.requested_users),
-            "requested_teams": list(pr.requested_teams),
+            "requested_teams": [
+                _team_id(ctx.config, org, slug) for org, slug in _requested_teams(ctx.config, pr)
+            ],
         }
         if mine and state == "open":
             ignored = ctx.config.ignored_reviewers

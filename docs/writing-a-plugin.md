@@ -165,7 +165,8 @@ class LinearConfig(TokenFields):
   the body, never the URL (its errors name the URL, without its query).
 - Core knows no teams. A plugin keeps the ones it needs in its section (github's `teams`, by
   slug), and one whose tool has teams publishes them as the `team` family (`mine` for mine), so
-  another reads them from the graph: slack keys its channels by a team's `handle`.
+  another reads them from the graph: slack keys its channels by a team's id, as a PR's
+  `requested_teams` name them (a handle isn't unique).
 
 ## Collecting and storing
 
