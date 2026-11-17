@@ -1,5 +1,5 @@
 # Copier's record of this project's answers, for `copier update`; don't edit it by hand.
-_commit: 2ef53db
+_commit: 2397daf
 _src_path: gh:benekastah/python-template
 author_email: benekastah@gmail.com
 author_name: Paul Harper
@@ -11,6 +11,7 @@ min_python: '3.15'
 newest_python: '3.15'
 package_name: move_forward
 project_name: move-forward
+rapid_development: true
 test_shards_linux: 1
 test_shards_macos: 1
 test_shards_windows: 1

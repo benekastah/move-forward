@@ -14,10 +14,20 @@ Development section says how to set up a clone and run the checks.
 - **One kind of change per PR**: a refactor, a feature and a fix are separate PRs, each small
   enough to review whole. When one needs another first, that one lands first, on its own,
   with its own tests.
-- **Except in rapid development**: while `PROJECT_AGENTS.md` has the **In rapid development**
-  rule, waiting on CI costs more than a longer review, so bundle related changes (a fix, the
+- **Except in rapid development**: while `.copier-answers.yml` has `rapid_development: true`,
+  waiting on CI costs more than a longer review, so bundle related changes (a fix, the
   refactor it needs, a small feature) into one PR worth a CI run. Past about 800 changed
-  lines, split it into PRs that each get their CI in turn.
+  lines, split it into PRs that each get their CI in turn. Once others depend on a release and
+  most changes are fixes, leave rapid development, which also makes CI strict (see "Tests and
+  checks"):
+
+  ```sh
+  uvx copier update --defaults -d rapid_development=false \
+      --vcs-ref "$(sed -n "s/^_commit: //p" .copier-answers.yml | tr -d "'")"
+  ```
+
+  then check that `git diff` shows the new answer and `ci.yml`'s stricter `CI passed`, and
+  commit them.
 - **One commit per change**, in every project, so a reviewer can go commit by commit: each
   with its own tests and docs, and passing the checks on its own. Fixes from a review can be
   commits of their own.
@@ -76,7 +86,12 @@ Development section says how to set up a clone and run the checks.
   a PR above the bottom never gets "CI passed", so merging it waits forever.
   `python3 dev.py coverage` shows what the tests don't run.
 - **PRs are squash-merged**, so the checks must pass on a PR's last commit, and CI must pass
-  on it too (the "CI passed" check, which main's ruleset should require).
+  on it too (the "CI passed" check, which main's ruleset should require). In rapid
+  development, a PR's test jobs on macOS or Windows that never got a runner (GitHub's are
+  sometimes unavailable for long stretches) don't fail "CI passed" if Linux's passed: it
+  names them in a warning and in its summary. Those systems' tests didn't run, so mind the
+  code that differs there. On `main` they still fail it, and out of rapid development they
+  always do.
 - **Tests keep to themselves**: no network, and not the user's real config, home directory
   or other state; use `tmp_path`, and give programs the tests start a config that reaches
   nothing.

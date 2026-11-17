@@ -117,9 +117,6 @@ what's untried where it runs).
 
 ## Rules for changes
 
-- **In rapid development**: bundle related changes into PRs worth a CI run (see AGENTS.md).
-  Remove this rule, under this name, once others depend on a release and most changes are
-  fixes.
 - **Core and a plugin change in separate PRs.** Don't change core in the PR that adds or
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
