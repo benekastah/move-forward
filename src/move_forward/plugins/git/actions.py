@@ -157,18 +157,20 @@ def restore_together(req: InputRequest[GitConfig]) -> str:
     for repo, branch, sha in targets:
         by_repo[repo].append((branch, sha))
     gits = {repo: Git(repo) for repo in by_repo}
+    updates: dict[Path, list[RefUpdate]] = defaultdict(list)
     for repo, restored in by_repo.items():
         existing = refs(gits[repo], "refs/heads/")
         with CatFile(gits[repo]) as objects:
             for branch, sha in restored:
                 if f"refs/heads/{branch}" in existing:
                     raise ActionError(f"{branch} already exists in {repo}")
-                if objects.resolve(f"{sha}^{{commit}}") is None:
+                commit = objects.resolve(f"{sha}^{{commit}}")
+                if commit is None:
                     raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}")
-    for repo, restored in by_repo.items():
-        # Each only while it doesn't exist (an `old` of all zeros), all or none in a repo.
-        updates = [RefUpdate(f"refs/heads/{b}", sha, "0" * len(sha)) for b, sha in restored]
-        update_refs(gits[repo], updates, "move-forward: restored from ice")
+                # Only while it doesn't exist: an `old` of all zeros, as long as an id.
+                updates[repo].append(RefUpdate(f"refs/heads/{branch}", commit, "0" * len(commit)))
+    for repo, made in updates.items():  # all or none in a repo
+        update_refs(gits[repo], made, "move-forward: restored from ice")
     return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
