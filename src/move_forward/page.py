@@ -243,8 +243,6 @@ class Panel(Model):
     priority: Band = Band.HOUSEKEEPING
     """What kind of panel it is, which says where it goes by default (see `Band`). The page's
     layout, once someone has dragged things about, overrides it."""
-    sort_by_importance: bool = False
-    """Sort items by their assigned or signaled importance before their `rank`."""
     act_now: bool = False
     """Its items are candidates for core's Act now, but those that say otherwise
     (`Item.act_now`) and those `deferred`: work that's often the next thing to do."""

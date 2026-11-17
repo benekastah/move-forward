@@ -327,7 +327,6 @@ class Builder:
             title="Ready for me to review",
             description="Direct requests and my assigned approvals needing a fresh review.",
             items=items,
-            sort_by_importance=True,
         )
 
     def replies_for_me(self) -> Panel:
@@ -420,7 +419,6 @@ class Builder:
                 title="Fix before review",
                 description="My open PRs with failing checks, conflicts, feedback or missing reviewers.",
                 items=fixing,
-                sort_by_importance=True,
             ),
             Panel(
                 key="ready_for_review",

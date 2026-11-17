@@ -181,8 +181,8 @@ git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
 now stays first); the order is kept in the database, and focus mode's list of
 panels follows it. A group or panel new since then goes after the one it followed by default.
-Panels that order by importance use the priority set on an item's subject first, then
-their own rank for ties.
+Every panel orders its items by importance first (the priority set on an item's subject, else
+what its plugin or who it's about gives it), then by its own order.
 Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows
 Important and Critical as one group of buttons (❗️ / ‼️), highlighting the selected level. To set
 something aside rather than raise it, Snooze or put it on ice. For an
@@ -220,7 +220,7 @@ for that address or for everyone at its domain (not for a domain anyone can have
 like gmail.com). Once one is set, a Clear type button goes with it, asking first; one set on a
 domain says so, as it clears everyone there. A type I set beats one a tool gives, and one on an
 address beats one on its domain. Their type's importance (`[people] contact_types`)
-raises the item in Act now and in panels ordered by importance. It never lowers what a plugin
+raises the item in Act now and in its panel. It never lowers what a plugin
 said, and a priority I set on the item replaces it.
 
 ## Tags

@@ -94,7 +94,7 @@ on others (Ready for review, Held by merge conditions, In the merge queue), then
   treated as waiting for review (a reviewer who has since approved isn't waited on). Failing policy checks whose status descriptions say they
   need an approval are waiting too, on a first review as on a later one; other policy
   failures remain here.
-  The reasons appear together on one item; assigned importance sorts before age.
+  The reasons appear together on one item.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
   Pending CI is allowed. Each item says who it's waiting on. Where its repo allows auto-merge
   and its base requires a review it hasn't had, Merge when ready lets it merge by itself once it
@@ -108,7 +108,7 @@ on others (Ready for review, Held by merge conditions, In the merge queue), then
   from a requested reviewer. Team-only requests stay in
   Requested from my teams; a new push alone does not bring an approved PR back. Like
   other entity items, each has the core
-  importance choices. Assigned importance sorts before recent updates.
+  importance choices.
 - **Replies for me**: open non-draft PRs of others that mention me (updated within
   `history_days`) without asking for a review, with Act now's "Reply".
 - **Feedback to address**: unresolved threads, changes requested, comments since my last

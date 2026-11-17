@@ -70,7 +70,7 @@ def test_build_with_nothing_stored() -> None:
     assert dashboard.generated_at == datetime(2026, 10, 30, 12, tzinfo=UTC)
 
 
-def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
+def test_every_panel_sorts_assigned_importance_before_its_own_rank() -> None:
     ordinary = Item(title="ordinary", rank=200, subjects=[Ref(kind="x", id="ordinary")])
     critical = Item(title="critical", rank=1, subjects=[Ref(kind="x", id="critical")])
     important = Item(title="important", rank=100, subjects=[Ref(kind="x", id="important")])
@@ -79,7 +79,6 @@ def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
         title="Stage",
         description="",
         items=[ordinary, critical, important],
-        sort_by_importance=True,
     )
     assigned = {"critical": 2, "important": 1}
     built = panels.build(
