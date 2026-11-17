@@ -6,11 +6,11 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 from conftest import GIT_STACK, Outside, OutsideRefused
-from git_client.testing import GIT_SETTINGS
 
 from move_forward import keychain
 
@@ -80,9 +80,13 @@ def test_git_may_run(outside: Outside) -> None:
 
 
 def test_git_reaches_no_network_nor_my_config() -> None:
-    """py-git-client's test plugin, loaded in pyproject.toml's `addopts`, gives git these."""
-    assert GIT_SETTINGS.items() <= os.environ.items()
-    assert os.environ["GIT_CONFIG_NOSYSTEM"] == "1" and "GIT_CONFIG_GLOBAL" in os.environ
+    """What py-git-client's test plugin, loaded in pyproject.toml's `addopts`, must give git:
+    only local remotes, no asking for a password, and no config but the tests'."""
+    assert os.environ["GIT_ALLOW_PROTOCOL"] == "file"
+    assert os.environ["GIT_TERMINAL_PROMPT"] == "0"
+    assert os.environ["GIT_CONFIG_NOSYSTEM"] == "1"
+    tests_own = Path(os.environ["GIT_CONFIG_GLOBAL"]).resolve()
+    assert tests_own.is_relative_to(Path(tempfile.gettempdir()).resolve())
 
 
 def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:
