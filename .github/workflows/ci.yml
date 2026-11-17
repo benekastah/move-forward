@@ -1,7 +1,9 @@
 # Runs the static checks (formatting, lint, types) once, the tests on Linux, macOS and Windows
 # with the oldest and newest Python supported, a coverage report once, and the project's own
-# jobs (project.yml): once per pull request (on the merge GitHub would make), and on whatever
-# lands on main.
+# jobs (project.yml): on each pull request into main (on the merge GitHub would make), and on
+# whatever lands on main. A pull request into another branch (one stacked on another's) runs
+# no job until it targets main (see `on:`): it will be rebased and pushed again by then, which
+# would throw that run away.
 #
 # This file is the template's: `copier update` keeps it current, and merges its changes with
 # any made here. Put the project's own jobs in project.yml instead, which is the project's.
@@ -11,6 +13,16 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+    # The default three, and `edited` for a pull request retargeted to main without a push
+    # (by GitHub, when the branch below it is deleted, or by git stack, after it pushes): with
+    # no run, it would never get CI passed. A title or body edit runs no job (see the
+    # concurrency group, `changes` and `passed`), but reports each one as skipped, so the PR
+    # shows that rather than an earlier failure: the earlier run still has it.
+    types: [opened, synchronize, reopened, edited]
+# The filter alone doesn't keep a stacked pull request out: in one of GitHub's own stacks,
+# every pull request's workflows trigger as if it targeted the stack's base (main). So the
+# jobs also check the pull request's own base, and run only when it's main.
 
 permissions:
   contents: read
@@ -24,9 +36,14 @@ permissions:
 # job: project.yml's jobs are part of this run, so they're cancelled with it.
 #
 # A pull request's group is its number, the group cancel.yml's run joins when the pull request
-# merges or closes, to cancel this run: keep the two names the same.
+# merges or closes, to cancel this run: keep the two names the same. A run that checks nothing
+# (see `changes`) is in a group of its own, so a title edit, say, cancels no real run.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    ${{ (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
+    && (github.event.action != 'edited' || github.event.changes.base))
+    && format('ci-{0}', github.event.pull_request.number || github.ref)
+    || format('ci-skipped-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.run_attempt == 1 }}
 
 # Each job's time limit (timeout-minutes) is about 20% over how long it takes, and at most 5
@@ -35,8 +52,13 @@ concurrency:
 jobs:
   # Whether anything but docs changed. A pull request touching only Markdown skips the checks
   # (CI passed still reports); main always runs them. docs/entities.md counts as code: a test
-  # checks it against the plugins' models.
+  # checks it against the plugins' models. Skipped, and every job after it, for a
+  # pull request whose own base isn't main (one in a GitHub stack, above its bottom), and for
+  # an edit that leaves the base alone (`changes.base` is there only when the base changed).
   changes:
+    if: >-
+      (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
+      && (github.event.action != 'edited' || github.event.changes.base))
     runs-on: ubuntu-latest
     timeout-minutes: 1
     outputs:
@@ -162,10 +184,20 @@ jobs:
   # The one check a ruleset on main should require, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
   # passing), and fails unless project.yml's jobs passed and, unless docs alone changed, so
-  # did every other check.
+  # did every other check. Skipped when `changes` is, under another name: a skipped check
+  # counts as passing, and the latest check of a name is the one that counts, so one named CI
+  # passed could stand in for a real run on the same commit, or pass a stacked pull request
+  # (a ruleset judges one in a GitHub stack by the stack's base's rules). That run reports
+  # every other job as skipped, under its own name: so CI passed is the only check a ruleset
+  # may require.
   passed:
-    name: CI passed
-    if: always()
+    name: >-
+      ${{ (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
+      && (github.event.action != 'edited' || github.event.changes.base))
+      && 'CI passed' || 'CI not run' }}
+    if: >-
+      always() && (github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
+      && (github.event.action != 'edited' || github.event.changes.base))
     needs: [changes, static, tests, coverage, project]
     runs-on: ubuntu-latest
     timeout-minutes: 2  # time for the force-cancel step's minute, below

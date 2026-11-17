@@ -9,6 +9,8 @@ name: cancel
 
 on:
   pull_request:
+    # As ci.yml: a pull request into another branch has no run to cancel.
+    branches: [main]
     types: [closed]
 
 permissions: {}
