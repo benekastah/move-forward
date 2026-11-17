@@ -30,17 +30,6 @@ wrong, add it.
   and the token file would be warned about on every start: look their names up from their
   well-known SIDs (`LookupAccountSidW`) rather than matching English ones.
 
-## What one surface offers and another doesn't
-
-Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn't hold yet (Act now,
-the panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
-needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
-
-- **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
-  conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
-  force-push (with lease), which the rule against force-pushing from a button forbids unless
-  that's changed.
-
 ## The skill and the dashboard disagree
 
 The work-notes skill won't clean while something's on ice, but the dashboard cleans regardless

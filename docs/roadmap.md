@@ -21,9 +21,7 @@ the 8 hooks of its four mixins (`Collector`, `ChangeChecker`, `Command`, `Fetche
 
 ## Next, in this order
 
-1. **Buttons**: [What one surface offers and another
-   doesn't](issues.md#what-one-surface-offers-and-another-doesnt), in issues.md, and
-   [Buttons](#buttons), below.
+1. **Buttons**: see [Buttons](#buttons), below.
 2. **Gmail links that open the message**: see issues.md's [Bugs](issues.md#bugs).
 3. **Read the address book where it lives**: see [Contacts](#contacts), below.
 4. **HTML escaped by construction**: see [The page](#the-page), below.
