@@ -86,5 +86,6 @@ def test_the_migration_lower_cases_channels_kept_by_slug_so_they_can_be_cleared(
     db.migrate("slack", MIGRATIONS)
     slack = SlackRepository(db)
     assert sorted(slack.team_channels()) == ["platform", "web"]
+    assert slack.team_channels()["web"].channel_name == "#web"  # the one already lower-cased
     assert slack.unset_team_channel("Platform")
     assert list(slack.team_channels()) == ["web"]

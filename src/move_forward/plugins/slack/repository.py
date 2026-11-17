@@ -15,7 +15,7 @@ def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
     teams' names. A team's channel was kept by its slug alone, which
     says no org: it's left as it was, to be set again by the team's id, but lower-cased, as
     slack names a team now (it was kept as typed: `Platform`), so it can be cleared. Of two
-    that differ only in case, one is kept."""
+    that differ only in case, the one already lower-cased is kept."""
     rows = conn.execute("SELECT id, pr_url, target FROM slack_pings WHERE target LIKE 'team:%'")
     for row_id, pr_url, target in rows.fetchall():
         url = urlsplit(str(pr_url))
@@ -26,7 +26,12 @@ def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
                 "UPDATE slack_pings SET target = ? WHERE id = ?",
                 (f"team:{url.netloc}/{owner}/{slug}".casefold(), row_id),
             )
-    # Slugs and ids are ASCII, so SQLite's lower() is casefold() for them.
+    # Slugs and ids are ASCII, so SQLite's lower() is casefold() for them. Where a team is
+    # kept already lower-cased, its other spellings go; of the rest, one of each is kept.
+    conn.execute(
+        "DELETE FROM slack_team_channels WHERE team != lower(team) AND lower(team) IN"
+        " (SELECT team FROM slack_team_channels WHERE team = lower(team))"
+    )
     conn.execute("UPDATE OR REPLACE slack_team_channels SET team = lower(team)")
 
 
