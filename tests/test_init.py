@@ -1,4 +1,5 @@
 import re
+import sys
 import tomllib
 from dataclasses import replace
 from datetime import date
@@ -7,12 +8,13 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import pytest
-from conftest import section
+from conftest import Outside, section
 from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, keychain, registry, tomledit
 from move_forward.asking import InitSection
+from move_forward.git import Git
 from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
@@ -23,7 +25,6 @@ from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.mail import setup as mail_setup
 from move_forward.plugins.slack.config import SlackConfig
-from move_forward.shell import git
 from move_forward.strict import LOCKED, TABLES, Strict, marked
 
 
@@ -235,6 +236,12 @@ def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> No
     }
 
 
+def test_a_quiet_guess_is_a_commands_output_or_nothing(outside: Outside) -> None:
+    outside.allow(sys.executable)  # the child, a script of our own, isn't guarded
+    assert asking.quiet([sys.executable, "-c", "print(' org ')"]) == "org"
+    assert asking.quiet([sys.executable, "-c", "raise SystemExit(1)"]) == ""
+
+
 def test_guesses_cope_without_git_or_gh(tmp_path: Path) -> None:
     assert asking.checkout(tmp_path) is None and github_setup.guess_org(tmp_path) == ""
     assert github_setup.guess_teams("") == [] and github_setup.org_team_examples("") == []
@@ -242,9 +249,8 @@ def test_guesses_cope_without_git_or_gh(tmp_path: Path) -> None:
 
 def test_the_org_is_guessed_from_the_remote_the_branch_tracks(tmp_path: Path) -> None:
     org = tmp_path / "org"
-    git(tmp_path, "init", "-q", "-b", "main", str(org))
-    git(
-        org,
+    Git(tmp_path).run("init", "-q", "-b", "main", str(org))
+    Git(org).run(
         "commit",
         "-q",
         "--allow-empty",
@@ -252,10 +258,10 @@ def test_the_org_is_guessed_from_the_remote_the_branch_tracks(tmp_path: Path) ->
         "a",
     )
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", "-o", "upstream", str(org), str(repo))
-    git(repo, "remote", "add", "a-fork", "https://github.com/me/widgets.git")
+    Git(tmp_path).run("clone", "-q", "-o", "upstream", str(org), str(repo))
+    Git(repo).run("remote", "add", "a-fork", "https://github.com/me/widgets.git")
     assert github_setup.guess_org(repo) == "me"  # main tracks upstream, which isn't on GitHub
-    git(repo, "remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
+    Git(repo).run("remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
     assert github_setup.guess_org(repo) == "acme"  # the tracked one first
 
 

@@ -1,5 +1,5 @@
 """What a plugin may use from core: everything here, and nothing else. A plugin imports from
-`move_forward.api` (and its submodules `html`, `shell`, `http`, `localtime`, `keychain`,
+`move_forward.api` (and its submodules `html`, `shell`, `git`, `http`, `localtime`, `keychain`,
 `kinds`, `ids`, `tags`), never from core's own modules, which may change without notice."""
 
 from move_forward.act_now import due_pressure
@@ -15,6 +15,7 @@ from move_forward.asking import (
     https_url,
     path,
     quiet,
+    quiet_git,
     url,
     word,
 )
@@ -144,6 +145,7 @@ __all__ = [
     "https_url",
     "path",
     "quiet",
+    "quiet_git",
     "url",
     "word",
 ]

@@ -5,6 +5,17 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Reinstall: move-forward depends on py-git-client
+
+move-forward now runs git through [py-git-client](https://github.com/benekastah/py-git-client),
+a new dependency, so an install from before it can't start: `mfd serve --reload` keeps running
+the old code, and a restart fails. To move:
+
+1. Stop `mfd serve`.
+2. Pull.
+3. Reinstall: `python3 dev.py install` (on Windows, `py dev.py install`).
+4. Start `mfd serve` again.
+
 ### Python 3.15 is required
 
 move-forward now needs Python 3.15 or newer. As for 3.14 (below), a running `mfd serve` can't

@@ -43,11 +43,32 @@ A plugin uses core only through `move_forward.api` (`from move_forward.api impor
 Context, Graph`; imports are absolute, as Ruff enforces): everything a plugin may use is
 there, and core's own modules may change without notice. Its submodules group the rest:
 `api.html` (`page`, `e` to escape, `shown` to drop hidden characters, `buttons`,
-`linkable`), `api.shell` (`run`, `git`, `git_common_dir`, `CommandError`), `api.http`
+`linkable`), `api.shell` (`run`, `CommandError`), `api.git` (`Git`, `GitError`,
+`GitTimeoutError`, `NotARepositoryError`, `git_common_dir`, and py-git-client's `config`, `config_key` and `refs`), `api.http`
 (`request`, `RequestError`), `api.localtime` (`local`, `day`, `at`), `api.ids`
 (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`TokenFields`,
 `TokenSettings`, `token`, `read`, `write`, `delete`). Ruff refuses any other core import
 in a plugin, and `tests/test_api.py` checks it too.
+
+A plugin runs git through `api.git.Git(repo)`, never through
+[py-git-client](https://github.com/benekastah/py-git-client) itself, which the dashboard
+builds on: `Git` is py-git-client's client as the dashboard runs it (its git, its timeout, and
+nothing started once it's shutting down), and `api.git` re-exports the rest of py-git-client a
+plugin needs, so a new py-git-client changes the API's version rather than break plugins
+quietly. Ruff refuses an import of `git_client` in a plugin, as `tests/test_api.py` does. Run
+a command with `run` (its output stripped), `ok` (a yes-or-no answer, as `merge-base
+--is-ancestor` gives), `resolve` (an object id, or None) or `output` (as git printed it, for a
+parser); a failure raises `GitError`, with git's `stderr` and `stdout`. Nothing starts once
+the dashboard is stopping, but a long-lived git (`popen`, as a py-git-client `CatFile` uses)
+has no timeout: a plugin that keeps one closes it when the dashboard stops (`api.shell.stopping`),
+so a stuck git can't hold up shutdown.
+
+The built-ins' tests use py-git-client's pytest plugin, `git_client.testing` (this repo loads
+it in `pyproject.toml`'s `addopts`); a plugin of your own loads it in its own tests, with `-p
+git_client.testing` or `pytest_plugins`, for a git kept from your config and the network, and
+for repos built once a session. Its `FakeGit` stands in for `Git` where a test checks the
+commands a plugin runs, but only for py-git-client's own methods (`run`, `run_bytes`, `ok`,
+`resolve`), not the dashboard's `output`: test code that calls `output` on real repos.
 
 ## Versions
 

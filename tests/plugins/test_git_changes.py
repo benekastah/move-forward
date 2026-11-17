@@ -8,9 +8,11 @@ from typing import Any
 
 import pytest
 from conftest import NOW
+from git_client import GitError
 
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
+from move_forward.git import Git, git_common_dir
 from move_forward.graph import Graph
 from move_forward.ids import branch_id
 from move_forward.plugin import (
@@ -26,7 +28,6 @@ from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.registry import Enabled
 from move_forward.repositories import ChangeRepository, KvRepository, ProblemRepository
-from move_forward.shell import CommandError, git, git_common_dir
 
 
 class _Server:
@@ -52,8 +53,8 @@ class _Server:
 
 def _repo(path: Path) -> Path:
     path.mkdir()
-    git(path, "init", "-q", "-b", "main")
-    git(path, "commit", "-q", "--allow-empty", "-m", "first")
+    Git(path).run("init", "-q", "-b", "main")
+    Git(path).run("commit", "-q", "--allow-empty", "-m", "first")
     return path
 
 
@@ -68,27 +69,27 @@ def test_commits_checkouts_branches_and_config_change_the_fingerprint_but_status
         return seen[-1] != seen[-2]
 
     (repo / "a.txt").write_text("a")
-    git(repo, "status")  # rewrites the index, as editors do
+    Git(repo).run("status")  # rewrites the index, as editors do
     assert not moved()
-    git(repo, "add", "a.txt")
+    Git(repo).run("add", "a.txt")
     assert not moved()  # staged, not committed: left to refresh_seconds
-    git(repo, "commit", "-q", "-m", "a")
+    Git(repo).run("commit", "-q", "-m", "a")
     assert moved()
-    git(repo, "branch", "feature")
+    Git(repo).run("branch", "feature")
     assert moved()
-    git(repo, "checkout", "-q", "feature")
+    Git(repo).run("checkout", "-q", "feature")
     assert moved()
-    git(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
+    Git(repo).run("worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
     assert moved()
-    git(tmp_path / "wt", "commit", "-q", "--allow-empty", "-m", "in the worktree")
+    Git(tmp_path / "wt").run("commit", "-q", "--allow-empty", "-m", "in the worktree")
     assert moved()
-    git(repo, "config", "branch.feature.stackParent", "main")  # as git stack tracks it
+    Git(repo).run("config", "branch.feature.stackParent", "main")  # as git stack tracks it
     assert moved()
 
 
 def test_a_worktree_is_watched_through_its_main_repository(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
-    git(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
+    Git(repo).run("worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
     assert changes.fingerprint([repo, tmp_path / "wt"]) == changes.fingerprint([repo])
 
 
@@ -108,7 +109,7 @@ def test_the_plugin_says_changed_after_a_move_and_keeps_it_until_a_refresh_reads
     )
     server = _Server(GitPlugin(watching=False))
     assert not server.changed(ctx)  # nothing to compare against yet
-    git(repo, "commit", "-q", "--allow-empty", "-m", "second")
+    Git(repo).run("commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx)
     # Kept until a refresh reads it, but asking for one only once: nothing new moved since.
     assert not server.changed(ctx)
@@ -151,14 +152,14 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     assert not server.changed(ctx(0))  # the first look
     refresh(0)
     assert sorted(read) == ["a", "b"]
-    git(b, "commit", "-q", "--allow-empty", "-m", "second")
+    Git(b).run("commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx(1))
     read.clear()
     refresh(1)
     assert read == ["b"]  # a is kept as stored
     stored = server.plugin.snapshots(ContextRequest(ctx(1))).load()
     assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
-    git(a, "commit", "-q", "--allow-empty", "-m", "second")
+    Git(a).run("commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx(11))
     read.clear()
     refresh(11)  # ten minutes since every repo was read: all of them, whatever moved
@@ -218,10 +219,10 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
     assert server.changed(ctx(40))
 
     def failing(*args: Any, **kwargs: Any) -> LocalRepo:
-        raise CommandError("git: index.lock exists")
+        raise GitError(["status"], 128, "fatal: index.lock exists")
 
     monkeypatch.setattr(client, "collect_repo", failing)
-    with pytest.raises(CommandError):
+    with pytest.raises(GitError):
         server.refresh(ctx(40))
     assert not server.changed(ctx(80))  # as the last look saw it, though not as stored
     (repo / "other.txt").write_text("x\n", encoding="utf-8")
@@ -256,8 +257,8 @@ def test_edits_back_as_the_last_look_saw_them_after_a_newer_store_are_still_seen
     assert not server.changed(ctx(0))
     (repo / "new.txt").write_text("x\n", encoding="utf-8")
     assert server.changed(ctx(40))  # looked at: one untracked file
-    git(repo, "add", "new.txt")
-    git(repo, "commit", "-q", "-m", "new")
+    Git(repo).run("add", "new.txt")
+    Git(repo).run("commit", "-q", "-m", "new")
     server.refresh(ctx(40))  # stores none untracked, with no look in between
     (repo / "other.txt").write_text("x\n", encoding="utf-8")
     assert server.changed(ctx(80))  # one untracked again, as the last look saw, but not stored
@@ -279,14 +280,14 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     )
     server = _Server(GitPlugin(watching=False))
     assert not server.changed(ctx)
-    git(repo, "commit", "-q", "--allow-empty", "-m", "second")
+    Git(repo).run("commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx)
 
     def failing(*args: Any, **kwargs: Any) -> LocalRepo:
-        raise CommandError("git: index.lock exists")
+        raise GitError(["status"], 128, "fatal: index.lock exists")
 
     monkeypatch.setattr(client, "collect_repo", failing)
-    with pytest.raises(CommandError):
+    with pytest.raises(GitError):
         server.refresh(ctx)
     assert ChangeRepository(db).get("git").full_at is None  # the next collect reads every repo
     assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}  # kept
@@ -301,7 +302,7 @@ def test_two_clones_of_one_github_repo_are_a_problem(
     that differ in it name the same repo."""
     clones = [_repo(tmp_path / "a"), _repo(tmp_path / "b")]
     for clone, name in zip(clones, ["Acme/widgets", second], strict=True):
-        git(clone, "remote", "add", "origin", f"git@github.com:{name}.git")
+        Git(clone).run("remote", "add", "origin", f"git@github.com:{name}.git")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     ctx = Context(

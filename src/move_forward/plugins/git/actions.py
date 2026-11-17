@@ -9,8 +9,8 @@ from pathlib import Path
 from pydantic import Field
 
 from move_forward.api import ActionError, Form, Graph, InputRequest, Model
+from move_forward.api.git import Git, GitError
 from move_forward.api.ids import branch_parts
-from move_forward.api.shell import CommandError, git
 from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.panels import ICED, branch_ref
@@ -40,22 +40,19 @@ def worktrees(repo: Path) -> list[Path]:
     """The repo's worktrees, as `git worktree list` has them now."""
     return [
         Path(path)
-        for path, _ in client.parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
+        for path, _ in client.parse_worktrees(Git(repo).output("worktree", "list", "--porcelain"))
     ]
 
 
 def branch_exists(repo: Path, branch: str) -> bool:
     """Whether `branch` is a local branch: its exact ref, not a revision (`main~1`) that
     `rev-parse` would resolve."""
-    try:
-        git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")
-    except CommandError:
-        return False
-    return True
+    return Git(repo).ok("show-ref", "--verify", "--quiet", f"refs/heads/{branch}")
 
 
 def checked_out_in(repo: Path, branch: str) -> str | None:
-    for path, checked_out in client.parse_worktrees(git(repo, "worktree", "list", "--porcelain")):
+    listed = Git(repo).output("worktree", "list", "--porcelain")
+    for path, checked_out in client.parse_worktrees(listed):
         if checked_out == branch:
             return path
     return None
@@ -75,7 +72,7 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
 
 def _tip(repo: Path, branch: str) -> str:
     """The commit the branch points at: the branch's, never a tag of the same name's."""
-    return git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
+    return Git(repo).run("rev-parse", "--verify", f"refs/heads/{branch}")
 
 
 def delete_branch(req: InputRequest[GitConfig]) -> str:
@@ -87,7 +84,7 @@ def delete_branch(req: InputRequest[GitConfig]) -> str:
     _check_deletable(graph, repo, branch)
     if (sha := req.form.fields.get("sha")) and _tip(repo, branch) != sha:
         raise ActionError(f"{branch} has moved since the page showed it: look again")
-    git(repo, "branch", "-D", branch)
+    Git(repo).run("branch", "-D", branch)
     return f"deleted {branch} in {repo}"
 
 
@@ -105,7 +102,7 @@ def delete_together(req: InputRequest[GitConfig]) -> str:
     for repo, branch in targets:
         _check_deletable(graph, repo, branch)
     for repo, branch in targets:
-        git(repo, "branch", "-D", branch)
+        Git(repo).run("branch", "-D", branch)
     return f"deleted {', '.join(branch for _, branch in targets)}"
 
 
@@ -133,15 +130,13 @@ def restore_together(req: InputRequest[GitConfig]) -> str:
             raise ActionError(f"{branch} isn't on ice with a commit to restore it at")
         if branch_exists(repo, branch):
             raise ActionError(f"{branch} already exists in {repo}")
-        try:
-            git(repo, "cat-file", "-e", f"{sha}^{{commit}}")
-        except CommandError as e:
-            raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}") from e
+        if Git(repo).resolve(f"{sha}^{{commit}}") is None:
+            raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}")
         targets.append((repo, branch, sha))
     if not targets:
         raise ActionError("no branches to restore")
     for repo, branch, sha in targets:
-        git(repo, "branch", branch, sha)
+        Git(repo).run("branch", branch, sha)
     return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
@@ -164,7 +159,7 @@ def delete_branches(req: InputRequest[GitConfig]) -> str:
                 )
             )
             done.append(branch)
-        except (ActionError, CommandError) as e:
+        except (ActionError, GitError) as e:
             failed.append(f"{branch}: {e}")
     notice = f"deleted {len(done)} branches"
     if failed:
@@ -181,19 +176,15 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
     branch = req.field("branch")
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
-    try:
-        git(repo, "rev-parse", "--verify", "--quiet", f"{branch}@{{upstream}}")
-        has_upstream = True
-    except CommandError:
-        has_upstream = False
-    if has_upstream:
+    git = Git(repo)
+    if git.resolve(f"{branch}@{{upstream}}") is not None:
         remote, ref = client.push_target(repo, branch)
         if not remote:
             raise ActionError(
                 f"{branch} tracks a local branch, and {repo} has no remote to push to, or several:"
                 " set remote.pushDefault to say which"
             )
-        git(repo, "push", remote, f"refs/heads/{branch}:{ref}")
+        git.run("push", remote, f"refs/heads/{branch}:{ref}")
     else:
         remote = client.push_remote(repo, branch)
         if remote is None:
@@ -201,7 +192,7 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
                 f"{repo} has no remote to push to, or several: set remote.pushDefault to say which"
             )
         # By its ref: a tag of the same name would make `branch` match more than one.
-        git(repo, "push", "--set-upstream", remote, f"refs/heads/{branch}")
+        git.run("push", "--set-upstream", remote, f"refs/heads/{branch}")
     return f"pushed {branch}"
 
 
@@ -216,9 +207,10 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
     branch = req.field("branch")
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
+    git = Git(repo)
     try:
-        remote = git(repo, "config", f"branch.{branch}.remote").strip()
-    except CommandError as e:
+        remote = git.run("config", f"branch.{branch}.remote")
+    except GitError as e:
         raise ActionError(f"{branch} has no upstream to pull from") from e
     upstream_ref = f"{branch}@{{upstream}}"
     if remote == ".":  # it tracks a local branch: pull its copy where Push sent it, as counted
@@ -230,13 +222,13 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
                 " several: set remote.pushDefault to say which"
             )
     try:
-        git(repo, "fetch", "--quiet", remote)
-    except CommandError as e:
+        git.run("fetch", "--quiet", remote)
+    except GitError as e:
         raise ActionError(f"couldn't fetch {remote}: {e}") from e
     try:
-        upstream = git(repo, "rev-parse", "--verify", upstream_ref).strip()
-        here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
-    except CommandError as e:
+        upstream = git.run("rev-parse", "--verify", upstream_ref)
+        here = git.run("rev-parse", "--verify", f"refs/heads/{branch}")
+    except GitError as e:
         missing = (
             f"no copy on {remote} to pull"
             if upstream_ref.startswith("refs/remotes/")
@@ -245,24 +237,23 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
         raise ActionError(f"{branch} has {missing}") from e
     if here == upstream:
         return f"{branch} is up to date"
-    try:
-        git(repo, "merge-base", "--is-ancestor", here, upstream)
-    except CommandError as e:
+    if not git.ok("merge-base", "--is-ancestor", here, upstream):
         raise ActionError(
             f"{branch}'s upstream was rewritten (force-pushed?), or it has commits of its own:"
             " can't fast-forward"
-        ) from e
+        )
     worktree = checked_out_in(repo, branch)
     try:
         if worktree is None:
-            git(repo, "fetch", "--quiet", ".", f"{upstream}:refs/heads/{branch}")
+            git.run("fetch", "--quiet", ".", f"{upstream}:refs/heads/{branch}")
         else:
-            if git(Path(worktree), "status", "--porcelain", "--untracked-files=no").strip():
+            checkout = Git(Path(worktree))
+            if checkout.run("status", "--porcelain", "--untracked-files=no"):
                 raise ActionError(
                     f"{branch} has uncommitted changes in {worktree}: commit or set them aside"
                 )
-            git(Path(worktree), "merge", "--ff-only", "--quiet", upstream)
-    except CommandError as e:
+            checkout.run("merge", "--ff-only", "--quiet", upstream)
+    except GitError as e:
         raise ActionError(f"couldn't pull {branch}: {e}") from e
     return f"pulled {branch}"
 
@@ -278,5 +269,5 @@ def wip_commit(req: InputRequest[GitConfig]) -> str:
     modified, _ = client.worktree_status(worktree)
     if not modified:
         raise ActionError(f"{worktree} has no modified tracked files")
-    git(worktree, "commit", "--all", "--quiet", "-m", WIP_MESSAGE)
+    Git(worktree).run("commit", "--all", "--quiet", "-m", WIP_MESSAGE)
     return f"committed {modified} files as {WIP_MESSAGE} in {worktree}"

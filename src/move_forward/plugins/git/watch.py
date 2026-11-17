@@ -30,7 +30,7 @@ from pathlib import Path, PurePosixPath
 
 from watchfiles._rust_notify import RustNotify
 
-from move_forward.api.shell import CommandError, git
+from move_forward.api.git import Git, GitError
 
 log = logging.getLogger(__name__)
 
@@ -89,8 +89,8 @@ def tracked_dirs(worktree: Path) -> set[Path]:
     """The worktree and every directory in its index, i.e. with a file git tracks or a new
     one staged."""
     try:
-        out = git(worktree, "ls-files", "-z")
-    except CommandError:
+        out = Git(worktree).output("ls-files", "-z")
+    except GitError:
         return {worktree}
     found = {worktree}
     for name in out.split("\0"):

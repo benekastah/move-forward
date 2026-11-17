@@ -22,7 +22,10 @@ what's untried where it runs).
   `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
   Core's `domain.py` has only the base `Model` and `KindModel`.
 - Plugins import core only from `move_forward.api` (ruff enforces it, and `tests/test_api.py`
-  every form of import), and never import each other (`tests/test_api.py` again) or read
+  every form of import), and run git through its `api.git.Git`, never py-git-client's own
+  (both ban `git_client` in a plugin), so every git command runs the dashboard's way: its git
+  (`$MOVE_FORWARD_GIT`), its timeout, and nothing started once it's stopping
+  (`move_forward/git.py`). They never import each other (`tests/test_api.py` again) or read
   each other's config, snapshots or tables. What one needs
   from another goes through the graph. A plugin that's built on another declares it in
   `requires`.
@@ -196,18 +199,21 @@ what's untried where it runs).
   by opting out. A test that tries on purpose (a test of the guard) takes what was refused
   with `outside.take()`; one that truly needs a program lets it run with
   `outside.allow(...)` (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for
-  `git stack`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so
-  its own transports can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in
-  place of the developer's and the system's (an identity, no signing, no background maintenance,
-  none of their ignore or attributes files), but what it runs (hooks, credential helpers,
+  `git stack`). A child process isn't guarded: git runs with py-git-client's test environment
+  (its pytest plugin, `git_client.testing`, loaded in pyproject.toml's `addopts`):
+  `GIT_ALLOW_PROTOCOL=file`, so its own transports can't fetch from the network, no asking for
+  a password, and a config of the tests' own in place of the developer's and the system's (an
+  identity, no background maintenance, none of their ignore or attributes files). Build a repo
+  several tests share once, with its `repo_templates`. What git runs (hooks, credential helpers,
   `git stack`) and a program a test allows can do anything, so give them a config and repos
   that reach nothing. The one exception is
   `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
   ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
   only Windows CI sets, as that runner's store is thrown away after the job.
-- **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
-  the only ones; tools are
-  reached through their CLIs (`gh`, `git`) or the standard library.
+- **No new runtime dependencies.** pydantic, watchfiles (git watching its repos) and
+  py-git-client (running git, from its repository, by a release's commit: it has no
+  dependencies of its own) are the only ones; tools are reached through their CLIs (`gh`,
+  `git`) or the standard library.
 - **Linux, macOS and Windows**, as in `AGENTS.md`, and here: text people write by hand is
   read as `"utf-8-sig"` with `errors="replace"`, and `tests/test_encoding.py` checks every
   `read_text`, `write_text`, builtin `open` and `fdopen` names its encoding. The systems that

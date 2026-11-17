@@ -8,10 +8,12 @@ from pathlib import Path
 import move_forward
 
 PACKAGE = Path(move_forward.__file__).parent
+GIT_CLIENT = "git_client"
 API_MODULES = [
     "api",
     "api.html",
     "api.shell",
+    "api.git",
     "api.http",
     "api.localtime",
     "api.keychain",
@@ -31,9 +33,15 @@ def test_every_name_the_api_offers_resolves() -> None:
 
 
 def _modules(file: Path, node: ast.ImportFrom | ast.Import) -> list[list[str]]:
-    """The modules an import in `file` reaches, each as its parts below `move_forward`. In
-    `from package import name`, `name` may itself be a module, so it's counted as
-    `package.name`."""
+    """The modules an import in `file` reaches, each as its parts below `move_forward`, or
+    py-git-client's as `git_client` (a plugin runs git through `api.git`). In `from package
+    import name`, `name` may itself be a module, so it's counted as `package.name`."""
+    if isinstance(node, ast.ImportFrom):
+        reached = [node.module or ""] if node.level == 0 else []
+    else:
+        reached = [a.name for a in node.names]
+    if any(m.split(".")[0] == GIT_CLIENT for m in reached):
+        return [[GIT_CLIENT]]
     if isinstance(node, ast.Import):
         # A bare `import move_forward` reaches every module through it: core itself.
         return [
@@ -101,12 +109,15 @@ def test_every_way_of_reaching_past_the_api_is_caught() -> None:
     assert caught("from move_forward.plugins import github") == ["plugins.github"]
     assert caught("from ...plugins import github") == ["plugins.github"]
     assert caught("from ..mail.sub import helper") == []  # its own, however deep
+    assert caught("import git_client") == ["git_client"]
+    assert caught("from git_client.batch import refs") == ["git_client"]
 
 
-def test_ruff_bans_every_core_module_in_plugins() -> None:
-    """So a plugin importing core's own modules fails `ruff check` as I write it."""
+def test_ruff_bans_every_core_module_and_git_client_in_plugins() -> None:
+    """So a plugin importing core's own modules, or py-git-client, fails `ruff check` as I
+    write it."""
     pyproject = PACKAGE.parents[1] / "pyproject.toml"
     lint = tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["ruff"]["lint"]
     banned = set(lint["flake8-tidy-imports"]["banned-api"])
     core = {f"move_forward.{f.stem}" for f in PACKAGE.glob("*.py") if f.stem != "__init__"}
-    assert core - banned == set()
+    assert core - banned == set() and GIT_CLIENT in banned

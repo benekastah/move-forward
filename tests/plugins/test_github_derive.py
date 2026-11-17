@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from conftest import pr, snapshot
 
+from move_forward.git import Git
 from move_forward.plugins.github import codeowners, derive
-from move_forward.shell import git
 
 
 def test_team_score_counts_owned_required_and_my_files() -> None:
@@ -33,9 +33,8 @@ def test_team_score_counts_the_part_owned_by_me_or_my_teams_with_its_lines() -> 
 def _commit(repo: Path, email: str, path: str) -> None:
     (repo / path).parent.mkdir(parents=True, exist_ok=True)
     (repo / path).write_text(email + path)
-    git(repo, "add", path)
-    git(
-        repo,
+    Git(repo).run("add", path)
+    Git(repo).run(
         "-c",
         f"user.email={email}",
         "commit",
@@ -48,14 +47,14 @@ def _commit(repo: Path, email: str, path: str) -> None:
 def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
+    Git(repo).run("init", "-q", "-b", "main")
     _commit(repo, "alice@x", "api/a.py")
     _commit(repo, "alice@x", "api/b.py")
     _commit(repo, "bob@x", "api/c.py")
     _commit(repo, "me@x", "api/d.py")
     _commit(repo, "carol@x", "web/e.py")
     _commit(repo, "nobody@x", "api/f.py")
-    git(repo, "update-ref", "refs/remotes/upstream/main", "HEAD")
+    Git(repo).run("update-ref", "refs/remotes/upstream/main", "HEAD")
     local = derive.Checkout(
         github_repo="acme/widgets",
         dir=str(repo),
@@ -80,12 +79,12 @@ def test_suggest_reviewers_counts_commits_within_the_checkouts_history_days(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
+    Git(repo).run("init", "-q", "-b", "main")
     monkeypatch.setenv("GIT_COMMITTER_DATE", (datetime.now(UTC) - timedelta(days=60)).isoformat())
     _commit(repo, "alice@x", "api/a.py")
     monkeypatch.delenv("GIT_COMMITTER_DATE")
     _commit(repo, "bob@x", "api/b.py")
-    git(repo, "update-ref", "refs/remotes/upstream/main", "HEAD")
+    Git(repo).run("update-ref", "refs/remotes/upstream/main", "HEAD")
 
     def suggested(days: int) -> list[str]:
         local = derive.Checkout(
@@ -121,11 +120,11 @@ def test_a_checkout_scores_its_prs_whatever_case_its_remote_names_the_repo_in(
 def test_each_of_my_prs_in_a_checkout_gets_suggestions_but_whom_it_asked(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
+    Git(repo).run("init", "-q", "-b", "main")
     _commit(repo, "alice@x", "api/a.py")
     _commit(repo, "alice@x", "api/c.py")
     _commit(repo, "bob@x", "api/b.py")
-    git(repo, "update-ref", "refs/remotes/upstream/main", "HEAD")
+    Git(repo).run("update-ref", "refs/remotes/upstream/main", "HEAD")
     local = derive.Checkout(
         github_repo="acme/widgets",
         dir=str(repo),

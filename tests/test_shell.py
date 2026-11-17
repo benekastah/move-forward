@@ -1,17 +1,14 @@
-"""Running external commands."""
+"""Running external commands (git aside: see test_git.py)."""
 
-import shutil
 import subprocess
 import sys
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import REAL_GIT, Outside
+from conftest import Outside
 
 from move_forward import shell
-from move_forward.shell import GIT_ENV, CommandError, git, git_common_dir, git_program, run
+from move_forward.shell import CommandError, run
 
 
 def test_a_failing_command_keeps_what_it_printed(outside: Outside) -> None:
@@ -37,61 +34,3 @@ def test_only_windows_closes_what_a_command_would_inherit(monkeypatch: pytest.Mo
         monkeypatch.setattr(shell.sys, "platform", platform)
         run(["git", "--version"])
     assert closed == [True, False, False]
-
-
-@pytest.fixture
-def looked_up_again() -> Iterator[None]:
-    """`git_program` forgets what it found, before the test and after it."""
-    git_program.cache_clear()
-    yield
-    git_program.cache_clear()
-
-
-@pytest.mark.usefixtures("looked_up_again")
-def test_git_is_the_one_its_variable_names_else_the_one_on_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv(GIT_ENV, str(tmp_path / "nowhere" / "git"))
-    with pytest.raises(FileNotFoundError):
-        git(tmp_path, "status")
-    git_program.cache_clear()
-    monkeypatch.delenv(GIT_ENV)
-    assert git_program() == shutil.which("git") and Path(git_program()).is_absolute()
-    git_program.cache_clear()
-    monkeypatch.setenv("PATH", str(tmp_path))
-    assert git_program() == "git"  # for the error saying it isn't there
-
-
-def test_the_tests_run_gits_own_program() -> None:
-    assert git_program() == str(REAL_GIT) and REAL_GIT.is_file()
-
-
-def _checkout(path: Path) -> Path:
-    path.mkdir()
-    git(path, "init", "-q", "-b", "main")
-    git(
-        path,
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "a",
-    )
-    return path
-
-
-def test_a_main_checkouts_git_directory_is_its_dot_git(tmp_path: Path) -> None:
-    repo = _checkout(tmp_path / "repo")
-    assert git_common_dir(repo) == repo / ".git"
-
-
-def test_a_linked_worktrees_git_directory_is_its_main_repositorys(tmp_path: Path) -> None:
-    repo = _checkout(tmp_path / "repo")
-    git(repo, "worktree", "add", "-q", "-b", "side", str(tmp_path / "linked"))
-    assert git_common_dir(tmp_path / "linked") == (repo / ".git").resolve()
-
-
-def test_what_isnt_a_checkout_has_no_git_directory(tmp_path: Path) -> None:
-    assert git_common_dir(tmp_path) is None
-    (tmp_path / ".git").write_text("not a pointer\n", encoding="utf-8")
-    assert git_common_dir(tmp_path) is None

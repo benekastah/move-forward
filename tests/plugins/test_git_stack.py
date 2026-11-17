@@ -2,7 +2,7 @@
 `git stack clean`."""
 
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -20,12 +20,14 @@ from conftest import (
     stored,
     titles,
 )
+from git_client.testing import FakeGit
 from legacy import save_json_snapshot
 
 from move_forward import refresh, registry
 from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.git import Git
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError, RefreshRequest
 from move_forward.plugins.git.repository import LocalRepository
@@ -34,7 +36,6 @@ from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch,
 from move_forward.plugins.git_stack.panels import repo_dirs, stack_of
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
-from move_forward.shell import CommandError, git
 
 ICED = iced("me/x", "/src/widgets")
 
@@ -266,8 +267,22 @@ def _json_lines(events: Sequence[JsonEvent], last: Mapping[str, object]) -> str:
     return "\n".join(json.dumps(e) for e in [*events, {**last, "events": events}]) + "\n"
 
 
-def _clean_with(monkeypatch: pytest.MonkeyPatch, fake_git: Callable[..., str]) -> str:
-    monkeypatch.setattr(actions, "git", fake_git)
+def _git_stack(
+    monkeypatch: pytest.MonkeyPatch, stdout: str, stderr: str = "", returncode: int = 0
+) -> FakeGit:
+    """The actions' git, answering `git stack` with this output and exit status."""
+    git = FakeGit()
+    git.respond(["stack"], stdout=stdout, stderr=stderr, returncode=returncode)
+
+    def made(_repo: Path, *, timeout: int) -> FakeGit:
+        return git
+
+    monkeypatch.setattr(actions, "Git", made)
+    return git
+
+
+def _clean() -> str:
+    """Press Clean, for the repo's stacks."""
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main")]),
         stacks=stacks(StackBranch(name="me/a", parent="main")),
@@ -278,58 +293,41 @@ def _clean_with(monkeypatch: pytest.MonkeyPatch, fake_git: Callable[..., str]) -
 def test_stack_clean_says_what_it_did_from_its_json_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ran: list[tuple[str, ...]] = []
     tree = {"type": "result", "stacks": [{"name": "me/undeleted-thing", "parent": "main"}]}
-
-    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
-        ran.append(args)
-        return _json_lines([FETCHING, DELETED_A, *KEPT_B], tree)
-
-    notice = _clean_with(monkeypatch, fake_git)
-    assert ran == [("stack", "clean", "-d", "local", "--json")]
+    git = _git_stack(monkeypatch, _json_lines([FETCHING, DELETED_A, *KEPT_B], tree))
+    notice = _clean()
+    assert git.commands == [["stack", "clean", "-d", "local", "--json"]]
     assert notice == (
         f"cleaned {Path('/src/widgets')}: deleted me/a; untracked me/b;"
         " warning: me/b is checked out in /wt"
     )
 
-    def nothing(repo: Path, *args: str, timeout: int = 0) -> str:
-        return _json_lines([FETCHING], {"type": "result", "stacks": []})
-
-    cleaned = _clean_with(monkeypatch, nothing)
+    _git_stack(monkeypatch, _json_lines([FETCHING], {"type": "result", "stacks": []}))
+    cleaned = _clean()
     assert cleaned == f"cleaned {Path('/src/widgets')}: nothing merged to clean"
 
 
 def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.MonkeyPatch) -> None:
-    def failing(repo: Path, *args: str, timeout: int = 0) -> str:
-        out = _json_lines([FETCHING, DELETED_A], {"type": "error", "message": "rebase conflict"})
-        raise CommandError("git stack clean: rebase conflict", out)
-
+    out = _json_lines([FETCHING, DELETED_A], {"type": "error", "message": "rebase conflict"})
+    _git_stack(monkeypatch, out, "error: rebase conflict", 1)
     with pytest.raises(ActionError, match=r"failed: rebase conflict \(after it deleted me/a\)"):
-        _clean_with(monkeypatch, failing)
+        _clean()
 
 
 def test_a_clean_that_crashes_before_its_report_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
-    def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
-        out = "\n".join(json.dumps(e) for e in [FETCHING, DELETED_A]) + "\nTraceback\n"
-        raise CommandError("git stack clean: Traceback ... KeyError: 'parent'", out)
-
+    out = "\n".join(json.dumps(e) for e in [FETCHING, DELETED_A]) + "\nTraceback\n"
+    _git_stack(monkeypatch, out, "Traceback ... KeyError: 'parent'\n", 1)
     with pytest.raises(
-        ActionError, match=r"clean failed: git stack clean: Traceback.*\(after it deleted me/a\)"
+        ActionError, match=r"^git stack clean failed: Traceback.*\(after it deleted me/a\)$"
     ):
-        _clean_with(monkeypatch, crashing)
+        _clean()
 
 
 def test_untrack_says_which_branches_now_start_their_own_stacks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ran: list[tuple[str, ...]] = []
-
-    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
-        ran.append(args)
-        result = {"type": "result", "untracked": [{"branch": "me/b", "children": ["me/c"]}]}
-        return _json_lines([], result)
-
-    monkeypatch.setattr(actions, "git", fake_git)
+    result = {"type": "result", "untracked": [{"branch": "me/b", "children": ["me/c"]}]}
+    git = _git_stack(monkeypatch, _json_lines([], result))
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/b")]),
         stacks=stacks(
@@ -337,24 +335,21 @@ def test_untrack_says_which_branches_now_start_their_own_stacks(
         ),
     )
     notice = refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
-    assert ran == [("stack", "untrack", "me/b", "--json")]
+    assert git.commands == [["stack", "untrack", "me/b", "--json"]]
     assert notice == "untracked me/b; me/c now starts its own stack"
 
 
 def test_an_untrack_that_crashes_says_why_and_nothing_it_didnt_do(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
-        raise CommandError("git stack untrack: Traceback", json.dumps(FETCHING) + "\nTraceback\n")
-
-    monkeypatch.setattr(actions, "git", crashing)
+    _git_stack(monkeypatch, json.dumps(FETCHING) + "\nTraceback\n", "Traceback\n", 1)
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/b")]),
         stacks=stacks(StackBranch(name="me/b", parent="main")),
     )
     with pytest.raises(ActionError) as failed:
         refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
-    assert str(failed.value) == "git stack untrack failed: git stack untrack: Traceback"
+    assert str(failed.value) == "git stack untrack failed: Traceback"
 
 
 def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_record(
@@ -362,7 +357,7 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
 ) -> None:
     repo = tmp_path / "widgets"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
+    Git(repo).run("init", "-q", "-b", "main")
     config, db = stored(
         local=local_snapshot(dir=str(repo), branches=[local_branch("me/a", sha="a" * 40)]),
         stacks=stacks(StackBranch(name="me/a", parent="main"), dir=str(repo)),
@@ -381,7 +376,7 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
         local_snapshot(dir=str(repo), branches=[local_branch("me/a", sha="b" * 40)])
     )
     assert changed()  # a commit on a tracked branch
-    git(repo, "config", "branch.me/a.stackParent", "develop")  # as `git stack` records it
+    Git(repo).run("config", "branch.me/a.stackParent", "develop")  # as `git stack` records it
     assert changed()
     assert not changed()
     e = next(e for e in enabled(config, db, NOW) if e.name == "git_stack")
@@ -487,13 +482,7 @@ def test_merged_branches_from_multiple_repos_stay_out_of_act_now() -> None:
 def test_restack_runs_git_stack_restack_on_a_tracked_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ran: list[tuple[str, ...]] = []
-
-    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
-        ran.append(args)
-        return _json_lines([FETCHING], {"type": "result", "stacks": []})
-
-    monkeypatch.setattr(actions, "git", fake_git)
+    git = _git_stack(monkeypatch, _json_lines([FETCHING], {"type": "result", "stacks": []}))
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
         stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
@@ -502,17 +491,16 @@ def test_restack_runs_git_stack_restack_on_a_tracked_branch(
     assert refresh.run_action(config, db, "git_stack/stack_restack", fields) == (
         "restacked me/a's stack"
     )
-    assert ran == [("stack", "restack", "me/a", "--json")]  # --json read as an option, not a name
+    assert git.commands == [
+        ["stack", "restack", "me/a", "--json"]
+    ]  # --json read as an option, not a name
     with pytest.raises(ActionError, match="doesn't track"):
         refresh.run_action(config, db, "git_stack/stack_restack", {**fields, "branch": "me/b"})
 
 
 def test_a_restack_that_stops_on_a_conflict_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    def conflict(repo: Path, *args: str, timeout: int = 0) -> str:
-        out = _json_lines([], {"type": "error", "message": "conflict in me/a: resolve it"})
-        raise CommandError("git stack restack: conflict", out)
-
-    monkeypatch.setattr(actions, "git", conflict)
+    out = _json_lines([], {"type": "error", "message": "conflict in me/a: resolve it"})
+    _git_stack(monkeypatch, out, "error: conflict\n", 1)
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
         stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
@@ -532,10 +520,7 @@ def test_a_restack_that_skips_a_branch_doesnt_say_it_restacked_all(
         "warning": True,
     }
 
-    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
-        return _json_lines([skipped], {"type": "result", "stacks": []})
-
-    monkeypatch.setattr(actions, "git", fake_git)
+    _git_stack(monkeypatch, _json_lines([skipped], {"type": "result", "stacks": []}))
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
         stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
@@ -566,9 +551,8 @@ def test_a_branch_needing_a_restack_or_merged_is_said_once_and_a_new_one_not() -
 def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "main")
-    git(
-        repo,
+    Git(repo).run("init", "-q", "-b", "main")
+    Git(repo).run(
         "commit",
         "-q",
         "--allow-empty",
@@ -576,9 +560,9 @@ def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> No
         "a",
     )
     linked = tmp_path / "linked"
-    git(repo, "worktree", "add", "-q", "-b", "side", str(linked))
+    Git(repo).run("worktree", "add", "-q", "-b", "side", str(linked))
     before = changes.configs([str(linked)])
-    git(repo, "config", "branch.side.stackParent", "main")  # as `git stack` records it
+    Git(repo).run("config", "branch.side.stackParent", "main")  # as `git stack` records it
     assert changes.configs([str(linked)]) != before
 
 
@@ -629,8 +613,8 @@ def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name()
 
 def _repo(path: Path) -> Path:
     path.mkdir()
-    git(path, "init", "-q", "-b", "main")
-    git(path, "commit", "-q", "--allow-empty", "-m", "first")
+    Git(path).run("init", "-q", "-b", "main")
+    Git(path).run("commit", "-q", "--allow-empty", "-m", "first")
     return path
 
 

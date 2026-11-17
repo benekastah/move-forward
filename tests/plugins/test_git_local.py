@@ -1,17 +1,17 @@
 import os
 import shutil
-import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from git_client import GitError, GitTimeoutError
 
 from move_forward.db import Database
+from move_forward.git import Git
 from move_forward.plugins.git import client as local
 from move_forward.plugins.git.models import LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
-from move_forward.shell import CommandError, git
 
 WORKTREES = """\
 worktree /repo
@@ -73,22 +73,22 @@ def test_github_repo_from_remote_urls() -> None:
 
 def _init_repo(path: Path) -> None:
     path.mkdir()
-    git(path, "init", "-q", "-b", "main")
+    Git(path).run("init", "-q", "-b", "main")
 
 
 def _commit(path: Path, name: str) -> None:
     (path / name).parent.mkdir(parents=True, exist_ok=True)
     (path / name).write_text(name)
-    git(path, "add", name)
-    git(path, "commit", "-q", "-m", name)
+    Git(path).run("add", name)
+    Git(path).run("commit", "-q", "-m", name)
 
 
 def test_worktree_status_counts_files_inside_untracked_directories(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
     (repo / ".gitignore").write_text("ignored/\n", encoding="utf-8")
-    git(repo, "add", ".gitignore")
-    git(repo, "commit", "-q", "-m", "ignore generated files")
+    Git(repo).run("add", ".gitignore")
+    Git(repo).run("commit", "-q", "-m", "ignore generated files")
     (repo / "new" / "nested").mkdir(parents=True)
     (repo / "new" / "one.txt").write_text("one", encoding="utf-8")
     (repo / "new" / "nested" / "two.txt").write_text("two", encoding="utf-8")
@@ -104,8 +104,8 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     _init_repo(origin)
     _commit(origin, "src/a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
-    git(repo, "switch", "-q", "-c", "feature")
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    Git(repo).run("switch", "-q", "-c", "feature")
     _commit(repo, "b.txt")
     (repo / "dirty.txt").write_text("x")
 
@@ -116,7 +116,7 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     assert [(w.branch, w.modified, w.untracked) for w in result.worktrees] == [("feature", 0, 1)]
     feature = next(b for b in result.branches if b.name == "feature")
     assert feature.upstream is None and feature.ahead_of_default == 1
-    assert feature.sha == git(repo, "rev-parse", "feature").strip()
+    assert feature.sha == Git(repo).run("rev-parse", "feature").strip()
     assert result.my_dirs == ["src"]
 
 
@@ -127,7 +127,7 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     _init_repo(other)
     _commit(other, "a.txt")
     second = tmp_path / "repo2"
-    git(repo, "worktree", "add", "-q", "-b", "side", str(second))
+    Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
     assert list(local.folded([second, other, repo])) == [repo, other]  # the main checkout stays
     assert list(local.folded([second, other])) == [second, other]  # the first listed, without it
 
@@ -137,18 +137,18 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     _init_repo(origin)
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
-    git(repo, "switch", "-q", "-c", "mine")
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    Git(repo).run("switch", "-q", "-c", "mine")
     _commit(repo, "m.txt")
-    git(repo, "switch", "-q", "-c", "stacked")  # on mine, with someone else's commit on top
+    Git(repo).run("switch", "-q", "-c", "stacked")  # on mine, with someone else's commit on top
     (repo / "o.txt").write_text("o")
-    git(repo, "add", "o.txt")
-    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
-    git(repo, "switch", "-q", "-c", "theirs", "main")
+    Git(repo).run("add", "o.txt")
+    Git(repo).run("-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    Git(repo).run("switch", "-q", "-c", "theirs", "main")
     (repo / "t.txt").write_text("t")
-    git(repo, "add", "t.txt")
-    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("add", "t.txt")
+    Git(repo).run("-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    Git(repo).run("switch", "-q", "main")
 
     now = datetime.now(UTC) + timedelta(seconds=1)
     result = local.collect_repo(repo, now, 30, [])
@@ -161,15 +161,15 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
     _init_repo(origin)
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
-    git(repo, "switch", "-q", "-c", "side")
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    Git(repo).run("switch", "-q", "-c", "side")
     (repo / "s.txt").write_text("s")
-    git(repo, "add", "s.txt")
-    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
-    git(repo, "switch", "-q", "-c", "topic", "main")
+    Git(repo).run("add", "s.txt")
+    Git(repo).run("-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    Git(repo).run("switch", "-q", "-c", "topic", "main")
     _commit(repo, "t.txt")
-    git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("merge", "-q", "--no-ff", "-m", "merge side", "side")
+    Git(repo).run("switch", "-q", "main")
 
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
@@ -182,15 +182,17 @@ def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Pa
     _init_repo(origin)
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
     for branch in ("v1", "good"):
-        git(repo, "switch", "-q", "-c", branch, "main")
+        Git(repo).run("switch", "-q", "-c", branch, "main")
         _commit(repo, f"{branch}.txt")
-    git(repo, "tag", "v1", "main")
-    git(repo, "switch", "-q", "--track", "-c", "v2", "main")  # tracks a local branch,
-    git(repo, "tag", "v2", "main")
-    git(repo, "push", "-q", "origin", "refs/heads/v2")  # so it's counted against its pushed copy
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("tag", "v1", "main")
+    Git(repo).run("switch", "-q", "--track", "-c", "v2", "main")  # tracks a local branch,
+    Git(repo).run("tag", "v2", "main")
+    Git(repo).run(
+        "push", "-q", "origin", "refs/heads/v2"
+    )  # so it's counted against its pushed copy
+    Git(repo).run("switch", "-q", "main")
 
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
@@ -207,8 +209,8 @@ def test_an_upstream_is_named_as_its_remote_branch_even_beside_a_branch_named_li
     _init_repo(origin)
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
-    git(repo, "branch", "-q", "--no-track", "origin/main", "main")
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    Git(repo).run("branch", "-q", "--no-track", "origin/main", "main")
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert next(b for b in result.branches if b.name == "main").upstream == "origin/main"
 
@@ -216,41 +218,34 @@ def test_an_upstream_is_named_as_its_remote_branch_even_beside_a_branch_named_li
 def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
-    git(repo, "remote", "add", "zeta", "https://github.com/acme/z.git")
-    git(repo, "remote", "add", "alpha", "https://github.com/acme/a.git")
-    git(repo, "config", "remote.Mid.pushurl", "https://github.com/acme/m.git")  # no url
-    git(repo, "config", "branch.FeAture.pushRemote", "zeta")
+    Git(repo).run("remote", "add", "zeta", "https://github.com/acme/z.git")
+    Git(repo).run("remote", "add", "alpha", "https://github.com/acme/a.git")
+    Git(repo).run("config", "remote.Mid.pushurl", "https://github.com/acme/m.git")  # no url
+    Git(repo).run("config", "branch.FeAture.pushRemote", "zeta")
     config = local.RepoConfig.read(repo)
-    assert config.remotes() == git(repo, "remote").split() == ["Mid", "alpha", "zeta"]
+    assert config.remotes() == Git(repo).run("remote").split() == ["Mid", "alpha", "zeta"]
     assert config.get("branch.FeAture.pushRemote") == config.get("BRANCH.FeAture.PUSHREMOTE")
     assert config.get("branch.FeAture.pushRemote") == "zeta"
     assert config.get("branch.feature.pushRemote") is None  # a branch's name keeps its case
 
 
 def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, git_calls: list[list[str]]
 ) -> None:
     """Not one for each remote, key, ref or branch: on Windows each start costs tens of ms."""
     origin = tmp_path / "origin"
     _init_repo(origin)
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(repo))
-    git(repo, "remote", "add", "fork", str(origin))
-    git(repo, "fetch", "-q", "fork")
+    Git(tmp_path).run("clone", "-q", str(origin), str(repo))
+    Git(repo).run("remote", "add", "fork", str(origin))
+    Git(repo).run("fetch", "-q", "fork")
     for name in ("one", "two", "three"):
-        git(repo, "switch", "-q", "-c", name, "main")
+        Git(repo).run("switch", "-q", "-c", name, "main")
         _commit(repo, f"{name}.txt")
-    started: list[str] = []
-    real = local.git
-
-    def counting(repo: Path, *args: str, **kwargs: Any) -> str:
-        started.append(args[0])
-        return real(repo, *args, **kwargs)
-
-    monkeypatch.setattr(local, "git", counting)
+    git_calls.clear()  # those making the repos
     local.collect([repo], datetime.now(UTC) + timedelta(seconds=1), 30, [])
-    assert sorted(started) == sorted(
+    assert sorted(args[0] for args in git_calls) == sorted(
         ["worktree", "config", "for-each-ref", "--no-optional-locks", "rev-list", "log"]
     )
 
@@ -259,7 +254,7 @@ def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
     repo = tmp_path / "local-only"
     _init_repo(repo)
     _commit(repo, "a.txt")
-    git(repo, "checkout", "-q", "-b", "idea")
+    Git(repo).run("checkout", "-q", "-b", "idea")
     collected = local.collect_repo(repo, datetime.now(UTC), 30, [])
     assert collected.github_repo is None and collected.my_dirs == ["."]  # from the local main
     assert [b.name for b in collected.branches] == ["idea", "main"]
@@ -272,18 +267,18 @@ def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
     _init_repo(org)
     _commit(org, "a.txt")
     fork = tmp_path / "fork"
-    git(tmp_path, "clone", "-q", str(org), str(fork))
+    Git(tmp_path).run("clone", "-q", str(org), str(fork))
     _commit(fork, "f.txt")  # on the fork's main only
     repo = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", "-o", "upstream", str(org), str(repo))
-    git(repo, "remote", "add", "fork", str(fork))
-    git(repo, "fetch", "-q", "fork")
-    git(repo, "switch", "-q", "--no-track", "-c", "synced", "fork/main")  # all on a remote
-    git(repo, "switch", "-q", "-c", "mine", "main")
+    Git(tmp_path).run("clone", "-q", "-o", "upstream", str(org), str(repo))
+    Git(repo).run("remote", "add", "fork", str(fork))
+    Git(repo).run("fetch", "-q", "fork")
+    Git(repo).run("switch", "-q", "--no-track", "-c", "synced", "fork/main")  # all on a remote
+    Git(repo).run("switch", "-q", "-c", "mine", "main")
     _commit(repo, "m.txt")
-    git(repo, "switch", "-q", "main")
-    git(repo, "remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
-    git(repo, "remote", "set-url", "fork", "https://github.com/me/widgets.git")
+    Git(repo).run("switch", "-q", "main")
+    Git(repo).run("remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
+    Git(repo).run("remote", "set-url", "fork", "https://github.com/me/widgets.git")
 
     found = local.read_remotes(repo)
     assert found.default_branch == "main" and found.github_repo == "acme/widgets"
@@ -305,8 +300,8 @@ def test_reading_a_worktrees_status_leaves_the_index_alone(tmp_path: Path) -> No
     repo = tmp_path / "r"
     _init_repo(repo)
     (repo / "a.py").write_text("x\n")
-    git(repo, "add", "a.py")
-    git(repo, "commit", "-q", "-m", "a")
+    Git(repo).run("add", "a.py")
+    Git(repo).run("commit", "-q", "-m", "a")
     os.utime(repo / "a.py", ns=(1, 1))  # same content, new stat: the index is stale
     (repo / "b.py").write_text("y\n")
     index = repo / ".git" / "index"
@@ -321,7 +316,7 @@ def test_one_repo_git_cant_read_doesnt_fail_the_rest(tmp_path: Path) -> None:
     _init_repo(good)
     _commit(good, "a.txt")
     gone = tmp_path / "gone-wt"
-    git(good, "worktree", "add", "-q", "-b", "wt", str(gone))
+    Git(good).run("worktree", "add", "-q", "-b", "wt", str(gone))
     shutil.rmtree(gone)  # deleted without `git worktree remove`
     plain = tmp_path / "plain"  # a directory, but no repository
     plain.mkdir()
@@ -337,23 +332,23 @@ def test_one_repo_git_cant_read_doesnt_fail_the_rest(tmp_path: Path) -> None:
 def test_when_no_repo_can_be_read_the_collect_fails(tmp_path: Path) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
-    with pytest.raises(CommandError):
+    with pytest.raises(GitError):
         local.collect([plain], datetime.now(UTC), 30, [])
 
 
 def test_a_repo_on_master_with_no_remote_head_counts_against_master(tmp_path: Path) -> None:
     origin = tmp_path / "origin"
     origin.mkdir()
-    git(origin, "init", "-q", "--bare", "-b", "master")
+    Git(origin).run("init", "-q", "--bare", "-b", "master")
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "master")
+    Git(repo).run("init", "-q", "-b", "master")
     _commit(repo, "a.txt")
-    git(repo, "remote", "add", "origin", str(origin))
-    git(repo, "push", "-q", "-u", "origin", "master")  # sets no origin/HEAD
-    git(repo, "switch", "-q", "-c", "topic")
+    Git(repo).run("remote", "add", "origin", str(origin))
+    Git(repo).run("push", "-q", "-u", "origin", "master")  # sets no origin/HEAD
+    Git(repo).run("switch", "-q", "-c", "topic")
     _commit(repo, "b.txt")
-    git(repo, "switch", "-q", "master")
+    Git(repo).run("switch", "-q", "master")
     found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert (found.default_branch, found.default_refs) == ("master", ["origin/master"])
     counts = {b.name: (b.ahead_of_default, b.my_commits) for b in found.branches}
@@ -363,7 +358,7 @@ def test_a_repo_on_master_with_no_remote_head_counts_against_master(tmp_path: Pa
 def test_with_nothing_to_count_against_nothing_is_counted(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    git(repo, "init", "-q", "-b", "trunk")
+    Git(repo).run("init", "-q", "-b", "trunk")
     _commit(repo, "a.txt")
     found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert found.default_refs == []
@@ -373,15 +368,70 @@ def test_with_nothing_to_count_against_nothing_is_counted(tmp_path: Path) -> Non
 def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
-    git(repo, "config", "user.email", "an@x.com")
+    Git(repo).run("config", "user.email", "an@x.com")
     _commit(repo, "api/v1/mine.py")
-    git(repo, "-c", "user.email=jan@x.com", "commit", "-q", "--allow-empty", "-m", "x")
+    Git(repo).run("-c", "user.email=jan@x.com", "commit", "-q", "--allow-empty", "-m", "x")
     (repo / "web").mkdir()
     (repo / "web" / "theirs.ts").write_text("t")
-    git(repo, "add", "web")
-    git(repo, "-c", "user.email=jan@x.com", "commit", "-q", "-m", "theirs")
+    Git(repo).run("add", "web")
+    Git(repo).run("-c", "user.email=jan@x.com", "commit", "-q", "-m", "theirs")
     found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert found.my_dirs == ["api/v1"]  # not jan@x.com's web, whose email has mine in it
+
+
+def _hangs(monkeypatch: pytest.MonkeyPatch, hung: Path, command: str) -> list[str]:
+    """git times out on `command` in `hung`; returns the commands each run there."""
+    ran: list[str] = []
+    real = Git.output
+
+    def output(self: Git, *args: str, **kwargs: Any) -> str:
+        if Path(self.directory) == hung:
+            ran.append(args[0])
+            if args[0] == command:
+                raise GitTimeoutError(list(args), None, "")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Git, "output", output)
+    return ran
+
+
+@pytest.mark.parametrize("command", ["rev-list", "worktree"])
+def test_a_repo_whose_git_times_out_is_kept_as_read_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    """Not stored afresh without what timed out (its branches' counts), nor, for its worktree
+    list, asked again and timed out twice."""
+    hung, good = tmp_path / "hung", tmp_path / "good"
+    for repo in (hung, good):
+        _init_repo(repo)
+        _commit(repo, "a.txt")
+        Git(repo).run("switch", "-q", "-c", "topic")
+        _commit(repo, "b.txt")
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    before = local.collect([hung, good], now, 30, [])
+    ran = _hangs(monkeypatch, hung, command)
+    found = local.collect([hung, good], now, 30, [], previous=before)
+    assert found.repos == before.repos
+    assert ran.count(command) == 1
+
+
+def test_config_bytes_that_arent_utf8_are_replaced_so_the_repo_can_be_stored(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    Git(repo).run("init", "-q", "-b", "dev")
+    _commit(repo, "a.txt")
+    with (repo / ".git" / "config").open("ab") as config:
+        config.write(b"[init]\n\tdefaultBranch = tr\xe9s\n")  # neither main nor master here
+        config.write(b'[remote "r\xe9mote"]\n\turl = /nowhere\n')
+    # A remote's name, from its key, is what a stored default ref (`<remote>/<branch>`) starts with.
+    assert local.RepoConfig.read(repo).remotes() == ["r\ufffdmote"]
+    collected = local.collect_repo(repo, datetime.now(UTC), 30, [])
+    assert collected.default_branch == "tr\ufffds"
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    LocalRepository(db).save(LocalSnapshot(repos=[collected]))
 
 
 def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
@@ -395,7 +445,7 @@ def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
 
     def hanging(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
         if repo == hung:
-            raise subprocess.TimeoutExpired(["git", "status"], 120)
+            raise GitTimeoutError(["status"], None, "")
         return real(repo, *args, **kwargs)
 
     monkeypatch.setattr(local, "collect_repo", hanging)
