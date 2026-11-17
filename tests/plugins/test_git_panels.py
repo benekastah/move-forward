@@ -80,7 +80,8 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert [
         (a.name, a.fields)
         for a in items[both].actions
-        if a.name != "notes/todo_add" and a.group not in ("Importance", "Tags")
+        if a.name not in ("notes/todo_add", "notes/condition_add")
+        and a.group not in ("Importance", "Tags")
     ] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),

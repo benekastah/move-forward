@@ -112,6 +112,7 @@ flowchart TB
     slack([slack]) -- "Ping / Bump link" --> prItems
     notes([notes]) -- "Add todo" --> prItems
     notes -- "Add todo" --> ticketItems
+    notes -- "Hold / Release" --> prItems
     notes -- "Put on ice" --> branchItems
     notes -- "Put on ice" --> prItems
     notes -- "Put on ice" --> ticketItems

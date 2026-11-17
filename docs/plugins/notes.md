@@ -39,7 +39,9 @@ names are related through it.
   once their work is over (see the README's daily clean-up).
 
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo
-goes to the entry covering it, or creates one), and Put on ice to every item about a local
+goes to the entry covering it, or creates one); a Hold field, adding a merge condition, to every
+item about one of my open PRs (to the same entry), and Release, with a drop-down of the
+conditions holding it (asking first), to every item about a PR that one holds; and Put on ice to every item about a local
 branch (with its stack and group in git stack), one of my open PRs, a ticket or a work entry.
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
 in a group when both are offered, and joins Snooze and Pin on Act now items.
@@ -76,6 +78,8 @@ are done it's badged as probably done, which brings it back if it was snoozed.
 | `/actions/notes/entry_set` | `entry`, `field` (or `choice`: `status`, `where` or `blocked-on`), `text` (or `input`; empty clears it) | Sets the entry's status, where it lives, or what it's blocked on, as `mfd notes set` does. |
 | `/actions/notes/entry_link` | `entry`, `input` (Jira key or PR URL) | Says the entry is about the PR or ticket, as `mfd notes link` does. |
 | `/actions/notes/entry_remove` | `entry` | Forgets the entry with its todos, as `mfd notes remove` does; nothing is recorded as done. |
+| `/actions/notes/condition_add` | `pr` (its URL), `entry`, `input` (the condition), optional `create=1` | Holds the PR with a merge condition on the entry; with `create`, a missing entry is created first, about the PR. |
+| `/actions/notes/condition_remove` | `pr`, `choice` (or `text`: the condition) | Drops that merge condition on the PR, from every entry that holds it so. |
 | `/actions/notes/todo_new` | `input` (the todo; a leading `[quick]` or `[big]` sizes it), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`; a leading `[quick]` or `[big]` sizes it), optional `size` (or `choice`: `quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_size` | `todo`, `size` (`quick` or `big`) | Says how big an open todo is. |

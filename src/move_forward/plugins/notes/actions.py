@@ -22,9 +22,9 @@ from move_forward.api.kinds import PULL_REQUEST as PR
 from move_forward.api.kinds import TICKET
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.covers import covers
-from move_forward.plugins.notes.models import Entry, IcedItem, Link, Size, Todo
+from move_forward.plugins.notes.models import Condition, Entry, IcedItem, Link, Size, Todo
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.plugins.notes.text import links_in, sized
+from move_forward.plugins.notes.text import PR_URL_RE, links_in, sized
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 BRANCH = "git.branch"
@@ -213,6 +213,56 @@ def entry_remove(req: InputRequest[NotesConfig]) -> str:
     return f"removed {entry.title}"
 
 
+# Merge conditions
+
+
+def _pr_url(req: InputRequest[NotesConfig]) -> str:
+    pr = req.field("pr").strip()
+    if not PR_URL_RE.fullmatch(pr):
+        raise ActionError(f"{pr!r} isn't a pull request's URL")
+    return pr
+
+
+def _pr_name(pr: str) -> str:
+    return f"PR {pr.rsplit('/', 1)[1]}"
+
+
+def condition_add(req: InputRequest[NotesConfig]) -> str:
+    """Hold a PR (`pr`, its URL) until `input` happens: a merge condition on the entry titled
+    `entry`; with `create`, one is made first, about the PR."""
+    ctx = req.ctx
+    pr, text = _pr_url(req), req.field("input").strip()
+    if not text:
+        raise ActionError("the merge condition is empty")
+    notes = NotesRepository(ctx.db)
+    title = req.field("entry")
+    entry_id = notes.entry_id(title)
+    if entry_id is None and req.form.fields.get("create"):
+        entry_id = notes.add_entry(entry_title(title), ctx.today, INFERRED, pr, links_in(pr))
+    if entry_id is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    if not notes.add_condition(entry_id, Condition(pr=pr, text=text)):
+        raise ActionError(f"{title} already has that merge condition on {_pr_name(pr)}")
+    notes.touch(entry_id, ctx.today)
+    return f"held {_pr_name(pr)}: {text}"
+
+
+def condition_remove(req: InputRequest[NotesConfig]) -> str:
+    """Release a PR (`pr`) from the merge condition `choice` (or `text`), in every entry that
+    holds it so."""
+    ctx, fields = req.ctx, req.form.fields
+    pr = _pr_url(req)
+    text = fields.get("choice") or fields.get("text") or ""
+    notes = NotesRepository(ctx.db)
+    holding = [e for e in notes.entries() if Condition(pr=pr, text=text) in e.conditions]
+    if not holding:
+        raise ActionError(f"{_pr_name(pr)} has no merge condition {text!r}")
+    for entry in holding:
+        notes.remove_condition(entry.id, text, pr)
+        notes.touch(entry.id, ctx.today)
+    return f"released {_pr_name(pr)} from: {text}"
+
+
 # Todos
 
 
@@ -381,6 +431,8 @@ ACTIONS: dict[str, ActionHandler] = {
     "entry_set": entry_set,
     "entry_link": entry_link,
     "entry_remove": entry_remove,
+    "condition_add": condition_add,
+    "condition_remove": condition_remove,
     "todo_new": todo_new,
     "todo_done": todo_done,
     "todo_undone": todo_undone,

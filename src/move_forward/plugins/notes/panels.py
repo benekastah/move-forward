@@ -44,6 +44,8 @@ TODOS = "todos"
 BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
 TODO_NEW = "notes/todo_new"
+CONDITION_ADD = "notes/condition_add"
+CONDITION_REMOVE = "notes/condition_remove"
 
 
 # Output models
@@ -370,6 +372,23 @@ class Builder:
         self.today = today
         """The local day: a todo ticked off on it stays listed, ticked, to untick."""
 
+    def _my_pr_entry(self, ref: Ref) -> tuple[str | None, str, str] | None:
+        """The entry covering one of my open PRs, by title, else None; the title an entry made
+        for it takes (its ticket's key and summary, or its URL and title, as the skill does);
+        and its URL. None when it isn't one of my open PRs."""
+        pr = self.graph.view_one(PR, ref.id, _PrView)
+        entity = self.graph.get(PR, ref.id)
+        if pr is None or entity is None or not (pr.mine and pr.state == "open"):
+            return None
+        tickets = [r.id for r in entity.refs if r.kind == TICKET]
+        entry = entry_for(self.entries, pr.id, tickets, self.graph)
+        if not tickets:
+            return entry, f"{pr.id} {pr.title}", pr.id
+        ticket = self.graph.view_one(TICKET, tickets[0], _TicketView)
+        summary = ticket.summary if ticket else None
+        key = self.graph.handle(TICKET, tickets[0])
+        return entry, f"{key} {summary or pr.title}", pr.id
+
     def add_todo(self, item: Item) -> Action | None:
         """An Add todo field for an item about one of my open PRs or a ticket.
 
@@ -380,24 +399,43 @@ class Builder:
         if any(a.name == TODO_ADD for a in item.actions) or ref is None:
             return None
         if ref.kind == PR:
-            pr = self.graph.view_one(PR, ref.id, _PrView)
-            entity = self.graph.get(PR, ref.id)
-            if pr is None or entity is None or not (pr.mine and pr.state == "open"):
-                return None
-            tickets = [r.id for r in entity.refs if r.kind == TICKET]
-            entry = entry_for(self.entries, pr.id, tickets, self.graph)
-            if not tickets:
-                return add_todo_action(entry, f"{pr.id} {pr.title}", pr.id)
-            ticket = self.graph.view_one(TICKET, tickets[0], _TicketView)
-            summary = ticket.summary if ticket else None
-            key = self.graph.handle(TICKET, tickets[0])
-            return add_todo_action(entry, f"{key} {summary or pr.title}", pr.id)
+            found = self._my_pr_entry(ref)
+            return add_todo_action(*found) if found else None
         ticket = self.graph.view_one(TICKET, ref.id, _TicketView)
         if ticket is None:
             return None
         entry = entry_for(self.entries, ticket.url, [ticket.id], self.graph)
         title = f"{ticket.handle} {ticket.summary}" if ticket.summary else ticket.handle
         return add_todo_action(entry, title, ticket.url or "")
+
+    def conditions(self, item: Item) -> list[Action]:
+        """On an item about a PR: Hold, a field adding a merge condition, on one of my open PRs
+        (to the entry covering it, or one made for it, as Add todo does); and Release, with a
+        drop-down of the conditions holding it, which asks first."""
+        ref = item.subject(PR)
+        if ref is None:
+            return []
+        actions: list[Action] = []
+        if found := self._my_pr_entry(ref):
+            entry, title, url = found
+            fields = {"pr": url, "entry": entry or title}
+            fields |= {"create": "1"} if entry is None else {}
+            actions.append(
+                Action(name=CONDITION_ADD, label="Hold", fields=fields, input="Merge condition")
+            )
+        held = [c.text for e in self.entries for c in e.conditions if c.pr == ref.id]
+        if held:
+            choices = {text: text for text in dict.fromkeys(held)}
+            actions.append(
+                Action(
+                    name=CONDITION_REMOVE,
+                    label="Release",
+                    fields={"pr": ref.id},
+                    choices=choices,
+                    confirm="Drop the merge condition chosen from the work notes?",
+                )
+            )
+        return actions
 
     def put_on_ice(self, item: Item, group: str = "Disposition") -> Action | None:
         """A Put on ice button for an item about one of git's branches (with its stack), else

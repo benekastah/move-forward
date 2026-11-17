@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Hold and release a PR on the page
+
+Items about my open PRs have Hold, a field adding a merge condition (to the entry covering the
+PR, or one made for it), and items about a held PR have Release, a drop-down of its conditions,
+posting to the new `/actions/notes/condition_add` and `condition_remove`. `mfd notes condition`
+is unchanged.
+
 ### Change a work entry on the page
 
 The Todos panel's entries say their status and where they live, and have Set (status, where or

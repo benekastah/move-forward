@@ -40,8 +40,6 @@ needs. Each stands alone; a plugin fix that needs a core one says so, and lands 
   conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
   force-push (with lease), which the rule against force-pushing from a button forbids unless
   that's changed.
-- **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
-  and remove them on the PR's items.
 
 ## The skill and the dashboard disagree
 
