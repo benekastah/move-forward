@@ -40,7 +40,8 @@ branch (with its stack and group in git stack), one of my open PRs, a ticket or 
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
 in a group when both are offered, and joins Snooze and Pin on Act now items.
 
-In focus mode, work entries are split into their todos, one per page, quick ones first.
+In focus mode, work entries are split into their todos, one per page, quick ones first, each
+with its entry's Put on ice.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number, but
 not a number within a version, an amount, a path or a range: `1.2.5`, `$5`, `1230-1234`) first
 and in bold; merged PRs are purple and struck through, closed ones gray and struck

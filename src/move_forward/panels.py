@@ -188,15 +188,16 @@ class Dashboard(Model):
         """The items focus mode steps through for a category, each with its panel.
 
         Act now's come in its own order across the tools. A panel's come in its order, and
-        an item with `parts` (an entry's todos) contributes those instead of itself; what's set
-        aside or done isn't a step. None for an unknown category.
+        an item with `parts` (an entry's todos) contributes those instead of itself, each with
+        the item's buttons (`_alone`); what's set aside or done isn't a step. None for an
+        unknown category.
         """
         if category == ACT_NOW:
             return [(panel, item) for panel, item in self._act_now()]
         if (panel := self.find_panel(category)) is None:
             return None
         return [
-            (panel, part)
+            (panel, _alone(part, item) if item.parts else part)
             for item in panel.items
             if not item.set_aside and not item.done  # nothing to do now
             for part in item.parts or [item]
@@ -233,6 +234,20 @@ class Dashboard(Model):
         panel, item = remembered
         posting = {"actions": [a for a in item.actions if a.href is not None], "parts": []}
         return Kept(panel, item.model_copy(update=posting), gone=True)
+
+
+def _alone(part: Item, item: Item) -> Item:
+    """A part as focus mode shows it, without its item: with the item's buttons that none of
+    its parts offers in kind (an entry's Put on ice), as nothing else would offer them there.
+    What a part offers of its own (its importance, its tags, the entry's Add todo on its last
+    todo) the item's doesn't repeat."""
+
+    def kind(action: Action) -> str:
+        return action.href if action.href is not None else action.name
+
+    offered = {kind(a) for each in item.parts for a in each.actions}
+    added = [a for a in item.actions if kind(a) not in offered]
+    return part.model_copy(update={"actions": [*part.actions, *added]}) if added else part
 
 
 @dataclass(frozen=True)

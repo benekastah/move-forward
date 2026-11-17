@@ -305,9 +305,10 @@ question, or listing them in `[notifications] subscribe` (for example
 The Focus button in the header opens a list of what to walk through: Act now, and each
 panel under its group's title, with counts. Pick one to see a single item at a time, with
 Prev and Next (or the left and right arrow keys). Act now goes through its items in their
-order overall; a panel, in its own. Work entries are split into their todos
-([notes](docs/plugins/notes.md#panels) says how). With tags selected (see [Tags](#tags)), it goes
-through only what carries one.
+order overall; a panel, in its own, with the panel's own buttons (Delete all, New todo) above
+its item. Work entries are split into their todos
+([notes](docs/plugins/notes.md#panels) says how), each with the entry's buttons that no todo
+has (Put on ice). With tags selected (see [Tags](#tags)), it goes through only what carries one.
 Buttons on a focused item come back to the same item afterwards, wherever they moved it (a
 todo made quick comes first). One that takes it out of the category (a todo ticked off, an
 item snoozed) leaves it shown as the page has it now (the todo ticked, "done"; the item with

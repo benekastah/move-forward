@@ -969,6 +969,24 @@ def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None
     assert adds == [0, 0, 1]
 
 
+def test_a_part_focus_mode_shows_alone_carries_its_items_buttons_no_part_has() -> None:
+    def button(name: str) -> Action:
+        return Action(name=name, label=name, fields={})
+
+    first = Item(title="one", actions=[button("x/done")])
+    last = Item(title="two", actions=[button("x/done"), button("x/add")])
+    entry_ = Item(title="entry", actions=[button("x/ice"), button("x/add")], parts=[first, last])
+    stage = Panel(key="p", title="P", description="", items=[entry_])
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
+    steps = [[a.name for a in part.actions] for _, part in board.focus_items("x.p") or []]
+    assert steps == [["x/done", "x/ice"], ["x/done", "x/add", "x/ice"]]
+    [listed] = board.panel("x.p").items
+    assert [[a.name for a in part.actions] for part in listed.parts] == [
+        ["x/done"],
+        ["x/done", "x/add"],
+    ]
+
+
 def test_whats_done_is_dimmed_uncounted_and_not_stepped_through() -> None:
     ticked = Item(title="ticked", done=True)
     entry_ = Item(title="entry", parts=[Item(title="open"), ticked])
