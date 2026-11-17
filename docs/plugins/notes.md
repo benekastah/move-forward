@@ -22,6 +22,11 @@ names are related through it.
   off today stays listed, ticked and dimmed, to untick, as focus mode keeps it, but isn't a step
   in focus mode nor counted; an entry with nothing left but those goes last, and isn't a
   close-out.
+  Each entry says its status and where it lives, and offers what `mfd notes` can do to it: Set
+  its status, where it lives or what blocks it (by a drop-down, offering what it says now),
+  Clear status and Clear where while it says one, and Unblock when it's blocked, each asking
+  first, Link entry to a PR or ticket, and Remove entry, asking first; focus mode puts them on
+  each of its todos.
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
   with its importance and Put on ice. While the notes are empty, it says how
   to start them.
@@ -35,12 +40,15 @@ names are related through it.
   once their work is over (see the README's daily clean-up).
 
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo
-goes to the entry covering it, or creates one), and Put on ice to every item about a local
+goes to the entry covering it, or creates one); a Hold field, adding a merge condition, to every
+item about one of my open PRs (to the same entry), and Release, with a drop-down of the
+conditions holding it (asking first), to every item about a PR that one holds; and Put on ice to every item about a local
 branch (with its stack and group in git stack), one of my open PRs, a ticket or a work entry.
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
 in a group when both are offered, and joins Snooze and Pin on Act now items.
 
-In focus mode, work entries are split into their todos, one per page, quick ones first.
+In focus mode, work entries are split into their todos, one per page, quick ones first, each
+with its entry's Put on ice.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number, but
 not a number within a version, an amount, a path or a range: `1.2.5`, `$5`, `1230-1234`) first
 and in bold; merged PRs are purple and struck through, closed ones gray and struck
@@ -68,6 +76,11 @@ are done it's badged as probably done, which brings it back if it was snoozed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/notes/entry_set` | `entry`, `field` (or `choice`: `status`, `where` or `blocked-on`), `text` (or `input`; empty clears it) | Sets the entry's status, where it lives, or what it's blocked on, as `mfd notes set` does. |
+| `/actions/notes/entry_link` | `entry`, `input` (Jira key or PR URL) | Says the entry is about the PR or ticket, as `mfd notes link` does. |
+| `/actions/notes/entry_remove` | `entry` | Forgets the entry with its todos, as `mfd notes remove` does; nothing is recorded as done. |
+| `/actions/notes/condition_add` | `pr` (its URL), `entry`, `input` (the condition), optional `create=1` | Holds the PR with a merge condition on the entry; with `create`, a missing entry is created first, about the PR. |
+| `/actions/notes/condition_remove` | `pr`, `choice` (or `text`: the condition) | Drops that merge condition on the PR, from every entry that holds it so. |
 | `/actions/notes/todo_new` | `input` (the todo; a leading `[quick]` or `[big]` sizes it), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`; a leading `[quick]` or `[big]` sizes it), optional `size` (or `choice`: `quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_size` | `todo`, `size` (`quick` or `big`) | Says how big an open todo is. |
@@ -91,16 +104,18 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
 | `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry. A ticket key in the title makes it about that ticket (with `[jira]`). |
 | `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
-| `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on. |
+| `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on; empty text clears it. |
 | `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs `[jira]`; one in a project jira hasn't seen yet is looked up in Jira, and that project's keys count from then on. |
 | `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo (a leading `[quick]` or `[big]` in it sizes it, unless `--size` does); PR URLs in the text are linked. Prints its id. |
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
+| `mfd notes todo size <id> quick\|big` | Say how big an open todo is, as its Quick and Big buttons do. |
 | `mfd notes condition add <entry> <text> --pr <URL>` / `remove <entry> <text> [--pr <URL>]` | Add a merge condition holding one of the entry's PRs, or remove one (from that PR, or from every PR it holds). Conditions kept before each named its PR are given one: the PR their text names, else each of the entry's PRs; one with no PR to hold becomes a line of its entry, `- Merge condition: …`, to add again with `--pr`. |
 | `mfd notes remember <key> [--on DATE]` | Record that what `<key>` names happened, today (or on `DATE`, `YYYY-MM-DD`), replacing the day kept before. A key is any text the skill chooses; see the keys below. The daily prune forgets a day `prune_days` old. |
 | `mfd notes recall <key>` | The day `remember` last recorded for `<key>`, `YYYY-MM-DD`, or an empty line when it never did (or the prune forgot it); with `--json`, `{"key": …, "on": "YYYY-MM-DD" or null}`. |
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
-| `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
+| `mfd notes ices` | What's on ice, with the ids `thaw` and `ice-note` take. |
+| `mfd notes ice-note <id> <note>` | Say why something is on ice, in place of what's said now, as its Replace note button does. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 
 ### Keys to remember by

@@ -5,6 +5,35 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Hold and release a PR on the page
+
+Items about my open PRs have Hold, a field adding a merge condition (to the entry covering the
+PR, or one made for it), and items about a held PR have Release, a drop-down of its conditions,
+posting to the new `/actions/notes/condition_add` and `condition_remove`. `mfd notes condition`
+is unchanged.
+
+### Change a work entry on the page
+
+The Todos panel's entries say their status and where they live, and have Set (status, where or
+blocked-on), Clear status, Clear where, Unblock, Link entry and Remove entry, posting to the new
+`/actions/notes/entry_set`, `entry_link` and `entry_remove`. `mfd notes set`, `link` and `remove`
+now run those same actions: their output is as before, but `mfd notes set <entry> <field> ""` now
+clears the field and says `<field> cleared`, rather than `<field> is now `.
+
+### Size a todo, and say why something's on ice, from `mfd notes`
+
+Two new commands, printing `{"notice": …}` with `--json` as the others do: `mfd notes todo size
+<id> quick|big` sizes an open todo (as its Quick and Big buttons do), and `mfd notes ice-note <id>
+<note>` replaces what's said of why something is on ice (its id as `mfd notes ices` gives it). Use
+them where the skill had to send you to the page for either.
+
+### Nudge reviewers' task is `await_review`
+
+slack's Nudge reviewers was snoozed by the task `ping`; it now shares `await_review` with the PR's
+item in github's Ready for review, so one snooze sets aside both. `mfd snooze <PR> --task ping`
+and `mfd unsnooze <PR> --task ping` find nothing now: pass `--task await_review`, and read
+`await_review` for it in `mfd snoozes`. A nudge snoozed under `ping` comes back once.
+
 ### Reinstall: move-forward depends on py-git-client
 
 move-forward now runs git through [py-git-client](https://github.com/benekastah/py-git-client),

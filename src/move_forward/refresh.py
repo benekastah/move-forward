@@ -514,7 +514,7 @@ def _plugin_panels(
     graph: Graph,
     snapshots: dict[str, BaseModel | None],
 ) -> list[panels.PluginPanels]:
-    """Each plugin's panels and its nominations for Act now, from its stored snapshot."""
+    """Each plugin's panels, from its stored snapshot."""
     plugin_panels: list[panels.PluginPanels] = []
     for e in plugins:
         snapshot = snapshots[e.name]
@@ -525,11 +525,9 @@ def _plugin_panels(
             None,
         )
         if own is None:
-            plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)], []))
+            plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)]))
             continue
-        plugin_panels.append(
-            panels.PluginPanels(e.name, e.plugin.title, own, panels.candidates(own))
-        )
+        plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own))
     return plugin_panels
 
 

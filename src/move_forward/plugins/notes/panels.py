@@ -44,6 +44,8 @@ TODOS = "todos"
 BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
 TODO_NEW = "notes/todo_new"
+CONDITION_ADD = "notes/condition_add"
+CONDITION_REMOVE = "notes/condition_remove"
 
 
 # Output models
@@ -120,6 +122,58 @@ def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> 
         input=ADD_TODO_INPUT,
         choices=TODO_SIZES,
     )
+
+
+ENTRY_FIELD_CHOICES = {"status": "status", "where": "where", "blocked on": "blocked-on"}
+"""What an entry's Set field sets, by what its drop-down says (`actions.entry_set`)."""
+
+
+def entry_actions(entry: Entry, blocked: bool) -> list[Action]:
+    """What `mfd notes` can do to an entry, on its item: Set its status, where it lives or what
+    blocks it (offering what it says now, to pick and edit); clear its status or where, or
+    Unblock it (when `blocked`), asking first, as what it said is lost; Link it to a PR or
+    ticket; and Remove it, asking first."""
+    fields = {"entry": entry.title}
+    count = len(entry.open_todos)
+    todos = f"{count} open todo{'' if count == 1 else 's'}"
+    said = [text for text in (entry.status, entry.where, entry.blocked_on) if text]
+    clears = [
+        (label, field, text)
+        for label, field, text, shown in (
+            ("Clear status", "status", entry.status, entry.status),
+            ("Clear where", "where", entry.where, entry.where),
+            ("Unblock", "blocked-on", entry.blocked_on, blocked),
+        )
+        if shown
+    ]
+    return [
+        Action(
+            name="notes/entry_set",
+            label="Set",
+            fields=fields,
+            input="Status, where it lives, or what blocks it",
+            choices=ENTRY_FIELD_CHOICES,
+            suggestions=list(dict.fromkeys(said)),
+        ),
+        *(
+            Action(
+                name="notes/entry_set",
+                label=label,
+                fields={**fields, "field": field, "text": ""},
+                confirm=f"{label} of {entry.title}? It will no longer say {field}: {text}",
+            )
+            for label, field, text in clears
+        ),
+        Action(
+            name="notes/entry_link", label="Link entry", fields=fields, input="Jira key or PR URL"
+        ),
+        Action(
+            name="notes/entry_remove",
+            label="Remove entry",
+            fields=fields,
+            confirm=f"Remove {entry.title} with its {todos}? Nothing is recorded as done.",
+        ),
+    ]
 
 
 def entry_for(
@@ -328,6 +382,23 @@ class Builder:
         self.today = today
         """The local day: a todo ticked off on it stays listed, ticked, to untick."""
 
+    def _my_pr_entry(self, ref: Ref) -> tuple[str | None, str, str] | None:
+        """The entry covering one of my open PRs, by title, else None; the title an entry made
+        for it takes (its ticket's key and summary, or its URL and title, as the skill does);
+        and its URL. None when it isn't one of my open PRs."""
+        pr = self.graph.view_one(PR, ref.id, _PrView)
+        entity = self.graph.get(PR, ref.id)
+        if pr is None or entity is None or not (pr.mine and pr.state == "open"):
+            return None
+        tickets = [r.id for r in entity.refs if r.kind == TICKET]
+        entry = entry_for(self.entries, pr.id, tickets, self.graph)
+        if not tickets:
+            return entry, f"{pr.id} {pr.title}", pr.id
+        ticket = self.graph.view_one(TICKET, tickets[0], _TicketView)
+        summary = ticket.summary if ticket else None
+        key = self.graph.handle(TICKET, tickets[0])
+        return entry, f"{key} {summary or pr.title}", pr.id
+
     def add_todo(self, item: Item) -> Action | None:
         """An Add todo field for an item about one of my open PRs or a ticket.
 
@@ -338,24 +409,43 @@ class Builder:
         if any(a.name == TODO_ADD for a in item.actions) or ref is None:
             return None
         if ref.kind == PR:
-            pr = self.graph.view_one(PR, ref.id, _PrView)
-            entity = self.graph.get(PR, ref.id)
-            if pr is None or entity is None or not (pr.mine and pr.state == "open"):
-                return None
-            tickets = [r.id for r in entity.refs if r.kind == TICKET]
-            entry = entry_for(self.entries, pr.id, tickets, self.graph)
-            if not tickets:
-                return add_todo_action(entry, f"{pr.id} {pr.title}", pr.id)
-            ticket = self.graph.view_one(TICKET, tickets[0], _TicketView)
-            summary = ticket.summary if ticket else None
-            key = self.graph.handle(TICKET, tickets[0])
-            return add_todo_action(entry, f"{key} {summary or pr.title}", pr.id)
+            found = self._my_pr_entry(ref)
+            return add_todo_action(*found) if found else None
         ticket = self.graph.view_one(TICKET, ref.id, _TicketView)
         if ticket is None:
             return None
         entry = entry_for(self.entries, ticket.url, [ticket.id], self.graph)
         title = f"{ticket.handle} {ticket.summary}" if ticket.summary else ticket.handle
         return add_todo_action(entry, title, ticket.url or "")
+
+    def conditions(self, item: Item) -> list[Action]:
+        """On an item about a PR: Hold, a field adding a merge condition, on one of my open PRs
+        (to the entry covering it, or one made for it, as Add todo does); and Release, with a
+        drop-down of the conditions holding it, which asks first."""
+        ref = item.subject(PR)
+        if ref is None:
+            return []
+        actions: list[Action] = []
+        if found := self._my_pr_entry(ref):
+            entry, title, url = found
+            fields = {"pr": url, "entry": entry or title}
+            fields |= {"create": "1"} if entry is None else {}
+            actions.append(
+                Action(name=CONDITION_ADD, label="Hold", fields=fields, input="Merge condition")
+            )
+        held = [c.text for e in self.entries for c in e.conditions if c.pr == ref.id]
+        if held:
+            choices = {text: text for text in dict.fromkeys(held)}
+            actions.append(
+                Action(
+                    name=CONDITION_REMOVE,
+                    label="Release",
+                    fields={"pr": ref.id},
+                    choices=choices,
+                    confirm="Drop the merge condition chosen from the work notes?",
+                )
+            )
+        return actions
 
     def put_on_ice(self, item: Item, group: str = "Disposition") -> Action | None:
         """A Put on ice button for an item about one of git's branches (with its stack), else
@@ -462,6 +552,8 @@ class Builder:
             parts += done
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
+            said = [f"status: {entry.status}"] if entry.status else []
+            said += [f"where: {entry.where}"] if entry.where else []
             items.append(
                 Item(
                     title=entry.title,
@@ -469,11 +561,16 @@ class Builder:
                     subtitle=", ".join(keys),
                     badges=badges,
                     # Several todos are listed as its parts.
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
-                    if lone and ordered
-                    else [f"done: {lone.title}"]
-                    if lone
-                    else [],
+                    details=[
+                        *said,
+                        *(
+                            [f"[{t.size or '?'}] {t.text}" for t in ordered]
+                            if lone and ordered
+                            else [f"done: {lone.title}"]
+                            if lone
+                            else []
+                        ),
+                    ],
                     links=lone.links if lone else links,
                     rank=(0 if blocked else 100)
                     + (50 if close_out else 0)
@@ -483,6 +580,7 @@ class Builder:
                     actions=[
                         *(lone.actions if lone else []),
                         *([add_todo_action(entry.title)] if not lone or lone.done else []),
+                        *entry_actions(entry, blocked),
                     ],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals, and is a candidate for Act now.

@@ -472,7 +472,7 @@ def test_an_item_gone_from_the_page_is_shown_as_it_was_without_its_buttons(
     _, back = _focused(client, "/focus?cat=notes.todos&i=0")
     body, _ = _focused(client, _pressed(client, back, "todo_delete", {"todo": str(dishes)}))
     assert "dishes" in body and "gone · 1 to go" in body
-    assert "/actions/notes/" not in body.split("focus-panel", 1)[1].split("laundry")[0]
+    assert "/actions/notes/" not in body.split("<ul class='items'>", 1)[1].split("laundry")[0]
 
 
 def test_an_item_snoozed_in_act_nows_focus_mode_stays_there_set_aside(

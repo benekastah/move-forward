@@ -82,8 +82,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel], Command[NotesConfig]):
         return [todos, builder.iced()]
 
     def item_actions(self, req: Request[NotesConfig, BaseModel]) -> ItemAdditionsFor:
-        """Put on ice and Add todo on other plugins' items, from the notes read once for the
-        page."""
+        """Put on ice, Add todo, and Hold and Release (merge conditions) on other plugins'
+        items, from the notes read once for the page."""
         builder = _builder(req.ctx, req.graph)
 
         def additions(each: ItemRequest) -> ItemAdditions:
@@ -93,7 +93,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel], Command[NotesConfig]):
                 ),
                 builder.add_todo(each.item),
             )
-            return ItemAdditions(actions=[a for a in found if a])
+            return ItemAdditions(actions=[*(a for a in found if a), *builder.conditions(each.item)])
 
         return additions
 

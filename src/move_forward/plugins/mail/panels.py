@@ -218,7 +218,6 @@ def panels(
             description=f"Unread and flagged mail in {_listed([m.shown for m in config.mailboxes()])}"
             ", newest first; lists and automated mail last.",
             items=[_item(config, plugin, thread, graph) for thread in threads(snapshot)],
-            sort_by_importance=True,
             act_now=True,
         )
     ]

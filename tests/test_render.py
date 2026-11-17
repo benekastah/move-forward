@@ -349,6 +349,26 @@ def test_focus_page_actions_come_back_to_it() -> None:
     )
 
 
+def test_focus_page_shows_its_panels_own_buttons() -> None:
+    item = page.Item(title="x")
+    clean = page.Action(name="git/delete_all", label="Delete all", fields={}, confirm="Sure?")
+    dashboard = panels.Dashboard(
+        groups=[page.Group(key="git", title="Git", panel_keys=["cleanup"])],
+        generated_at=NOW,
+        identities=[],
+        panels=[
+            page.Panel(
+                key="cleanup", title="Cleanup", description="", items=[item], actions=[clean]
+            )
+        ],
+        sources={},
+    )
+    html = render.focus_page(dashboard, "cleanup", 0)
+    assert html is not None
+    assert "action='/actions/git/delete_all?back=%2Ffocus%3Fcat%3Dcleanup" in html
+    assert "Delete all" in html and "confirm(" in html
+
+
 def test_checkbox_actions_and_the_done_todo_view() -> None:
     built = dashboard(work_items=[entry("APP-2", [todo("a", "quick"), todo("b", "big")])])
     html = render.focus_page(built, "notes.todos", 0)

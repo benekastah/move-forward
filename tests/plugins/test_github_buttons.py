@@ -1,10 +1,11 @@
 """github's buttons that change one of my PRs on GitHub."""
 
 import pytest
-from conftest import REPO, dashboard, entry, panel, pr, snapshot, stored
+from conftest import NOW, REPO, dashboard, entry, panel, pr, snapshot, stored
 
+from move_forward.api.kinds import AWAIT_REVIEW
 from move_forward.api.shell import CommandError
-from move_forward.page import Badge
+from move_forward.page import Badge, Item
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
 from move_forward.plugins.github.models import Check, PullRequest, Thread
@@ -16,7 +17,7 @@ from move_forward.plugins.github.panels import (
     RERUN_FAILED,
     UPDATE_BRANCH,
 )
-from move_forward.refresh import perform_action
+from move_forward.refresh import build_dashboard, perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
 
@@ -339,3 +340,20 @@ def test_auto_merge_on_shows_wherever_the_pr_is_and_warns_when_held() -> None:
         Badge(text="merges when ready, though held", tone="warn")
     ]
     assert CANCEL_AUTO_MERGE in [a.name for a in fixing.actions]
+
+
+def test_a_pr_awaiting_review_can_be_snoozed_until_a_push_and_brought_back() -> None:
+    config, db = stored(github=snapshot(mine=[_awaiting()]))
+
+    def waiting() -> list[Item]:
+        return panel(build_dashboard(config, db, NOW), "github.ready_for_review").items
+
+    snooze = next(a for a in waiting()[0].actions if a.label == "Snooze")
+    # Until a push, as slack's nudge to chase its reviewers, which the same snooze sets aside.
+    assert (snooze.fields["task"], snooze.fields["fingerprint"]) == (AWAIT_REVIEW, "abc1234def")
+    perform_action(config, db, snooze.name, snooze.fields)
+    [item] = waiting()
+    assert item.set_aside
+    unsnooze = next(a for a in item.actions if a.label == "Unsnooze")
+    perform_action(config, db, unsnooze.name, unsnooze.fields)
+    assert not waiting()[0].set_aside

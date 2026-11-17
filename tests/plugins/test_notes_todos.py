@@ -126,7 +126,17 @@ def test_an_entry_all_ticked_off_today_offers_what_any_entry_does() -> None:
     [item] = panel(built, "notes.todos").items
     assert item.done
     labels = [a.label for a in item.actions]
-    assert labels == ["Done", "Add todo", "Tag", "Put on ice", "Important", "Critical"]
+    assert labels == [
+        "Done",
+        "Add todo",
+        "Set",
+        "Link entry",
+        "Remove entry",
+        "Tag",
+        "Put on ice",
+        "Important",
+        "Critical",
+    ]
     [part] = item.parts
     assert [a.label for a in part.actions] == ["Done"]
 

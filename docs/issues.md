@@ -30,35 +30,6 @@ wrong, add it.
   and the token file would be warned about on every start: look their names up from their
   well-known SIDs (`LookupAccountSidW`) rather than matching English ones.
 
-## What one surface offers and another doesn't
-
-Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn't hold yet (Act now,
-the panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
-needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
-
-- **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
-  nowhere to come back from but `mfd unsnooze`.
-- **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
-  nor do those of an item that focus mode splits into parts (an entry's Put on ice).
-- **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task
-  `ping`), with Snooze, but the PR's item in github's Ready for review has no task, so it
-  has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
-  task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
-  decide whether snoozing it sets aside the nudge too.
-- **Importance where it means something.** Say whether every panel sorts by it: Ready for me
-  to review, Fix before review and Mail do, What next and Feedback to address don't.
-- **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
-  conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
-  force-push (with lease), which the rule against force-pushing from a button forbids unless
-  that's changed.
-- **Size a todo, and say why something's on ice, from the CLI.** `todo add --size` sizes a
-  new one; nothing sizes an existing one but the page's Quick and Big, and nothing changes
-  an ice note but its Replace note, so the work-notes skill can't do either.
-- **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
-  the page), status and where (not shown at all), `link`, and `remove`.
-- **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
-  and remove them on the PR's items.
-
 ## The skill and the dashboard disagree
 
 The work-notes skill won't clean while something's on ice, but the dashboard cleans regardless

@@ -997,7 +997,8 @@ def focus_page(
     An index past the end (the list shrank since the link was made) shows the last item.
     `notice` is the outcome of an action just run from this page. `kept` is an item an action
     just took out of the category, e.g. a todo ticked off: it's shown in place of the item at
-    `index` (which is now the one after it), so the change can be undone. The page's own link,
+    `index` (which is now the one after it), so the change can be undone. Its panel's own buttons
+    (Delete all, New todo) are there too. The page's own link,
     which its buttons come back to, names the item it shows (`KEPT`), to find it again. With
     `tags`, it steps through only what carries one (see `tag_view` and `dashboard_page`).
     """
@@ -1055,7 +1056,8 @@ def focus_page(
         f"{prev_link}<span class='focus-position'>{_e(position)}</span>{next_link}"
         "</nav><article class='panel focus'>"
         f"<div class='focus-panel'><h2>{_e(panel_title)}</h2>"
-        f"<span class='description'>{_e(description)}</span></div>"
+        f"<span class='description'>{_e(description)}</span>"
+        f"{_buttons(panel.actions if panel else [], here, tags=tags)}</div>"
         f"<ul class='items'>{_item(item, here, where=where)}</ul></article>"
         f"</main><script>{FOCUS_KEYS_SCRIPT}</script></body></html>"
     )

@@ -247,13 +247,12 @@ def test_a_contact_never_lowers_what_a_plugin_said() -> None:
     assert shown[0].items[0].details[0] == "why: critical"
 
 
-def test_a_panel_ordered_by_importance_counts_the_contact() -> None:
+def test_a_panels_order_counts_the_contact() -> None:
     panel = Panel(
         key="threads",
         priority=Band.ASKED,
         title="Threads",
         description="Threads, most important first.",
-        sort_by_importance=True,
         items=[
             Item(title="other", rank=1, subjects=[Ref(kind="mail.thread", id="t2")]),
             Item(title="customer", subjects=[THREAD]),

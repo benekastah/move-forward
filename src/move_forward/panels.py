@@ -8,7 +8,7 @@ other panel sits in its plugin's group. Panels and groups go in their bands' ord
 import logging
 from collections.abc import Callable, Sequence
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 
@@ -56,8 +56,12 @@ class PluginPanels:
     key: str
     title: str
     panels: list[Panel]
-    nominations: list[Item] = field(default_factory=list[Item])
-    """Its candidates for Act now (see `candidates`)."""
+
+    @property
+    def nominations(self) -> list[Item]:
+        """Its candidates for Act now (see `candidates`): only items of its panels, so what Act
+        now sets aside stays in a panel, with Unsnooze."""
+        return candidates(self.panels)
 
 
 def candidates(panels: list[Panel]) -> list[Item]:
@@ -184,15 +188,16 @@ class Dashboard(Model):
         """The items focus mode steps through for a category, each with its panel.
 
         Act now's come in its own order across the tools. A panel's come in its order, and
-        an item with `parts` (an entry's todos) contributes those instead of itself; what's set
-        aside or done isn't a step. None for an unknown category.
+        an item with `parts` (an entry's todos) contributes those instead of itself, each with
+        the item's buttons (`_alone`); what's set aside or done isn't a step. None for an
+        unknown category.
         """
         if category == ACT_NOW:
             return [(panel, item) for panel, item in self._act_now()]
         if (panel := self.find_panel(category)) is None:
             return None
         return [
-            (panel, part)
+            (panel, _alone(part, item) if item.parts else part)
             for item in panel.items
             if not item.set_aside and not item.done  # nothing to do now
             for part in item.parts or [item]
@@ -231,6 +236,20 @@ class Dashboard(Model):
         return Kept(panel, item.model_copy(update=posting), gone=True)
 
 
+def _alone(part: Item, item: Item) -> Item:
+    """A part as focus mode shows it, without its item: with the item's buttons that none of
+    its parts offers in kind (an entry's Put on ice), as nothing else would offer them there.
+    What a part offers of its own (its importance, its tags, the entry's Add todo on its last
+    todo) the item's doesn't repeat."""
+
+    def kind(action: Action) -> str:
+        return action.href if action.href is not None else action.name
+
+    offered = {kind(a) for each in item.parts for a in each.actions}
+    added = [a for a in item.actions if kind(a) not in offered]
+    return part.model_copy(update={"actions": [*part.actions, *added]}) if added else part
+
+
 @dataclass(frozen=True)
 class Kept:
     """An item focus mode shows in place of a step, after a button took it out of the
@@ -265,8 +284,9 @@ def _sorted(
     priority_of: act_now.PriorityOf = act_now.no_priority,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
 ) -> Panel:
-    """Highest rank first, deferred items after, and what's set aside or done last; optionally
-    importance before rank."""
+    """Most important first (the priority I set on what an item is about, else its signals'
+    importance or its contact's), then highest rank; deferred items after, and what's set
+    aside or done last."""
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
@@ -282,7 +302,7 @@ def _sorted(
                 key=lambda i: (
                     i.set_aside or i.done,
                     i.deferred,
-                    -(importance(i) if panel.sort_by_importance else 0),
+                    -importance(i),
                     -i.rank,
                 ),
             )
@@ -340,8 +360,9 @@ def _as_nomination(plugin: str, panel: Panel, item: Item) -> act_now.Nomination:
 
 
 def fingerprints(plugins: list[PluginPanels]) -> dict[act_now.FeedbackKey, str]:
-    """The fingerprint of every item the plugins show or nominate, by its key, as the page
-    compares a snooze with it: Act now's nomination's, else its panel item's."""
+    """The one fingerprint of every key the plugins' items have, as Act now and every panel
+    compare a snooze with it: of items sharing a key (one task about one subject, from
+    several plugins), the last one Act now takes, else the last one shown."""
     found = {
         n.key: n.fingerprint
         for plugin in plugins
@@ -358,17 +379,28 @@ def fingerprints(plugins: list[PluginPanels]) -> dict[act_now.FeedbackKey, str]:
     return found
 
 
+def _agreeing(
+    nomination: act_now.Nomination, known: dict[act_now.FeedbackKey, str]
+) -> act_now.Nomination:
+    """The nomination with its key's one fingerprint (`fingerprints`), as its panel item has."""
+    fingerprint = known.get(nomination.key) if nomination.key else None
+    if fingerprint is None or fingerprint == nomination.fingerprint:
+        return nomination
+    item = nomination.item.model_copy(update={"fingerprint": fingerprint})
+    return act_now.Nomination(nomination.plugin, item)
+
+
 def _with_set_aside(
     panel: Panel,
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
-    nominated: dict[act_now.FeedbackKey, str],
+    known: dict[act_now.FeedbackKey, str],
 ) -> Panel:
     """Each of a panel's items that has a task with Snooze, as in Act now; one snoozed there or
     here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is
-    known by the fingerprint Act now has for it (`nominated`, by key), so both agree, else its
-    own; its parts without a task of their own carry its buttons, as focus mode shows them,
+    known by the fingerprint the page has for its key (`known`, from `fingerprints`), so items
+    sharing one agree; its parts without a task of their own carry its buttons, as focus mode shows them,
     and they set it aside, as a part's Put on ice does its entry."""
 
     def with_buttons(item: Item) -> Item:
@@ -376,7 +408,7 @@ def _with_set_aside(
         key = nomination.key
         if key is None:
             return item
-        fingerprint = nominated.get(key, nomination.fingerprint)
+        fingerprint = known.get(key, nomination.fingerprint)
         aside = act_now.set_aside(fingerprint, feedback.get(key), now)
         buttons = act_now.set_aside_actions(act_now.feedback_fields(key, fingerprint), aside)
         parts = [
@@ -570,12 +602,12 @@ def build(
                 )
                 for p in plugin.panels
             ],
-            [_as_given(i) for i in plugin.nominations],
         )
         for plugin in plugins
     ]
+    known = fingerprints(plugins)
     nominations = [
-        act_now.Nomination(plugin.key, item)
+        _agreeing(act_now.Nomination(plugin.key, item), known)
         for plugin in plugins
         for item in plugin.nominations
         if not hidden(item) and _tasked(plugin.key, item)
@@ -585,7 +617,6 @@ def build(
     def shows(item: Item) -> bool:
         return not wanted or carries(item, wanted, tags_of)
 
-    nominated = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     # Its listed parts get the importance choices they have in their panels, as the same
@@ -633,7 +664,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_with_set_aside(panel, plugin.key, feedback or {}, now, nominated)]
+                for shown in [_with_set_aside(panel, plugin.key, feedback or {}, now, known)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),

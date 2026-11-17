@@ -70,7 +70,7 @@ def test_build_with_nothing_stored() -> None:
     assert dashboard.generated_at == datetime(2026, 10, 30, 12, tzinfo=UTC)
 
 
-def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
+def test_every_panel_sorts_assigned_importance_before_its_own_rank() -> None:
     ordinary = Item(title="ordinary", rank=200, subjects=[Ref(kind="x", id="ordinary")])
     critical = Item(title="critical", rank=1, subjects=[Ref(kind="x", id="critical")])
     important = Item(title="important", rank=100, subjects=[Ref(kind="x", id="important")])
@@ -79,7 +79,6 @@ def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
         title="Stage",
         description="",
         items=[ordinary, critical, important],
-        sort_by_importance=True,
     )
     assigned = {"critical": 2, "important": 1}
     built = panels.build(
@@ -263,6 +262,10 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_add", False, False),
         ("act_now/snooze", False, False),  # its entry's, as on the page
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
+        ("notes/entry_set", False, False),  # its entry's, which focus mode doesn't show
+        ("notes/entry_set", False, False),  # Clear where
+        ("notes/entry_link", False, False),
+        ("notes/entry_remove", False, False),
     ]
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
@@ -286,6 +289,10 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_size",
         "notes/todo_add",
+        "notes/entry_set",
+        "notes/entry_set",  # Clear where
+        "notes/entry_link",
+        "notes/entry_remove",
         "act_now/snooze",
         "notes/ice_item",
     ]
@@ -378,6 +385,10 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
         "notes/todo_size",
         "notes/todo_add",
         "notes/ice_item",
+        "notes/entry_set",
+        "notes/entry_set",  # Clear where
+        "notes/entry_link",
+        "notes/entry_remove",
     ]
     assert part.actions[2].input == "Jira key or PR URL"
     # Without a Jira site, keys aren't linked.
@@ -701,13 +712,20 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_fields_but_acts_own_do_not
             panels.PluginPanels(
                 "github",
                 "GitHub",
-                [],
                 [
-                    Item(
-                        title="x",
-                        subjects=[Ref(kind="pull_request", id="p")],
-                        signals=Signals(verb="Go", task="go"),
-                        actions=[action],
+                    Panel(
+                        key="p",
+                        title="P",
+                        description="",
+                        act_now=True,
+                        items=[
+                            Item(
+                                title="x",
+                                subjects=[Ref(kind="pull_request", id="p")],
+                                signals=Signals(verb="Go", task="go"),
+                                actions=[action],
+                            )
+                        ],
                     )
                 ],
             )
@@ -734,7 +752,21 @@ def test_a_nomination_without_a_task_is_left_out_of_act_now_and_logged(
 
     page = panels.build(
         NOW,
-        [panels.PluginPanels("linear", "Linear", [], [nominated("a", "go"), nominated("b", "")])],
+        [
+            panels.PluginPanels(
+                "linear",
+                "Linear",
+                [
+                    Panel(
+                        key="p",
+                        title="P",
+                        description="",
+                        act_now=True,
+                        items=[nominated("a", "go"), nominated("b", "")],
+                    )
+                ],
+            )
+        ],
         {},
     )
     assert [i.title for i in page.act_now()] == ["Go: a"]
@@ -823,7 +855,7 @@ def test_an_item_with_a_task_has_snooze_in_its_panel_as_in_act_now() -> None:
         NOW,
         [
             panels.PluginPanels(
-                "x", "X", [Panel(key="p", title="P", description="", items=[tasked])], [tasked]
+                "x", "X", [Panel(key="p", title="P", description="", items=[tasked], act_now=True)]
             )
         ],
         {},
@@ -833,6 +865,51 @@ def test_an_item_with_a_task_has_snooze_in_its_panel_as_in_act_now() -> None:
         return [(a.icon, a.group) for a in built.panel(key).items[0].actions if a.label == "Snooze"]
 
     assert snooze("x.p") == snooze("act.x") == [("💤", "Act now")]
+
+
+def test_act_now_takes_only_panel_items_so_one_snoozed_there_waits_in_its_panel() -> None:
+    """What Act now shows comes from the panels, so every item it can set aside has a panel
+    item to bring it back from, with Unsnooze."""
+    tasked = Item(
+        title="PR", subjects=[Ref(kind="pull_request", id="pr")], signals=Signals(task="fix")
+    )
+    stage = Panel(key="p", title="P", description="", items=[tasked], act_now=True)
+    plugin = panels.PluginPanels("x", "X", [stage])
+    assert [i.title for i in panels.build(NOW, [plugin], {}).act_now()] == ["PR"]
+    said = act_now.Feedback(
+        action="snooze", fingerprint=act_now.Nomination("x", tasked).fingerprint
+    )
+    feedback = {("pull_request", "pr", "fix"): said}
+    board = panels.build(NOW, [plugin], {}, feedback=feedback)
+    assert board.act_now() == []
+    [waiting] = board.panel("x.p").items
+    assert [a.label for a in waiting.actions if a.group == "Act now"] == ["Unsnooze"]
+
+
+def test_items_sharing_a_task_and_subject_agree_on_the_nominated_fingerprint() -> None:
+    """Two plugins' items with one task about one subject but different fingerprints: the one
+    Act now takes gives the fingerprint, so a snooze from either sets aside both, there and in
+    Act now."""
+    subject = Ref(kind="pull_request", id="pr")
+
+    def plugin(key: str, fingerprint: str, nominated: bool) -> panels.PluginPanels:
+        item = Item(
+            title=key, subjects=[subject], signals=Signals(task="wait"), fingerprint=fingerprint
+        )
+        stage = Panel(key="p", title="P", description="", items=[item], act_now=nominated)
+        return panels.PluginPanels(key, key, [stage])
+
+    plugins = [plugin("x", "a1", True), plugin("y", "b2", False)]
+    assert panels.fingerprints(plugins) == {("pull_request", "pr", "wait"): "a1"}
+    snooze = next(
+        a
+        for a in panels.build(NOW, plugins, {}).panel("y.p").items[0].actions
+        if a.label == "Snooze"
+    )
+    said = act_now.Feedback(action="snooze", fingerprint=snooze.fields["fingerprint"])
+    board = panels.build(NOW, plugins, {}, feedback={("pull_request", "pr", "wait"): said})
+    assert [board.panel(key).items[0].set_aside for key in ("x.p", "y.p")] == [True, True]
+    assert board.act_now() == []
 
 
 def test_an_item_without_a_task_has_no_snooze() -> None:
@@ -889,25 +966,22 @@ def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
     assert "Clear priority" in labels(1)
 
 
-def _set_aside_board(
-    until: datetime | None = NOW + timedelta(days=1), nominated_detail: str | None = None
-) -> panels.Dashboard:
-    """A panel with one item about a PR, snoozed `until` (None: until it changes), Act now
-    having nominated it (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
+def _set_aside_board(until: datetime | None = NOW + timedelta(days=1)) -> panels.Dashboard:
+    """A panel with one item about a PR, snoozed `until` (None: until it changes), which Act now
+    takes."""
     item = Item(
         title="Fix it",
         subjects=[Ref(kind="pull_request", id="pr")],
         signals=Signals(verb="Fix", task="fix"),
     )
-    nominee = item.model_copy(update={"details": [nominated_detail]}) if nominated_detail else item
-    fingerprint = act_now.Nomination("x", nominee).fingerprint
+    fingerprint = act_now.Nomination("x", item).fingerprint
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
         ("pull_request", "pr", "fix"): act_now.Feedback(
             action="snooze", fingerprint=fingerprint, until=until
         )
     }
-    panel_ = Panel(key="p", title="P", description="", items=[item])
-    plugin = panels.PluginPanels("x", "X", [panel_], [nominee])
+    panel_ = Panel(key="p", title="P", description="", items=[item], act_now=True)
+    plugin = panels.PluginPanels("x", "X", [panel_])
     return panels.build(NOW, [plugin], {}, feedback=feedback)
 
 
@@ -915,15 +989,6 @@ def test_an_item_snoozed_until_it_changes_waits_with_unsnooze() -> None:
     [item] = _set_aside_board(until=None).panel("x.p").items
     assert item.set_aside
     assert [a.label for a in item.actions if a.group == "Act now"] == ["Unsnooze"]
-
-
-def test_an_item_set_aside_in_act_now_is_set_aside_in_its_panel_though_act_now_saw_it_otherwise() -> (
-    None
-):
-    board = _set_aside_board(nominated_detail="and 2 more merged here")
-    assert board.act_now() == []
-    [item] = board.panel("x.p").items
-    assert item.set_aside
 
 
 def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> None:
@@ -940,6 +1005,24 @@ def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None
     assert focused is not None
     adds = [[a.name for a in part.actions].count("notes/todo_add") for _, part in focused]
     assert adds == [0, 0, 1]
+
+
+def test_a_part_focus_mode_shows_alone_carries_its_items_buttons_no_part_has() -> None:
+    def button(name: str) -> Action:
+        return Action(name=name, label=name, fields={})
+
+    first = Item(title="one", actions=[button("x/done")])
+    last = Item(title="two", actions=[button("x/done"), button("x/add")])
+    entry_ = Item(title="entry", actions=[button("x/ice"), button("x/add")], parts=[first, last])
+    stage = Panel(key="p", title="P", description="", items=[entry_])
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
+    steps = [[a.name for a in part.actions] for _, part in board.focus_items("x.p") or []]
+    assert steps == [["x/done", "x/ice"], ["x/done", "x/add", "x/ice"]]
+    [listed] = board.panel("x.p").items
+    assert [[a.name for a in part.actions] for part in listed.parts] == [
+        ["x/done"],
+        ["x/done", "x/add"],
+    ]
 
 
 def test_whats_done_is_dimmed_uncounted_and_not_stepped_through() -> None:
@@ -961,7 +1044,7 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     )
     live = Item(title="live", subjects=[Ref(kind="x.a", id="l")], signals=signals, rank=1)
     stage = Panel(key="p", title="P", description="", items=[done, live], act_now=True)
-    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage], [done, live])], {})
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
     assert [i.title for i in board.panel("x.p").items] == ["live", "done"]
     assert [i.title for i in board.act_now()] == ["Close: live"]
     entry_ = Item(title="e", parts=[Item(title="a"), Item(title="b")])

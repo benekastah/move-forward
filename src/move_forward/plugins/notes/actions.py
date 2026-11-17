@@ -22,9 +22,9 @@ from move_forward.api.kinds import PULL_REQUEST as PR
 from move_forward.api.kinds import TICKET
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.covers import covers
-from move_forward.plugins.notes.models import Entry, IcedItem, Link, Size, Todo
+from move_forward.plugins.notes.models import Condition, Entry, IcedItem, Link, Size, Todo
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.plugins.notes.text import links_in, sized
+from move_forward.plugins.notes.text import PR_URL_RE, links_in, sized
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 BRANCH = "git.branch"
@@ -159,6 +159,108 @@ def thaw(req: InputRequest[NotesConfig]) -> str:
         raise ActionError("that is not on ice")
     notes.delete_ice(ice_id)
     return f"thawed {found.title}"
+
+
+# Entries
+
+ENTRY_FIELDS = ("status", "where", "blocked-on")
+"""What `entry_set` sets of an entry, as `mfd notes set` names them."""
+
+
+def _entry(notes: NotesRepository, req: InputRequest[NotesConfig]) -> Entry:
+    """The entry the `entry` field names by title."""
+    title = req.field("entry")
+    found = next((e for e in notes.entries() if e.title == title), None)
+    if found is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    return found
+
+
+def entry_set(req: InputRequest[NotesConfig]) -> str:
+    """Set an entry's `status`, `where` (where the work lives) or `blocked-on`, named by
+    `field` (or `choice`, from its drop-down), to `input` (or `text`); empty clears it."""
+    ctx, fields = req.ctx, req.form.fields
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, req)
+    field = fields.get("field") or fields.get("choice") or ""
+    if field not in ENTRY_FIELDS:
+        raise ActionError(f"an entry's status, where or blocked-on is set, not {field!r}")
+    text = (fields.get("input") or fields.get("text") or "").strip() or None
+    {"status": notes.set_status, "where": notes.set_where, "blocked-on": notes.set_blocked_on}[
+        field
+    ](entry.id, text)
+    notes.touch(entry.id, ctx.today)
+    return f"{entry.title}: {field} is now {text}" if text else f"{entry.title}: {field} cleared"
+
+
+def entry_link(req: InputRequest[NotesConfig]) -> str:
+    """Say an entry is about a PR or ticket: `input`, a PR URL or ticket key."""
+    ctx, graph = req.ctx, req.graph
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, req)
+    value = req.field("input").strip()
+    if not notes.link_entry(entry.id, link_for(graph, value)):
+        raise ActionError(f"{entry.title} is already about {value}")
+    notes.touch(entry.id, ctx.today)
+    return f"{entry.title}: linked {value}"
+
+
+def entry_remove(req: InputRequest[NotesConfig]) -> str:
+    """Forget an entry with its todos, for finished work: nothing is recorded as done."""
+    notes = NotesRepository(req.ctx.db)
+    entry = _entry(notes, req)
+    notes.delete_entry(entry.id)
+    return f"removed {entry.title}"
+
+
+# Merge conditions
+
+
+def _pr_url(req: InputRequest[NotesConfig]) -> str:
+    pr = req.field("pr").strip()
+    if not PR_URL_RE.fullmatch(pr):
+        raise ActionError(f"{pr!r} isn't a pull request's URL")
+    return pr
+
+
+def _pr_name(pr: str) -> str:
+    return f"PR {pr.rsplit('/', 1)[1]}"
+
+
+def condition_add(req: InputRequest[NotesConfig]) -> str:
+    """Hold a PR (`pr`, its URL) until `input` happens: a merge condition on the entry titled
+    `entry`; with `create`, one is made first, about the PR."""
+    ctx = req.ctx
+    pr, text = _pr_url(req), req.field("input").strip()
+    if not text:
+        raise ActionError("the merge condition is empty")
+    notes = NotesRepository(ctx.db)
+    title = req.field("entry")
+    entry_id = notes.entry_id(title)
+    if entry_id is None and req.form.fields.get("create"):
+        entry_id = notes.add_entry(entry_title(title), ctx.today, INFERRED, pr, links_in(pr))
+    if entry_id is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    if not notes.add_condition(entry_id, Condition(pr=pr, text=text)):
+        raise ActionError(f"{title} already has that merge condition on {_pr_name(pr)}")
+    notes.touch(entry_id, ctx.today)
+    return f"held {_pr_name(pr)}: {text}"
+
+
+def condition_remove(req: InputRequest[NotesConfig]) -> str:
+    """Release a PR (`pr`) from the merge condition `choice` (or `text`), in every entry that
+    holds it so."""
+    ctx, fields = req.ctx, req.form.fields
+    pr = _pr_url(req)
+    text = fields.get("choice") or fields.get("text") or ""
+    notes = NotesRepository(ctx.db)
+    holding = [e for e in notes.entries() if Condition(pr=pr, text=text) in e.conditions]
+    if not holding:
+        raise ActionError(f"{_pr_name(pr)} has no merge condition {text!r}")
+    for entry in holding:
+        notes.remove_condition(entry.id, text, pr)
+        notes.touch(entry.id, ctx.today)
+    return f"released {_pr_name(pr)} from: {text}"
 
 
 # Todos
@@ -326,6 +428,11 @@ def todo_new(req: InputRequest[NotesConfig]) -> str:
 
 
 ACTIONS: dict[str, ActionHandler] = {
+    "entry_set": entry_set,
+    "entry_link": entry_link,
+    "entry_remove": entry_remove,
+    "condition_add": condition_add,
+    "condition_remove": condition_remove,
     "todo_new": todo_new,
     "todo_done": todo_done,
     "todo_undone": todo_undone,
