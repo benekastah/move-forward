@@ -20,6 +20,7 @@ from move_forward.api.git import (
     refs,
 )
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
+from move_forward.plugins.git.watch import git_dir
 
 log = logging.getLogger(__name__)
 
@@ -444,12 +445,14 @@ def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
 def folded(repos: list[Path]) -> list[Path]:
     """`repos` with one path per repository, by its common git directory, read without
     running git: a path that's a worktree of another listed one is folded into it, keeping the
-    main checkout if it's listed, else the first listed. A path that isn't a repository is
-    kept, to fail, and be said, on its own."""
+    main checkout (the one whose own git directory is the repository's) if it's listed, else
+    the first listed. A path that isn't a repository is kept, to fail, and be said, on its
+    own."""
     by_common: dict[Path, Path] = {}
     for repo in repos:
         common = git_common_dir(repo) or repo.resolve()
-        if common not in by_common or common == (repo / ".git").resolve():
+        own = git_dir(repo)
+        if common not in by_common or (own is not None and own.resolve() == common):
             by_common[common] = repo
     return list(by_common.values())
 

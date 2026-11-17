@@ -144,6 +144,19 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     assert list(local.folded([second, other])) == [second, other]  # the first listed, without it
 
 
+def test_a_main_checkout_with_its_git_directory_elsewhere_is_kept_over_its_worktree(
+    tmp_path: Path,
+) -> None:
+    """Its `.git` is a file, as a linked worktree's is, but names the repository itself."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    Git(repo).run("init", "-q", "-b", "main", f"--separate-git-dir={tmp_path / 'repo.git'}")
+    _commit(repo, "a.txt")
+    second = tmp_path / "repo2"
+    Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
+    assert local.folded([second, repo]) == [repo]
+
+
 def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(
     tmp_path: Path, repo_templates: RepoTemplates
 ) -> None:
