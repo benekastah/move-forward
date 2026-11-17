@@ -58,7 +58,10 @@ plugin needs, so a new py-git-client changes the API's version rather than break
 quietly. Ruff refuses an import of `git_client` in a plugin, as `tests/test_api.py` does. Run
 a command with `run` (its output stripped), `ok` (a yes-or-no answer, as `merge-base
 --is-ancestor` gives), `resolve` (an object id, or None) or `output` (as git printed it, for a
-parser); a failure raises `GitError`, with git's `stderr` and `stdout`.
+parser); a failure raises `GitError`, with git's `stderr` and `stdout`. Nothing starts once
+the dashboard is stopping, but a long-lived git (`popen`, as a py-git-client `CatFile` uses)
+has no timeout: a plugin that keeps one closes it when the dashboard stops (`api.shell.stopping`),
+so a stuck git can't hold up shutdown.
 
 The built-ins' tests use py-git-client's pytest plugin, `git_client.testing` (this repo loads
 it in `pyproject.toml`'s `addopts`); a plugin of your own loads it in its own tests, with `-p

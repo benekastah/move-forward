@@ -424,6 +424,9 @@ def test_config_bytes_that_arent_utf8_are_replaced_so_the_repo_can_be_stored(
     _commit(repo, "a.txt")
     with (repo / ".git" / "config").open("ab") as config:
         config.write(b"[init]\n\tdefaultBranch = tr\xe9s\n")  # neither main nor master here
+        config.write(b'[remote "r\xe9mote"]\n\turl = /nowhere\n')
+    # A remote's name, from its key, is what a stored default ref (`<remote>/<branch>`) starts with.
+    assert local.RepoConfig.read(repo).remotes() == ["r\ufffdmote"]
     collected = local.collect_repo(repo, datetime.now(UTC), 30, [])
     assert collected.default_branch == "tr\ufffds"
     db = Database(":memory:")
