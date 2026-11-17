@@ -59,3 +59,17 @@ def test_the_migration_names_the_teams_pinged_by_their_id() -> None:
         "unknown (from work notes)",
     ]
     assert list(slack.team_channels()) == ["web"]
+
+
+def test_the_migration_names_a_team_in_one_case_whatever_its_pr_url_says() -> None:
+    """GitHub ignores case in an org's name: `Acme` in a PR's URL is `org = "acme"`'s."""
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS[:4])
+    db.execute(
+        "INSERT INTO slack_pings (pr_url, target, kind, message, sent_at, source)"
+        " VALUES ('https://github.com/Acme/widgets/pull/1', 'team:Web', 'first', '', ?,"
+        " 'dashboard')",
+        (NOW.isoformat(),),
+    )
+    db.migrate("slack", MIGRATIONS)
+    assert [p.target for p in SlackRepository(db).pings()] == ["team:github.com/acme/web"]

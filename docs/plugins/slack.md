@@ -13,7 +13,7 @@ slug alone may be several orgs' teams', as github publishes the teams of every o
 request one. A key that isn't a team's id is refused.
 
 A team, wherever it's named (`[slack.teams]`, `/slack/contacts`, `mfd slack`), is named by its
-id.
+id, in any case: GitHub ignores case in orgs' and teams' names, so slack keeps them lower-cased.
 
 A team's channel comes from `[slack.teams]`, or is set by hand on `/slack/contacts` or with
 `mfd slack team set`; `[slack.teams]` wins. A team named in neither has no channel, and its

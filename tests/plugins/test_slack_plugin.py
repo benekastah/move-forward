@@ -204,6 +204,18 @@ def test_another_orgs_team_of_the_same_slug_isnt_pinged_in_my_teams_channel() ->
     assert other.slack_link is None and other.ping_kind == "first"
 
 
+def test_a_team_is_one_team_whatever_case_names_it() -> None:
+    """GitHub ignores case in an org's and a team's names: a channel set for `Acme/Web` is
+    `acme/web`'s, and so is a ping sent to it."""
+    mine = pr(1, repo="Acme/widgets", requested_teams=["web"])
+    shouty = TeamChannel(team="github.com/Acme/Web", channel_name="#team-web", channel_id="C1")
+    sent = Ping(pr_url=mine.url, target="team:github.com/ACME/web", kind="first", sent_at=NOW)
+    found = pings(github=snapshot(mine=[mine]), teams={"x": shouty}, pings=[sent])
+    [web] = found[mine.url].targets
+    assert (web.destination, web.ping_kind) == ("#team-web (C1)", "follow-up")
+    assert SlackConfig(teams={"github.com/Acme/Web": "#web"}).teams == {WEB: "#web"}
+
+
 def test_slack_teams_are_keyed_by_the_teams_id() -> None:
     assert SlackConfig(teams={WEB: "#web"}).teams == {WEB: "#web"}
     with pytest.raises(ValueError, match=r"keyed by a team's id.*\"github.com/<org>/web\""):

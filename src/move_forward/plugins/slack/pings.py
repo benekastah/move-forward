@@ -91,6 +91,12 @@ def _datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
+def _key(target: str) -> str:
+    """A ping's target (`user:<login>`, `team:<id>`) as pings are matched by it: GitHub ignores
+    case in logins, and in orgs' and teams' names."""
+    return target.casefold()
+
+
 def _shown(team_id: str) -> str:
     """A team as it's shown: its id without its host, `<org>/<slug>`."""
     return team_id.partition("/")[2]
@@ -150,11 +156,16 @@ class Pinger:
             )
             targets.append(
                 self._target(
-                    "user", login, link, f"{login} (DM)", last_by_target.get(f"user:{login}"), pr
+                    "user",
+                    login,
+                    link,
+                    f"{login} (DM)",
+                    last_by_target.get(_key(f"user:{login}")),
+                    pr,
                 )
             )
         for team_id in pr.requested_teams:
-            team = self.teams.get(team_id)
+            team = self.teams.get(team_id.casefold())
             link = None
             shown = _shown(team_id)
             destination = f"team {shown}"
@@ -165,7 +176,12 @@ class Pinger:
                 destination = team.channel_name
             targets.append(
                 self._target(
-                    "team", team_id, link, destination, last_by_target.get(f"team:{team_id}"), pr
+                    "team",
+                    team_id.casefold(),
+                    link,
+                    destination,
+                    last_by_target.get(_key(f"team:{team_id}")),
+                    pr,
                 )
             )
         return targets
@@ -175,7 +191,7 @@ class Pinger:
         by_pr: dict[str, dict[str, Ping]] = defaultdict(dict)
         untargeted: dict[str, Ping] = {}  # the latest nudge the skill logged without a target
         for ping in self.recorded:
-            by_pr[ping.pr_url][ping.target] = ping
+            by_pr[ping.pr_url][_key(ping.target)] = ping
             if ping.target.startswith("unknown"):
                 untargeted[ping.pr_url] = ping
         result: dict[str, PrPing] = {}
@@ -187,8 +203,8 @@ class Pinger:
             # A nudge the skill logged without a target counts for every target, as its last
             # ping unless one of its own came after.
             if nudge := untargeted.get(url):
-                keys = [f"user:{u}" for u in pr.requested_users]
-                keys += [f"team:{t}" for t in pr.requested_teams]
+                keys = [_key(f"user:{u}") for u in pr.requested_users]
+                keys += [_key(f"team:{t}") for t in pr.requested_teams]
                 for key in keys:
                     own = last_by_target.get(key)
                     if own is None or own.sent_at < nudge.sent_at:

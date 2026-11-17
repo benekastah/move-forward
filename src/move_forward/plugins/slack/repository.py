@@ -11,7 +11,8 @@ from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
     """A ping's team was its slug, which another org's team may share: name it by its id,
     `<host>/<owner>/<slug>`, from its PR's URL (`https://<host>/<owner>/<repo>/pull/<n>`), as
-    the team is in the PR's repo's owner. A team's channel was kept by its slug alone, which
+    the team is in the PR's repo's owner, casefolded, as GitHub ignores case in orgs' and
+    teams' names. A team's channel was kept by its slug alone, which
     says no org: it's left as it was, to be set again by the team's id."""
     rows = conn.execute("SELECT id, pr_url, target FROM slack_pings WHERE target LIKE 'team:%'")
     for row_id, pr_url, target in rows.fetchall():
@@ -21,7 +22,7 @@ def _teams_pinged_by_id(conn: sqlite3.Connection) -> None:
         if url.netloc and owner and "/" not in slug:
             conn.execute(
                 "UPDATE slack_pings SET target = ? WHERE id = ?",
-                (f"team:{url.netloc}/{owner}/{slug}", row_id),
+                (f"team:{url.netloc}/{owner}/{slug}".casefold(), row_id),
             )
 
 
@@ -157,16 +158,21 @@ class SlackRepository:
         return self._contacts.forget(login)
 
     def set_team_channel(self, team: str, name: str | None, channel_id: str | None) -> None:
-        """Set a team's channel by hand, in place of the one set before."""
+        """Set a team's channel by hand, in place of the one set before; by its id, casefolded,
+        as GitHub ignores case in orgs' and teams' names."""
         self._db.execute(
-            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?)", (team, name, channel_id)
+            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?)",
+            (team.casefold(), name, channel_id),
         )
 
     def unset_team_channel(self, team: str) -> bool:
-        """Forget a team's channel; False if there was none."""
+        """Forget a team's channel, named in any case; False if there was none."""
         with self._db.transaction() as conn:
             return (
-                conn.execute("DELETE FROM slack_team_channels WHERE team = ?", (team,)).rowcount > 0
+                conn.execute(
+                    "DELETE FROM slack_team_channels WHERE team = ?", (team.casefold(),)
+                ).rowcount
+                > 0
             )
 
     def pings(self) -> list[Ping]:

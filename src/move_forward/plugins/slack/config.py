@@ -18,8 +18,9 @@ TEAM_ID_RE = re.compile(r"^[^/\s]+(/[^/\s]+){2,}$")
 
 
 def team_id(team: str) -> str:
-    """`team` stripped. A ValueError, saying what a team's id is, unless it's one."""
-    team = team.strip()
+    """`team` stripped and casefolded, as slack keys a team (GitHub ignores case in orgs' and
+    teams' names). A ValueError, saying what a team's id is, unless it's one."""
+    team = team.strip().casefold()
     if not TEAM_ID_RE.match(team):
         raise ValueError(
             f"{team!r} isn't a team's id, `<host>/<org>/<slug>`: e.g. \"github.com/<org>/{team}\""
@@ -84,12 +85,14 @@ class SlackConfig(TokenFields):
     @field_validator("teams")
     @classmethod
     def _teams_by_id(cls, value: dict[str, str]) -> dict[str, str]:
-        for team in value:
+        """The teams by id, casefolded (see `team_id`)."""
+        teams: dict[str, str] = {}
+        for team, channel in value.items():
             try:
-                team_id(team)
+                teams[team_id(team)] = channel
             except ValueError as e:
                 raise ValueError(f"[slack.teams] is keyed by a team's id now: {e}") from None
-        return value
+        return teams
 
     @field_validator("workspace_url")
     @classmethod

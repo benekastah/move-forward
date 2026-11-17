@@ -57,8 +57,9 @@ class _TeamView(Model):
 
 
 def my_teams(graph: Graph) -> set[str]:
-    """The ids of the teams I'm on or review for, as the plugins publishing teams say."""
-    return {team.id for team in graph.view(TEAM, _TeamView) if team.mine}
+    """The ids of the teams I'm on or review for, as the plugins publishing teams say,
+    casefolded (see `config.team_id`)."""
+    return {team.id.casefold() for team in graph.view(TEAM, _TeamView) if team.mine}
 
 
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
@@ -125,12 +126,12 @@ def set_team_channel_action(req: InputRequest[SlackConfig]) -> str:
 
 
 def _requested(graph: Graph) -> tuple[set[str], set[str]]:
-    """The people and teams my open PRs ask to review, by login and team id."""
+    """The people and teams my open PRs ask to review, by login and team id (casefolded)."""
     users: set[str] = set()
     teams: set[str] = set()
     for pr in my_open_prs(graph):
         users.update(pr.requested_users)
-        teams.update(pr.requested_teams)
+        teams.update(team.casefold() for team in pr.requested_teams)
     return users, teams
 
 
