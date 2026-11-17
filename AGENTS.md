@@ -56,7 +56,7 @@ Development section says how to set up a clone and run the checks.
   on `main`, and a PR merges only once it passes. A stacked PR (into another PR's branch)
   gets no CI until it targets `main`, so these local checks are all it gets till then. In
   a GitHub stack, merge from the bottom, one PR at a time, each once its own CI has passed:
-  a PR above the bottom only ever gets "CI not run", so merging it waits forever.
+  a PR above the bottom never gets "CI passed", so merging it waits forever.
   `python3 dev.py coverage` shows what the tests don't run.
 - **PRs are squash-merged**, so the checks must pass on a PR's last commit, and CI must pass
   on it too (the "CI passed" check, which main's ruleset should require).
@@ -102,8 +102,10 @@ Development section says how to set up a clone and run the checks.
   they can set up uv and Python with `.github/actions/setup`, also the template's.
   `.github/workflows/cancel.yml`, the template's too, cancels a pull request's `ci.yml` run
   when it merges or closes, so its concurrency group must stay the same as `ci.yml`'s. Both
-  run only for PRs into `main`. If retargeting a PR to `main` starts no `ci.yml` run, push
-  again, or close and reopen the PR (re-running an earlier run keeps its old base).
+  run only for PRs into `main`. A retarget to `main` alone starts no `ci.yml` run: git stack
+  and GitHub's stacks push after one, but GitHub's own retarget when the branch below is
+  deleted (outside a GitHub stack) doesn't. If none started, push again, or close and reopen
+  the PR (re-running an earlier run keeps its old base).
 
 ## Linux, macOS and Windows
 
