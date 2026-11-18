@@ -63,6 +63,12 @@ Development section says how to set up a clone and run the checks.
   worktree or a scratch clone, use `dev.py venv` and the commands in `.venv` (a scratch clone
   also needs `git config core.hooksPath git_hooks` for the hooks; a worktree shares its
   clone's).
+- **The man pages are made from the README**: `dev.py man` writes `man/<command>.1` for each
+  of the package's commands, with pandoc, and `dev.py static` fails if one is out of date.
+  Never edit them by hand: change the README, and commit the pages with it (the pre-commit
+  hook makes them again and stages them, but stops a `git commit PATH`, which it can't stage
+  them in). Which `##` sections they leave out, and their
+  SYNOPSIS, are set in `dev_project.py` (see `dev.py`'s docstring).
 - `dev` is a reserved module name: `dev.py tests` loads `dev.py` into pytest as `dev`, which
   would hide a test helper of that name.
 - Dev tooling goes in `dev.py` or `dev_project.py`, not shell scripts; the git hooks are

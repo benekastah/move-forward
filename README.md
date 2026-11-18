@@ -19,7 +19,7 @@ the `git_stack` plugin). `mfd` runs the git the environment variable `MOVE_FORWA
 (a path), else the one on PATH, looked up at its first git command and kept until it exits.
 
 ```sh
-python3.15 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`
+python3.15 ~/src/move-forward/dev.py install  # .venv, `mfd` and its man page, git hooks, `mfd init`
                                    # (on Windows: py -3.15 dev.py install)
 mfd serve --open
 ```
@@ -460,22 +460,32 @@ server and copy a backup over `dashboard.db`.
 ## Development
 
 ```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto; all run even if one fails
-python3 dev.py static    # just the first three (all run even if one fails), which CI runs once
+python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), man --check, pytest -n auto; all run even if one fails
+python3 dev.py static    # all but the tests (all run even if one fails), which CI runs once
 python3 dev.py tests     # just the tests, in parallel, which CI runs on each system
 python3 dev.py coverage  # the tests under coverage.py: what they miss, and htmlcov/index.html
+python3 dev.py man       # man/mfd.1, the man page, from this README
 .venv/bin/ruff format    # fix formatting
 ```
 
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
-`git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
-`dev.py static` on every push (the tests are CI's). GitHub Actions
+`git_hooks/`: `pre-commit` formats and lint-fixes staged Python and makes the man page again,
+`pre-push` runs `dev.py static` on every push (the tests are CI's). GitHub Actions
 (`.github/workflows/ci.yml`) runs `dev.py static` once, on Linux, `dev.py tests` on Linux, macOS
 and Windows, and `dev.py coverage` on Linux, for each pull request into `main` and push to
 `main` (a stacked pull request gets CI once it targets `main` and is pushed), each job within
 a time limit about 20% over how long it takes; a pull request that changes only Markdown (but
-`docs/entities.md`, which a test reads) skips them. `CI passed` is the one check main's
-ruleset requires.
+`docs/entities.md`, which a test reads) skips them, though `static` still runs when the README
+changed. `CI passed` is the one check main's ruleset requires.
+
+The man page, `man/mfd.1`, is made from this README by `dev.py man`, with pandoc (from the
+`pypandoc_binary` dev dependency): every section but Development, with the SYNOPSIS in
+`dev_project.py`. The pre-commit hook makes it again when a commit changes the README, and adds
+it to the commit (or stops a `git commit PATH`, which it can't add the page to: run
+`dev.py man` and `git add` it, then commit). `dev.py static` fails if it's out of date.
+`dev.py install` links it into `~/.local/share/man/man1` (not on Windows, which has no `man`;
+use `mfd --help` there), so `man mfd` opens it; if `install` warns that `man` doesn't look
+there, add `export MANPATH="$HOME/.local/share/man:"` to your shell's startup file.
 
 The tooling comes from the [python-template](https://github.com/benekastah/python-template)
 Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`, the git hooks,
@@ -485,6 +495,6 @@ Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`
 like tzdata, go in `dev`). `uvx copier update --defaults` takes in its later changes, merged with
 ours, which in `ci.yml` are counting `docs/entities.md` as code, the Windows tests' real
 Credential Manager, and the time limits. `dev.py` stays the template's: what's move-forward's own
-(`install` ending with `mfd init`) is in `dev_project.py`. The README, `PROJECT_AGENTS.md`
-(move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
+(`install` ending with `mfd init`, and the man page's SYNOPSIS) is in `dev_project.py`. The
+README, `PROJECT_AGENTS.md` (move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
 `.github/workflows/project.yml` (CI jobs of our own, none yet) are ours alone.
