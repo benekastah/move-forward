@@ -460,8 +460,8 @@ server and copy a backup over `dashboard.db`.
 ## Development
 
 ```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto; all run even if one fails
-python3 dev.py static    # just the first three (all run even if one fails), which CI runs once
+python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), man --check, pytest -n auto; all run even if one fails
+python3 dev.py static    # all but the tests (all run even if one fails), which CI runs once
 python3 dev.py tests     # just the tests, in parallel, which CI runs on each system
 python3 dev.py coverage  # the tests under coverage.py: what they miss, and htmlcov/index.html
 python3 dev.py man       # man/mfd.1, the man page, from this README
@@ -495,6 +495,6 @@ Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`
 like tzdata, go in `dev`). `uvx copier update --defaults` takes in its later changes, merged with
 ours, which in `ci.yml` are counting `docs/entities.md` as code, the Windows tests' real
 Credential Manager, and the time limits. `dev.py` stays the template's: what's move-forward's own
-(`install` ending with `mfd init`) is in `dev_project.py`. The README, `PROJECT_AGENTS.md`
-(move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
+(`install` ending with `mfd init`, and the man page's SYNOPSIS) is in `dev_project.py`. The
+README, `PROJECT_AGENTS.md` (move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
 `.github/workflows/project.yml` (CI jobs of our own, none yet) are ours alone.
