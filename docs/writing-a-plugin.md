@@ -206,12 +206,13 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   answered "not modified", another plugin's entities in the graph) is also a `ChangeChecker`: it
   says how often to ask in `check_triggers(req)`, as a `ChangeCheckTriggers(poll_seconds=...)`
   (from its section, if that has a say), and implements `changed(req)`, which says what moved
-  in its tool (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
-  in the plugin's own terms (repos, PRs), `everything=True` for something moved that no subject
-  names, or more than one of these, and a `reason` for the log; `Changed()` says nothing moved. Core
-  keeps the answer, not the plugin: the server asks that often, compares each fingerprint with the
-  last, and refreshes the plugin as soon as something moved since the last check (a different
-  fingerprint, any subject, or `everything`), so name a subject only when it moved again. It asks
+  in its tool (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the
+  `subjects` that moved in the plugin's own terms (repos, PRs), `everything=True` for something
+  moved that no subject names, or more than one of these, and a `reason` for the log; `Changed()`
+  says nothing moved. Core keeps the answer, not the plugin: the server asks that often, compares
+  each fingerprint with the last, and refreshes the plugin as soon as something moved since the
+  last check (a different fingerprint, any subject, or `everything`), so name a subject only when
+  it moved again. It asks
   again as each collect of the plugin starts, so what moves while it runs is compared with what it
   read. The last fingerprint and when it was taken are `req.previous.fingerprint` and
   `req.previous.at`, for a check that needs them (which repos moved, what was updated since); other

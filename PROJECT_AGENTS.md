@@ -72,9 +72,9 @@ what's untried where it runs).
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
   `linking_patterns`, `check_triggers`); `Request(ctx, graph, snapshot)` (`entities`, `relate`,
   `panels`, `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph,
-  full, subjects)` (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`, `fetch`); and one
-  per thing I ask for: `PageRequest(ctx, graph, page)` (pages), `ActionRequest(ctx, graph, form)`
-  (buttons) and `CliRequest(ctx, graph, args)` (`mfd <plugin>`).
+  full, subjects)` (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`,
+  `fetch`); and one per thing I ask for: `PageRequest(ctx, graph, page)` (pages),
+  `ActionRequest(ctx, graph, form)` (buttons) and `CliRequest(ctx, graph, args)` (`mfd <plugin>`).
   `changed` and `events` get what held before in `req.previous`: a `PreviousCheck` (when, the
   fingerprint and the graph at the last check) and a `PreviousRefresh` (when, the snapshot and the
   graph before the refresh). Those called before there's a context take what
