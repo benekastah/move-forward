@@ -21,7 +21,6 @@ from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import PERSON
 from move_forward.page import Action, Identity, ItemAdditions, Panel
 from move_forward.plugin import (
-    Address,
     CliHandler,
     Command,
     Context,
@@ -256,9 +255,13 @@ class _Asked(JiraPlugin):
         self.asked.append(("fetch", req.kind))
         return []
 
-    def address(self, req: RefRequest[JiraConfig]) -> dict[str, Address]:
-        self.asked.append(("address", req.kind))
-        return super().address(req)
+    def web_address(self, req: RefRequest[JiraConfig]) -> dict[str, str]:
+        self.asked.append(("web_address", req.kind))
+        return super().web_address(req)
+
+    def handle(self, req: RefRequest[JiraConfig]) -> dict[str, str]:
+        self.asked.append(("handle", req.kind))
+        return super().handle(req)
 
 
 def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,7 +285,7 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
     graph.url_for("ticket", "APP-9")
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])
-    assert _Asked.asked == [("address", "ticket"), ("address", "ticket"), ("fetch", "ticket")]
+    assert _Asked.asked == [("web_address", "ticket"), ("handle", "ticket"), ("fetch", "ticket")]
 
 
 _family_asked: list[tuple[str, str]] = []
@@ -301,8 +304,8 @@ class _GitHubPeople(GitHubPlugin):
         PERSON: replace(GitHubPlugin.kinds[PERSON], fetchable=True),
     }
 
-    def address(self, req: RefRequest[GitHubConfig]) -> dict[str, Address]:
-        _family_asked.append((self.name, "address"))
+    def handle(self, req: RefRequest[GitHubConfig]) -> dict[str, str]:
+        _family_asked.append((self.name, "handle"))
         return {}
 
     def fetch(self, req: RefRequest[GitHubConfig]) -> list[Entity]:
@@ -318,9 +321,9 @@ class _MailPeople(MailPlugin, Fetcher[MailConfig]):
         PERSON: replace(MailPlugin.kinds[PERSON], fetchable=True),
     }
 
-    def address(self, req: RefRequest[MailConfig]) -> dict[str, Address]:
-        _family_asked.append((self.name, "address"))
-        return {id: Address(handle="bob@x.org") for id in req.ids}
+    def handle(self, req: RefRequest[MailConfig]) -> dict[str, str]:
+        _family_asked.append((self.name, "handle"))
+        return dict.fromkeys(req.ids, "bob@x.org")
 
     def fetch(self, req: RefRequest[MailConfig]) -> list[Entity]:
         _family_asked.append((self.name, "fetch"))
@@ -349,27 +352,41 @@ def test_each_publisher_of_a_family_is_asked_in_plugin_order(
         "mail/bob@x.org",
     ]
     assert _family_asked == [
-        ("github", "address"),
-        ("mail", "address"),
+        ("github", "handle"),
+        ("mail", "handle"),
         ("github", "fetch"),
         ("mail", "fetch"),
     ]
 
 
-def test_an_address_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
+def test_a_web_address_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
     config, db = stored(github=snapshot())
     [github] = [e for e in registry.enabled(config, db, NOW) if e.name == "github"]
     default = Plugin[GitHubConfig, GitHubSnapshot]()
     url = "https://github.com/o/r/pull/9"
 
     def url_for(kind: str, id: str) -> str | None:
-        found = default.address(RefRequest(github.ctx, kind, [id]))
-        return found[id].url if id in found else None
+        return default.web_address(RefRequest(github.ctx, kind, [id])).get(id)
 
     assert url_for("pull_request", url) == url
     assert url_for("pull_request", "#9") is None  # not a URL
     assert url_for("person", "github.com/alice") is None  # a family whose ids aren't URLs
     assert url_for("git.branch", "https://x/y") is None  # not a family's
+    assert default.handle(RefRequest(github.ctx, "pull_request", [url])) == {}
+
+
+class _NoWebAddress(JiraPlugin):
+    def web_address(self, req: RefRequest[JiraConfig]) -> dict[str, str]:
+        raise RuntimeError("no Jira site")
+
+
+def test_a_failing_web_address_doesnt_hide_the_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugins = [_NoWebAddress() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(jira_site="https://j")
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    assert graph.url_for("ticket", "APP-9") is None
+    assert graph.handle("ticket", "https://j/browse/APP-9") == "APP-9"
 
 
 class _Failing(JiraPlugin):
@@ -591,8 +608,9 @@ def test_jira_knows_a_tickets_url_from_its_key_and_its_key_from_its_url() -> Non
     config, db = stored(jira_site="https://j")
     [jira] = [e for e in registry.enabled(config, db, NOW) if e.name == "jira"]
     url = "https://j/browse/APP-9"
-    found = JiraPlugin().address(RefRequest(jira.ctx, "ticket", ["APP-9", url, "nope"]))
-    assert found == {"APP-9": Address(url=url), url: Address(url=url, handle="APP-9")}
+    req = RefRequest(jira.ctx, "ticket", ["APP-9", url, "nope"])
+    assert JiraPlugin().web_address(req) == {"APP-9": url, url: url}
+    assert JiraPlugin().handle(req) == {url: "APP-9"}
 
 
 class _Given(JiraPlugin):

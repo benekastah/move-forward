@@ -6,7 +6,7 @@ import logging
 import pkgutil
 import threading
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -24,7 +24,6 @@ from move_forward.keychain import TokenSettings
 from move_forward.kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
 from move_forward.plugin import (
     API_VERSION,
-    Address,
     ChangeChecker,
     Collector,
     Command,
@@ -530,8 +529,8 @@ def build_graph(
     stands when two plugins publish one entity of a family), with an id its family takes
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
-    `entities`, `address` or `linking_patterns` raises: the graph is built without its
-    answer. Core adds the `tag`s on the entities, from their tools and text but those
+    `entities`, `web_address`, `handle` or `linking_patterns` raises: the graph is built
+    without its answer. Core adds the `tag`s on the entities, from their tools and text but those
     `untagged`, and those `tagged` by hand, and points those whose text names one at it (see
     `tags`)."""
     entities: list[Entity] = []
@@ -571,20 +570,27 @@ def build_graph(
         publisher, in plugin order."""
         return [e for e in plugins if kind in e.plugin.kinds]
 
-    def addresses(kind: str, id: str) -> Iterator[Address]:
-        """What each publisher of `kind` knows of the entity `id`, in plugin order."""
+    def first_known(
+        name: str,
+        hook: Callable[[Plugin[Any, Any], RefRequest[Any]], dict[str, str]],
+        kind: str,
+        id: str,
+    ) -> str | None:
+        """The first answer to `hook` (`web_address` or `handle`) about the entity `id` from
+        the publishers of `kind`, in plugin order; one that fails is logged and passed over."""
         for e in owners(kind):
-            known: dict[str, Address] = call(
-                e.name, "address", lambda e=e: e.plugin.address(RefRequest(e.ctx, kind, [id])), {}
+            known: dict[str, str] = call(
+                e.name, name, lambda e=e: hook(e.plugin, RefRequest(e.ctx, kind, [id])), {}
             )
-            if (found := known.get(id)) is not None:
-                yield found
+            if found := known.get(id):
+                return found
+        return None
 
     def url_for(kind: str, id: str) -> str | None:
-        return next((a.url for a in addresses(kind, id) if a.url), None)
+        return first_known("web_address", lambda p, req: p.web_address(req), kind, id)
 
     def handle_for(kind: str, id: str) -> str | None:
-        return next((a.handle for a in addresses(kind, id) if a.handle), None)
+        return first_known("handle", lambda p, req: p.handle(req), kind, id)
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each publisher's answer; one that fails is logged and left out, so its entities just

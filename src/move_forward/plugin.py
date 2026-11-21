@@ -203,23 +203,13 @@ class RefreshRequest[C: BaseModel]:
 
 @dataclass(frozen=True)
 class RefRequest[C: BaseModel]:
-    """A hook asked about some of the plugin's entities by id: `address` and `fetch`."""
+    """A hook asked about some of the plugin's entities by id: `web_address`, `handle` and
+    `fetch`."""
 
     ctx: Context[C]
     kind: str
     """One of the plugin's `kinds` (of a family, each publisher's)."""
     ids: list[str]
-
-
-@dataclass(frozen=True)
-class Address:
-    """Where an entity is and what it's called, as `Plugin.address` knows them."""
-
-    url: str | None = None
-    """A link to it, e.g. a ticket's from its key; None when the plugin can't say."""
-    handle: str | None = None
-    """What text names it by (its family's `handle`), e.g. a ticket's key from its URL; None
-    when the plugin can't say."""
 
 
 @dataclass(frozen=True)
@@ -453,17 +443,21 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []
 
-    def address(self, req: RefRequest[C]) -> dict[str, Address]:
-        """Where each of these entities of one of its `kinds` is, and what it's called, by id,
-        even one not in the graph: a ticket's URL from its key, its key from its URL. Core asks
-        only about the plugin's own kinds. By default, its URL is its id where that's a URL of a
-        family whose ids are URLs (a pull request's), and nothing else is known."""
+    def web_address(self, req: RefRequest[C]) -> dict[str, str]:
+        """The URL of each of these entities of one of its `kinds` it knows, by id, even one not
+        in the graph: a ticket's from its key. Core asks only about the plugin's own kinds. By
+        default, an entity's id where that's a URL of a family whose ids are URLs (a pull
+        request's)."""
         family = FAMILIES.get(req.kind)
         return {
-            id: Address(url=id)
-            for id in req.ids
-            if family is not None and family.id_rule(id) and is_url(id)
+            id: id for id in req.ids if family is not None and family.id_rule(id) and is_url(id)
         }
+
+    def handle(self, req: RefRequest[C]) -> dict[str, str]:
+        """The text that names each of these entities of one of its `kinds` (its family's
+        `handle`) it knows, by id, even one not in the graph: a ticket's key from its URL. Core
+        asks only about the plugin's own kinds. By default, none."""
+        return {}
 
     # Page
 

@@ -28,6 +28,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   it's `Html`; a body of another type goes out as it is, with `X-Content-Type-Options: nosniff`.
   A `Response` with no content type, with a header name that isn't an HTTP token, or whose
   `headers` set `Content-Type` or `Content-Length`, answers 500.
+- **`address` is two hooks, `web_address` and `handle`**, and `Address` is gone: an entity's
+  URL and the text that names it are separate questions. `web_address(req)` gives each id's
+  URL as text (by default, as `address` did, the id where its family's ids are URLs), and
+  `handle(req)` each id's handle (by default none). A plugin that overrode `address` overrides
+  whichever of the two it answered.
 
 ## Version 4
 

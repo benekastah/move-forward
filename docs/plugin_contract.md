@@ -3,7 +3,7 @@
 The plugin contract in one place: the class variables and hooks of `move_forward.api.Plugin` and of
 the mixins a plugin may add, the requests its hooks are given, its context (`ctx`), what `changed`
 answers, and the markers its config model can carry. Other types hooks and handlers return or name
-(`Snapshots`, `Address`, `Panel`, `Entity`, `Event`, `ActionResult`, `Response` and the like) are
+(`Snapshots`, `Panel`, `Entity`, `Event`, `ActionResult`, `Response` and the like) are
 documented on themselves, in `move_forward.api`. Each line says what the code's docstring says; the
 docstrings have the detail. [writing-a-plugin.md](writing-a-plugin.md) walks through making a plugin
 with these, and `tests/test_plugin_contract_doc.py` checks that this page names every one of them,
@@ -77,7 +77,8 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | `entities` | `entities(req: Request[C, S]) -> list[Entity]` | What it publishes to the graph, from its snapshot and tables. Called every time the graph is built (`req.graph` empty). |
 | `relate` | `relate(req: Request[C, S]) -> list[tuple[Ref, Ref]]` | Relations between one of its entities and another plugin's that neither's data says (a PR and its local branch). Every time the graph is built: no I/O. |
 | `linking_patterns` | `linking_patterns(req: ContextRequest[C]) -> dict[str, str \| None]` | Its `linking` kinds with the patterns of their ids now. Every time the graph is built, so read from its tables. |
-| `address` | `address(req: RefRequest[C]) -> dict[str, Address]` | Where each entity of one of its kinds is (`url`) and what text names it (`handle`), by id, even one not in the graph. By default the id as the URL for a family whose ids are URLs. |
+| `web_address` | `web_address(req: RefRequest[C]) -> dict[str, str]` | The URL of each entity of one of its kinds it knows, by id, even one not in the graph. By default the id, for a family whose ids are URLs. |
+| `handle` | `handle(req: RefRequest[C]) -> dict[str, str]` | The text that names each entity of one of its kinds it knows (its family's `handle`), by id, even one not in the graph. By default none. |
 
 ### Page
 
@@ -184,7 +185,7 @@ For `collect` and `changed`.
 
 ### `RefRequest`
 
-For `address` and `fetch`.
+For `web_address`, `handle` and `fetch`.
 
 | Field | Type | What it holds |
 | --- | --- | --- |

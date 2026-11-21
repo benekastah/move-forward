@@ -387,14 +387,14 @@ class LinearPlugin(...):
   refreshes. A kind whose text anyone can write (mail's subjects) is
   `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
-- `address(req)` (`req.kind`, `req.ids`) says where entities that may not be in the graph
-  are and what they're called, by id: an `Address(url, handle)` (a ticket's URL from its key,
-  its key from its URL), leaving out what it can't say. `fetch(req)` fetches entities by id
+- `web_address(req)` (`req.kind`, `req.ids`) gives the URLs of entities that may not be in
+  the graph, by id (a ticket's from its key), and `handle(req)` the text that names them (a
+  ticket's key from its URL), each leaving out what it can't say. `fetch(req)` fetches entities by id
   from the tool now, for rare work like the daily prune; what a fetched entity must carry is
   in [entities.md](entities.md#fetched-on-demand). Core asks each only about the plugin's own
-  `kinds`, so they needn't check `req.kind` is theirs; `address` gives the id as the URL by
-  default where its family's ids are URLs (a pull request's), so a plugin overrides it only
-  to make a URL of something else (a ticket's key), or to give a handle.
+  `kinds`, so they needn't check `req.kind` is theirs; `web_address` gives the id by default
+  where its family's ids are URLs (a pull request's), so a plugin overrides it only to make a
+  URL of something else (a ticket's key).
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
