@@ -74,6 +74,24 @@ def in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(localtime, "zone", UTC)
 
 
+REAL_HOME = Path.home()
+"""My real home directory, read before any test runs."""
+
+
+@pytest.fixture(autouse=True)
+def no_real_home(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Every test's home directory is an empty one of its own, so nothing a test does with `~`
+    (a link in `~/.local`, a file under `~/.config`) reaches mine. Returns it."""
+    home = tmp_path_factory.mktemp("home")
+    for name in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(name, str(home))
+    for name in ("APPDATA", "LOCALAPPDATA"):  # Windows' per-user directories
+        monkeypatch.setenv(name, str(home / "AppData"))
+    for name in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
+        monkeypatch.delenv(name, raising=False)  # so they default to a directory in `home`
+    return home
+
+
 REAL_DATA_DIR = DEFAULT_DB_PATH.expanduser().parent
 """Where the dashboard I use keeps its database and sign-in token, which no test
 may touch. Read when a guard runs, so a test of the guard can point it elsewhere."""

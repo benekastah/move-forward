@@ -515,7 +515,8 @@ def test_a_plugins_migration_may_not_remove_what_isnt_its_own() -> None:
 
 
 def test_no_test_touches_the_real_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert DEFAULT_DB_PATH.expanduser().parent == conftest.REAL_DATA_DIR
+    # The default is in my real home, which tests don't see (`no_real_home`): where it would be.
+    assert (conftest.REAL_HOME / DEFAULT_DB_PATH.relative_to("~")).parent == conftest.REAL_DATA_DIR
     # Pointed elsewhere, so a broken guard can't reach my real data.
     real = tmp_path / "real"
     monkeypatch.setattr(conftest, "REAL_DATA_DIR", real)

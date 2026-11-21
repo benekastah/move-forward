@@ -1,5 +1,5 @@
 """The guard keeping tests to themselves (conftest's `outside`): no program but git, no network
-but this machine, and not the real secret store."""
+but this machine, and not the real secret store; and (`no_real_home`) not my home directory."""
 
 import contextlib
 import os
@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from conftest import GIT_STACK, Outside, OutsideRefused
+from conftest import GIT_STACK, REAL_HOME, Outside, OutsideRefused
 
 from move_forward import keychain
 
@@ -189,3 +189,8 @@ def test_a_refused_call_the_code_swallows_still_fails_the_test(outside: Outside)
         outside.check()
     outside.take()
     outside.check()  # nothing left to fail it
+
+
+def test_a_test_has_a_home_of_its_own(no_real_home: Path) -> None:
+    assert Path.home() == no_real_home != REAL_HOME
+    assert Path("~/.local").expanduser() == no_real_home / ".local"
