@@ -17,6 +17,10 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 - **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
   of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
   before.
+- **`Previous` is two types, one per hook**: `changed` gets a `PreviousCheck` (`at`,
+  `fingerprint`, `graph`) in `RefreshRequest.previous`, and `events` a `PreviousRefresh[S]`
+  (`at`, `snapshot`, `graph`) in `Request.previous`, each field meaning what it did for that hook.
+  Rename the type where you build one (a test); `req.previous.<field>` reads as before.
 - **`ChangeChecker`'s `change_check_seconds` and `watches` are one hook, `change_checks`**,
   answering a `ChangeCheckTriggers(poll_seconds=..., watches=[...])`; by default neither, and
   then `changed` is never asked, as before. Return what the two hooks did in one answer: git

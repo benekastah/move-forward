@@ -165,7 +165,7 @@ For `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune` and
 | `ctx` | `Context[C]` | The plugin's context. |
 | `graph` | `Graph` | Every plugin's entities; empty for `entities`, and without relations for `relate`. |
 | `snapshot` | `S \| None` | What it last stored (for `events`, the snapshot now); None before its first refresh. |
-| `previous` | `Previous[S]` | For `events` only: its snapshot before this refresh, when that was stored, and the graph then. |
+| `previous` | `PreviousRefresh[S]` | For `events` only: its snapshot before this refresh, when that was stored, and the graph then. |
 
 ### `RefreshRequest`
 
@@ -177,7 +177,7 @@ For `collect` and `changed`.
 | `graph` | `Graph` | For `collect`, as stored before the refresh (in the settle step, as the plugins it watches just stored it); for `changed`, as stored when it's asked. |
 | `full` | `bool` | For `collect`: whether to fetch everything (its first collect, its `refresh_seconds` passed, something moved no subject names, or nothing named). |
 | `subjects` | `frozenset[str]` | For `collect`: what its checks said moved since a collect last stored, and the ids of its entities asked for again. |
-| `previous` | `Previous[BaseModel]` | For `changed` only: when its last check ran, what it answered, and the graph it was given. |
+| `previous` | `PreviousCheck` | For `changed` only: when its last check ran, what it answered, and the graph it was given. |
 
 ### `RefRequest`
 
@@ -201,16 +201,25 @@ For pages, buttons and `mfd <plugin>`.
 | `form` | `Form` | For a button: its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
 | `args` | `Namespace` | For `mfd <plugin>`: its parsed arguments. |
 
-### `Previous`
+### `PreviousCheck`
 
-What held before, for `changed` and `events`.
+What its last change check saw, for `changed`.
 
 | Field | Type | What it holds |
 | --- | --- | --- |
-| `at` | `datetime \| None` | For `changed`, when its last check ran; for `events`, when the refresh that stored `snapshot` began. |
-| `fingerprint` | `str \| None` | For `changed`: what its last check answered. |
-| `snapshot` | `S \| None` | For `events`: its snapshot before this refresh. |
-| `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
+| `at` | `datetime \| None` | When its last check ran. |
+| `fingerprint` | `str \| None` | What its last check answered. |
+| `graph` | `Graph \| None` | The graph at its last check that didn't raise: None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. |
+
+### `PreviousRefresh`
+
+What held before this refresh, for `events`.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `at` | `datetime \| None` | When the refresh that stored `snapshot` began. |
+| `snapshot` | `S \| None` | Its snapshot before this refresh. |
+| `graph` | `Graph \| None` | The graph before this refresh. |
 
 ## Context and answers
 

@@ -43,7 +43,7 @@ from move_forward.plugin import (
     Form,
     InputRequest,
     Page,
-    Previous,
+    PreviousRefresh,
     RefreshRequest,
     Request,
     Response,
@@ -130,9 +130,9 @@ class Before:
     that never did (or did only before the time was kept) isn't here. A refresh that failed
     stored nothing, so it doesn't count."""
 
-    def previous(self, name: str) -> Previous[BaseModel]:
+    def previous(self, name: str) -> PreviousRefresh[BaseModel]:
         """What held before for the plugin `name`, as its `events` gets it."""
-        return Previous(
+        return PreviousRefresh(
             self.stored_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
         )
 
@@ -150,7 +150,7 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
 
 
 def changes_of(
-    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
+    e: Enabled, previous: PreviousRefresh[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
     """The events a plugin's `events` makes of a refresh, subscribed to or not, from what held
     `previous`ly and its snapshot `after` and the graph now; none while it has no snapshot to
@@ -169,7 +169,7 @@ def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Ev
 
 
 def events_of(
-    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
+    e: Enabled, previous: PreviousRefresh[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
     """Every event a plugin makes of a refresh, subscribed to or not: `changes_of`, then
     `newly_shown_of`."""

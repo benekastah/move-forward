@@ -73,8 +73,9 @@ what's untried where it runs).
   `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
   (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`, `fetch`); and `InputRequest(ctx,
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
-  `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
-  fingerprint, the snapshot and the graph then). Those called before there's a context take what
+  `changed` and `events` get what held before in `req.previous`: a `PreviousCheck` (when, the
+  fingerprint and the graph at the last check) and a `PreviousRefresh` (when, the snapshot and the
+  graph before the refresh). Those called before there's a context take what
   they need: `cli(parser)` (its docstring's first line is the command's help), `pages()` and
   `actions()`. A plugin has at most one token, its section's (`token_env` and
   `keychain_service`, a `TokenSettings`), read with `ctx.token()`: one login, never several (core

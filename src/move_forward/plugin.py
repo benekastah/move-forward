@@ -118,24 +118,34 @@ class ContextRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
-class Previous[S: BaseModel]:
-    """What held before, for `changed` and `events` to compare with now."""
+class PreviousCheck:
+    """What the plugin's last change check saw, for `changed` to compare with now."""
 
     at: datetime | None = None
-    """For `changed`, when the plugin's last change check ran; for `events`, when the refresh
-    that last stored a snapshot began (a refresh, or a refresh of subjects), the one `snapshot`
-    holds: a refresh that failed stored nothing, so it doesn't count. None before the first."""
+    """When the plugin's last change check ran; None before the first."""
     fingerprint: str | None = None
-    """What the plugin's last change check answered (`Changed.fingerprint`), for `changed`;
-    None before the first."""
-    snapshot: S | None = None
-    """The plugin's snapshot before this refresh, for `events`: after a start, what was stored
-    when the dashboard stopped."""
+    """What the plugin's last change check answered (`Changed.fingerprint`); None before the
+    first."""
     graph: Graph | None = None
-    """The graph then: at the plugin's last change check that didn't raise (`changed`), or
-    before this refresh (`events`). For `changed`, None at the first check since the dashboard
-    (or `mfd refresh`) started, as it's the one thing a restart can't rebuild; except in a
-    refresh's settle step, which gives the graph from before the refresh (see `ChangeCheckTriggers.watches`)."""
+    """The graph at the plugin's last change check that didn't raise. None at the first check
+    since the dashboard (or `mfd refresh`) started, as it's the one thing a restart can't
+    rebuild; except in a refresh's settle step, which gives the graph from before the refresh
+    (see `ChangeCheckTriggers.watches`)."""
+
+
+@dataclass(frozen=True)
+class PreviousRefresh[S: BaseModel]:
+    """What held before this refresh, for `events` to compare with now."""
+
+    at: datetime | None = None
+    """When the refresh that last stored a snapshot began (a refresh, or a refresh of subjects),
+    the one `snapshot` holds: a refresh that failed stored nothing, so it doesn't count. None
+    before the first."""
+    snapshot: S | None = None
+    """The plugin's snapshot before this refresh: after a start, what was stored when the
+    dashboard stopped."""
+    graph: Graph | None = None
+    """The graph before this refresh."""
 
 
 @dataclass(frozen=True)
@@ -150,7 +160,7 @@ class Request[C: BaseModel, S: BaseModel]:
     snapshot: S | None
     """What the plugin last stored; None before its first refresh. For `events`, the snapshot
     now."""
-    previous: Previous[S] = field(default_factory=Previous[S])
+    previous: PreviousRefresh[S] = field(default_factory=PreviousRefresh[S])
     """For `events` only: the plugin's snapshot before this refresh, when the refresh that
     stored it began (`at`), and the graph then."""
 
@@ -181,7 +191,7 @@ class RefreshRequest[C: BaseModel]:
     asked for again (↻, `mfd refresh --subject`). A collect that can't fetch just those
     fetches everything. Empty for `changed`, which says what moved rather than
     being told."""
-    previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
+    previous: PreviousCheck = field(default_factory=PreviousCheck)
     """For `changed` only: when core took the plugin's last answer, its fingerprint, and the
     graph it was given, to compare with `graph` for what other plugins' refreshes moved since
     (a plugin that `watches` them)."""

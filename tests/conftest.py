@@ -28,7 +28,7 @@ from move_forward.git import GIT_ENV
 from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.plugin import Previous, Request
+from move_forward.plugin import PreviousRefresh, Request
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -677,7 +677,7 @@ def events_between(plugin: str, before: dict[str, object], after: dict[str, obje
     graph, snapshots = stored_graph(db, plugins)
     e = next(e for e in plugins if e.name == plugin)
     newly_shown_of(e, previous_snapshots[plugin], previous)  # what showed before, to compare
-    was = Previous(snapshot=previous_snapshots[plugin], graph=previous)
+    was = PreviousRefresh(snapshot=previous_snapshots[plugin], graph=previous)
     return events_of(e, was, snapshots[plugin], graph)
 
 
