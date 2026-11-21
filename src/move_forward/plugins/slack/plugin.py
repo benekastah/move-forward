@@ -22,9 +22,9 @@ from move_forward.api import (
     Context,
     Graph,
     InputRequest,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     Migration,
     PageHandler,
     Panel,
@@ -155,8 +155,8 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
         the page."""
         pings = pinger(req.ctx, req.graph).pings()
 
-        def ping_action(each: ItemRequest) -> ItemAdditions:
-            pr = each.item.subject(PR)
+        def ping_action(item: Item) -> ItemAdditions:
+            pr = item.subject(PR)
             ping = pings.get(pr.id) if pr else None
             if ping is None or not ping.has_someone_to_chase:
                 return ItemAdditions()

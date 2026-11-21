@@ -17,7 +17,6 @@ from move_forward.api import (
     Fetcher,
     Init,
     InputRequest,
-    ItemRequest,
     Plugin,
     Previous,
     RefRequest,
@@ -83,7 +82,6 @@ def test_every_request_context_and_answer_field_is_listed() -> None:
         RefRequest,
         InputRequest,
         Previous,
-        ItemRequest,
     ):
         fields = [f.name for f in dataclasses.fields(request)]
         assert _listed(f"### `{request.__name__}`") == fields, request.__name__

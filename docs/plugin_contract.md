@@ -83,7 +83,7 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
 | `panels` | `panels(req: Request[C, S]) -> list[Panel]` | Its panels, from its snapshot and the graph: pure, no I/O. Called for each page, and after each refresh for a plugin I've subscribed to some event of (to find items newly shown with `notify`). |
-| `item_actions` | `item_actions(req: Request[C, S]) -> ItemAdditionsFor` | What it adds to other plugins' items (buttons, badges, details, links). Called once per page; the function it returns once per item, with an `ItemRequest`. |
+| `item_actions` | `item_actions(req: Request[C, S]) -> ItemAdditionsFor` | What it adds to other plugins' items (buttons, badges, details, links). Called once per page; the function it returns once per item, with the `Item`. |
 
 ### Upkeep
 
@@ -213,14 +213,6 @@ What held before, for `changed` and `events`.
 | `fingerprint` | `str \| None` | For `changed`: what its last check answered. |
 | `snapshot` | `S \| None` | For `events`: its snapshot before this refresh. |
 | `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
-
-### `ItemRequest`
-
-What the function `item_actions` returns is called with, once per item.
-
-| Field | Type | What it holds |
-| --- | --- | --- |
-| `item` | `Item` | The item. |
 
 ## Context and answers
 

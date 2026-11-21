@@ -487,7 +487,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   as "<plugin>/<name> failed" and logged.
 - **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
   `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
-  with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
+  with the `Item`: it returns the `ItemAdditions` (buttons, badges, details, links)
   for `each.item`, by its subjects. Read your tables, or make a pass over the graph, in
   `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed

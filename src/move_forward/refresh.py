@@ -42,7 +42,6 @@ from move_forward.plugin import (
     ActionResult,
     Form,
     InputRequest,
-    ItemRequest,
     Page,
     Previous,
     RefreshRequest,
@@ -596,10 +595,7 @@ def build_dashboard(
     def item_actions(item: Item) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
-            req = ItemRequest(item)
-            added = call(
-                e.name, "item_actions (per item)", lambda add=add, req=req: add(req), found
-            )
+            added = call(e.name, "item_actions (per item)", lambda add=add: add(item), found)
             if added is not found:
                 found = _merged(found, added)
         return found

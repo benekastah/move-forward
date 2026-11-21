@@ -17,6 +17,9 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 - **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
   of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
   before.
+- **`ItemRequest` is gone**: the function `item_actions` returns is called with the `Item`
+  itself (`ItemAdditionsFor = Callable[[Item], ItemAdditions]`), as the request held nothing
+  else. Write `def additions(item: Item)`, and `item` for `req.item`.
 - **`ItemRequest` is just the `item`; `Surface` and `Form.surface` are gone**: no plugin
   read the owner, and an item offers the same wherever it's shown (the dashboard, focus mode,
   Act now), so a plugin's additions no longer vary by surface. A plugin that told another

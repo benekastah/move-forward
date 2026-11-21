@@ -27,8 +27,8 @@ from move_forward.plugin import (
     ContextRequest,
     Fetcher,
     InputRequest,
+    Item,
     ItemAdditionsFor,
-    ItemRequest,
     PageHandler,
     Plugin,
     RefRequest,
@@ -53,8 +53,8 @@ class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
     def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
-        def additions(each: ItemRequest) -> ItemAdditions:
-            pr = each.item.subject("pull_request")
+        def additions(item: Item) -> ItemAdditions:
+            pr = item.subject("pull_request")
             if pr is None:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")
@@ -514,8 +514,8 @@ class _Prepared(JiraPlugin):
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
-        def actions(each: ItemRequest) -> ItemAdditions:
-            pr = each.item.subject("pull_request")
+        def actions(item: Item) -> ItemAdditions:
+            pr = item.subject("pull_request")
             if pr is None or pr.id not in prs:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")

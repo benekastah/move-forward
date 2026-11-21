@@ -14,9 +14,9 @@ from move_forward.api import (
     Entity,
     Event,
     Init,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -98,8 +98,8 @@ class GitStackPlugin(
         """Untrack the branches an On ice item put on ice."""
         graph = req.graph
 
-        def additions(each: ItemRequest) -> ItemAdditions:
-            action = untrack_iced_action(each.item, graph)
+        def additions(item: Item) -> ItemAdditions:
+            action = untrack_iced_action(item, graph)
             return ItemAdditions(actions=[action] if action else [])
 
         return additions

@@ -240,18 +240,11 @@ class InputRequest[C: BaseModel]:
             raise ActionError(f"missing field {name!r}") from None
 
 
-@dataclass(frozen=True)
-class ItemRequest:
-    """An item the function `item_actions` returned is asked about."""
-
-    item: Item
-
-
-ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
+ItemAdditionsFor = Callable[[Item], ItemAdditions]
 """What `Plugin.item_actions` returns: what the plugin adds to each item of one page."""
 
 
-def adds_nothing(req: ItemRequest) -> ItemAdditions:
+def adds_nothing(item: Item) -> ItemAdditions:
     """What `Plugin.item_actions` returns by default: nothing added to any item."""
     return ItemAdditions()
 
@@ -432,7 +425,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
         on a PR), badges, details and links. Core calls it once per page and the function it
-        returns once per item (`ItemRequest`):
+        returns once per `Item`:
         what needs the plugin's tables or a pass over the graph is done here, once, not per
         item. Adds nothing by default."""
         return adds_nothing

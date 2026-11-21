@@ -16,9 +16,9 @@ from move_forward.api import (
     Context,
     ContextRequest,
     Entity,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -300,8 +300,8 @@ class GitPlugin(
         """Delete or restore the branches an On ice item put on ice."""
         graph = req.graph
 
-        def additions(each: ItemRequest) -> ItemAdditions:
-            found = (delete_iced_action(each.item, graph), restore_iced_action(each.item, graph))
+        def additions(item: Item) -> ItemAdditions:
+            found = (delete_iced_action(item, graph), restore_iced_action(item, graph))
             return ItemAdditions(actions=[action for action in found if action])
 
         return additions
