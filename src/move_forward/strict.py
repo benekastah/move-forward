@@ -14,26 +14,14 @@ class Locked:
         return "LOCKED"
 
 
-class Tables:
-    """The type of `TABLES`."""
-
-    def __repr__(self) -> str:
-        return "TABLES"
-
-
 LOCKED = Locked()
 """Marks a config field as one the settings page shows but won't change, as it says where a
 credential goes (a site, a host), where items link with my login in the link, whose word
 decides a sender is who they claim, or what runs where: `site: Annotated[str, LOCKED]`. The
 page is reached with the dashboard's cookie, and one that could point the site at another
 server could send it the token; only the config file changes such a setting."""
-TABLES = Tables()
-"""Marks a config field whose entries are tables of their own, by name (`[site.<name>]`):
-`sites: Annotated[dict[str, Site], TABLES] = ...`. `mfd init` leaves it to the plugin's example
-tables."""
-Marker = Locked | Tables
-"""A marker a config field can carry. Each is a type of its own, so pydantic keeps both on a
-field carrying both."""
+Marker = Locked
+"""The type of the markers a config field can carry (`LOCKED`)."""
 
 
 class Strict(BaseModel):
@@ -150,5 +138,5 @@ def _buried(field: FieldInfo) -> bool:
 
 
 def marked(field: FieldInfo, marker: Marker) -> bool:
-    """Whether `field` carries `marker` (`LOCKED`, `TABLES`) in its `Annotated` metadata."""
+    """Whether `field` carries `marker` (`LOCKED`) in its `Annotated` metadata."""
     return any(isinstance(m, type(marker)) for m in field.metadata)

@@ -11,6 +11,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 5
 
+- **`Plugin.families` is gone, and with it `api.kinds.Family`, `is_url`, `is_host_login` and
+  `is_host_path`**: no plugin declared a family. A plugin publishes kinds named for it, or of
+  core's families (`api.kinds.FAMILIES`: pull request, ticket, person, team).
+- **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
+  of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
+  before.
 - **`ItemRequest` is just the `item`; `Surface` and `Form.surface` are gone**: no plugin
   read the owner, and an item offers the same wherever it's shown (the dashboard, focus mode,
   Act now), so a plugin's additions no longer vary by surface. A plugin that told another

@@ -27,7 +27,7 @@ from move_forward.api import (
     attrs,
     html,
 )
-from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
+from move_forward.api.kinds import PULL_REQUEST, TICKET, PullRequest, Ticket
 from move_forward.strict import Strict
 from move_forward.testing import NOW, Harness
 
@@ -215,65 +215,62 @@ def test_a_bad_section_fails_as_the_config_would() -> None:
         _config_error({})
 
 
-class Deal(KindModel):
-    handle: str
+class TrackerTicket(Ticket):
+    team: str
 
 
-class CrmPlugin(Plugin[LinearConfig, LinearSnapshot]):
-    """A plugin publishing deals, a family it declares."""
+class TrackerPlugin(Plugin[LinearConfig, LinearSnapshot]):
+    """A plugin publishing tickets, a family core declares."""
 
-    name: ClassVar[str] = "crm"
-    title: ClassVar[str] = "CRM"
+    name: ClassVar[str] = "tracker"
+    title: ClassVar[str] = "Tracker"
     api_version = API_VERSION
     config_model = LinearConfig
-    families = (Family("deal", "deal", Deal, is_url),)
-    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(Deal)}
+    kinds: ClassVar[dict[str, KindSpec]] = {TICKET: KindSpec(TrackerTicket)}
 
     def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:
+        ticket = TrackerTicket(handle="T-1", summary="Big", team="ENG")
         return [
-            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
-            for id in ("https://crm/deals/1", "D-1")  # the second breaks the family's rule
+            Entity(ref=Ref(kind=TICKET, id=id), title="Big", attrs=attrs(ticket))
+            for id in ("https://tracker/T-1", "T-1")  # the second breaks the family's rule
         ]
 
 
-def test_a_plugin_publishes_a_family_it_declares_as_core_would() -> None:
-    crm = Harness(CrmPlugin(), {"team": "ENG"})
-    [deal] = crm.entities()
-    assert (deal.ref.id, deal.kind, deal.family) == ("https://crm/deals/1", "crm.deal", "deal")
-    assert "deal" not in FAMILIES  # declared only while the harness runs a call
+def test_a_plugin_publishes_a_family_as_core_would() -> None:
+    tracker = Harness(TrackerPlugin(), {"team": "ENG"})
+    [ticket] = tracker.entities()
+    assert (ticket.ref.id, ticket.kind, ticket.family) == (
+        "https://tracker/T-1",
+        "tracker.ticket",
+        "ticket",
+    )
 
 
-class DealReader(LinearPlugin):
-    """Reads deals, a family another plugin declares."""
+class TicketReader(LinearPlugin):
+    """Reads tickets, which another plugin publishes."""
 
     name: ClassVar[str] = "reader"
     kinds: ClassVar[dict[str, KindSpec]] = {}
 
 
-def test_a_plugin_reading_another_plugins_family_is_given_it() -> None:
-    reader = Harness(DealReader(), {"team": "ENG"}, families=CrmPlugin.families)
+def test_a_plugin_reading_a_family_is_given_the_entities_that_fit_it() -> None:
+    reader = Harness(TicketReader(), {"team": "ENG"})
     reader.with_entities(
         [
-            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
-            for id in ("https://crm/deals/1", "D-1")
+            Entity(
+                ref=Ref(kind=TICKET, id=id),
+                title="Big",
+                attrs=attrs(Ticket(handle="T-1", summary="Big")),
+            )
+            for id in ("https://tracker/T-1", "T-1")
         ]
     )
-    [deal] = reader.graph().of_kind("deal")
-    assert (deal.ref.id, deal.family) == ("https://crm/deals/1", "deal")
+    [ticket] = reader.graph().of_kind(TICKET)
+    assert (ticket.ref.id, ticket.family) == ("https://tracker/T-1", TICKET)
 
 
-class BorrowingCrm(CrmPlugin):
-    name: ClassVar[str] = "borrowing"
-    families = ()
-
-
-def test_the_harness_refuses_a_plugin_core_would_leave_out() -> None:
-    with pytest.raises(RuntimeError, match="a family it doesn't declare"):
-        Harness(BorrowingCrm(), {"team": "ENG"}, families=CrmPlugin.families)
-
-
-def test_seeding_a_family_the_harness_wasnt_given_says_so() -> None:
-    reader = Harness(DealReader(), {"team": "ENG"})
+def test_seeding_a_kind_neither_a_family_nor_a_plugins_says_so() -> None:
+    reader = Harness(TicketReader(), {"team": "ENG"})
     deal = Entity(ref=Ref(kind="deal", id="https://crm/deals/1"), title="Big", attrs={})
-    with pytest.raises(ValueError, match="families="):
+    with pytest.raises(ValueError, match="neither a family nor a plugin's kind"):
         reader.with_entities([deal])

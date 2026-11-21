@@ -47,7 +47,7 @@ def test_a_kind_named_for_a_family_must_extend_its_model() -> None:
 
 def test_a_plugins_other_kinds_are_named_for_it() -> None:
     registry.check_plugins([_plugin("linear", {"linear.cycle": KindSpec(KindModel)})])
-    for kind in ("cycle", "github.cycle", "linear.", "linear.Cycle"):
+    for kind in ("cycle", "tag", "github.cycle", "linear.", "linear.Cycle"):
         with pytest.raises(RuntimeError, match=f"linear's kind '{kind}' must be named linear"):
             registry.check_plugins([_plugin("linear", {kind: KindSpec(KindModel)})])
 

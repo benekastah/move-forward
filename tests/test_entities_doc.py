@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from move_forward import registry, tags
-from move_forward.kinds import CORE_FAMILIES, FAMILIES, TAG
+from move_forward.kinds import FAMILIES, TAG
 
 DOC = Path(__file__).parent.parent / "docs" / "entities.md"
 _ROW_RE = re.compile(r"^\| `([\w.]+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
@@ -39,7 +39,7 @@ def test_each_kind_documents_exactly_its_models_attributes() -> None:
     marked; core's families are documented even before a plugin publishes them."""
     text = DOC.read_text()
     fields: dict[str, set[str]] = {TAG: set(tags.SPEC.attrs.model_fields)}
-    for family in CORE_FAMILIES:
+    for family in FAMILIES.values():
         fields.setdefault(family.name, set()).update(family.model.model_fields)
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():

@@ -36,7 +36,6 @@ from move_forward.asking import (
 from move_forward.config import Config
 from move_forward.keychain import TokenFields
 from move_forward.plugin import Plugin
-from move_forward.strict import TABLES, marked
 
 LINE_WIDTH = 100
 """The widest line `mfd init` writes: a key's comment, above it, is wrapped to this. A key
@@ -128,12 +127,12 @@ def commented_defaults(
     model: type[BaseModel], skip: Collection[str] = (), shown: Mapping[str, object] | None = None
 ) -> str:
     """`model`'s optional keys but `skip`, commented out, each with its default (or its value in
-    `shown`) and its docstring's `summary`. A table of tables by name (a field marked
-    `TABLES`) and a key whose default is None, not in `shown`, are left out."""
+    `shown`) and its docstring's `summary`. A key whose default is None, not in `shown`, is
+    left out."""
     shown = shown or {}
     text = ""
     for key, field in model.model_fields.items():
-        if key in skip or field.is_required() or marked(field, TABLES):
+        if key in skip or field.is_required():
             continue
         value = shown[key] if key in shown else _default(model, key, field)
         if value is not None:

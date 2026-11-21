@@ -27,7 +27,7 @@ from move_forward.asking import Init
 from move_forward.db import Database, Migration
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.keychain import TokenSettings
-from move_forward.kinds import FAMILIES, Family, is_url
+from move_forward.kinds import FAMILIES, is_url
 from move_forward.markup import Html
 from move_forward.notifications import Event
 from move_forward.page import Item, ItemAdditions, Panel
@@ -358,13 +358,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
     """The model of the `[name]` section: C. It must reject unknown keys (a `Strict`)."""
-    families: ClassVar[tuple[Family, ...]] = ()
-    """Families of kinds the plugin declares (`kinds.Family`): what more than one tool may
-    represent, like core's pull request, ticket, person and team, with the model its kinds extend
-    and the rule its ids follow; its model needs a `handle`. Declared by the plugin, or by a
-    package several share, it needs no change to core. A plugin publishes kinds only of core's
-    families and those it declares, and one declaring a family differently from core or
-    another plugin is left out, and said why."""
     kinds: ClassVar[dict[str, KindSpec]] = {}
     """The entity kinds the plugin publishes, each with its spec: the model of its
     attributes, which the graph checks its entities against, and whether it links what it's
