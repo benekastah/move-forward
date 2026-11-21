@@ -235,15 +235,15 @@ said, and a priority I set on the item replaces it.
 
 ## Tags
 
-An item's tags come from its tool (a PR's or a ticket's labels: each plugin's page says
-which), from a `#tag` in its title or description (a PR's, a todo's; not in code or an HTML
-comment), and from me: its Tag field, on any item about something (a mail, a ticket, a branch),
-or `mfd tag`. Each is a `#tag` badge, filters the page (below), and has an Untag button, which
-takes it off whatever put it there. One I put on goes for good; one from its tool or text stays
-off until the plugin the item is from next refreshes, which puts it back if the tool or the
-text still has it (notes never refreshes: there it stays off until I Tag it again). A tag I put
-on stays on finished work (a merged PR, a done ticket); what I put on or took off is forgotten
-once the item is gone (a deleted entry, a ticked-off todo, a mail once read).
+An item's tags come from its tool (a PR's or a ticket's labels: each plugin's page says which),
+from a `#tag` written in a work entry's title or a todo (not in code), and from me: its Tag
+field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Each is a `#tag`
+badge, filters the page (below), and has an Untag button, which takes it off whatever put it
+there. One I put on goes for good; one from its tool stays off until the plugin the item is from
+next refreshes, which puts it back if the tool still has it; one from an entry's or a todo's
+text stays off until I Tag it again. A tag I put on stays on finished work (a merged PR, a done
+ticket); what I put on or took off is forgotten once the item is gone (a deleted entry, a
+ticked-off todo, a mail once read).
 
 A tag's words are separated by `-` or `_`, and it needs a letter (`#7` is a PR's number). Text
 that names a tag, in a title or a description, however its words are spaced, hyphenated or cased

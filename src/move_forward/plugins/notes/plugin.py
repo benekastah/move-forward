@@ -52,9 +52,11 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel], Command[NotesConfig]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Done entries and todos aren't published: one that's gone is done.
-        ENTRY: KindSpec(EntryAttrs, linking=True, gone_means_done=True, resolvable=True),
+        ENTRY: KindSpec(
+            EntryAttrs, linking=True, gone_means_done=True, resolvable=True, find_tags_in_text=True
+        ),
         ICED: KindSpec(IcedAttrs, hides=True),
-        TODO: KindSpec(TodoAttrs, gone_means_done=True),
+        TODO: KindSpec(TodoAttrs, gone_means_done=True, find_tags_in_text=True),
     }
 
     def entities(self, req: Request[NotesConfig, BaseModel]) -> list[Entity]:

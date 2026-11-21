@@ -32,6 +32,17 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   it's `Html`; a body of another type goes out as it is, with `X-Content-Type-Options: nosniff`.
   A `Response` with no content type, with a header name that isn't an HTTP token, or whose
   `headers` set `Content-Type` or `Content-Length`, answers 500.
+- **`address` is two hooks, `web_address` and `handle`**, and `Address` is gone: an entity's
+  URL and the text that names it are separate questions. `web_address(req)` gives each id's
+  URL as text (by default, as `address` did, the id where its family's ids are URLs), and
+  `handle(req)` each id's handle (by default none). A plugin that overrode `address` overrides
+  whichever of the two it answered.
+- **`KindSpec`'s `tags_from_text` is `find_tags_in_text`, False by default**: a `#tag` in an
+  entity's title or mentions puts the tag on it only where its kind says
+  `KindSpec(find_tags_in_text=True)`, for text I write that has no labels (notes' entries and
+  todos), as a tool's labels already tag and text anyone else can write mustn't. Text still
+  names tags whatever its kind says. A kind that relied on the old default (True) must now say
+  so, and one that said `tags_from_text=False` drops it.
 
 ## Version 4
 

@@ -9,7 +9,6 @@ from move_forward.api import (
     API_VERSION,
     Action,
     ActionHandler,
-    Address,
     Badge,
     Band,
     ChangeChecker,
@@ -496,16 +495,21 @@ class JiraPlugin(
             for i in found
         ]
 
-    def address(self, req: RefRequest[JiraConfig]) -> dict[str, Address]:
-        """A ticket's URL, from its URL or its key alone, and its key, from its URL."""
+    def web_address(self, req: RefRequest[JiraConfig]) -> dict[str, str]:
+        """A ticket's URL, from its URL or its key alone."""
         site = req.ctx.config.site
-        found: dict[str, Address] = {}
+        found: dict[str, str] = {}
         for id in req.ids:
-            if key := client.key_of(site, id):
-                found[id] = Address(url=id, handle=key)
+            if client.key_of(site, id):
+                found[id] = id
             elif client.is_key(id):
-                found[id] = Address(url=client.ticket_url(site, id))
+                found[id] = client.ticket_url(site, id)
         return found
+
+    def handle(self, req: RefRequest[JiraConfig]) -> dict[str, str]:
+        """A ticket's key, from its URL."""
+        site = req.ctx.config.site
+        return {id: key for id in req.ids if (key := client.key_of(site, id))}
 
     def panels(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph

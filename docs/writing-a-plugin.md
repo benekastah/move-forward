@@ -377,24 +377,25 @@ class LinearPlugin(...):
   `gone_means_done`; one whose entities the plugin can look up after they've left the
   snapshot is `fetchable`, and the plugin a `Fetcher`, implementing `fetch(req)`; one `mfd
   priority <id>` should look in without `--kind` is `resolvable`.
-- **Tags.** A `#tag` in an entity's title or `mentions` (out of Markdown code and HTML
-  comments) puts the tag on it, and text there naming one points it at the tag (see the
-  README's Tags). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
+- **Tags.** Text in an entity's title or `mentions` (out of Markdown code and HTML comments)
+  naming a tag points it at the tag (see the README's Tags). A `#tag` there puts the tag on it
+  only where its kind says `KindSpec(..., find_tags_in_text=True)`: text I write myself in a
+  tool with no labels (notes'), not text a tool's labels already tag or anyone else can write
+  (a PR's body, mail's subjects). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
   makes them tags. Put only labels no outsider can set (people with a say in the tool, or the
   tool itself), even on a kind whose text anyone can write, and decide whether the tool's own
   (Gmail's `\Inbox`) are tags too: mail's are. A tag only labels give is named only with its
   `#`, as a label is often a common word. I can take a label's tag off, until your plugin next
-  refreshes. A kind whose text anyone can write (mail's subjects) is
-  `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
+  refreshes. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
-- `address(req)` (`req.kind`, `req.ids`) says where entities that may not be in the graph
-  are and what they're called, by id: an `Address(url, handle)` (a ticket's URL from its key,
-  its key from its URL), leaving out what it can't say. `fetch(req)` fetches entities by id
+- `web_address(req)` (`req.kind`, `req.ids`) gives the URLs of entities that may not be in
+  the graph, by id (a ticket's from its key), and `handle(req)` the text that names them (a
+  ticket's key from its URL), each leaving out what it can't say. `fetch(req)` fetches entities by id
   from the tool now, for rare work like the daily prune; what a fetched entity must carry is
   in [entities.md](entities.md#fetched-on-demand). Core asks each only about the plugin's own
-  `kinds`, so they needn't check `req.kind` is theirs; `address` gives the id as the URL by
-  default where its family's ids are URLs (a pull request's), so a plugin overrides it only
-  to make a URL of something else (a ticket's key), or to give a handle.
+  `kinds`, so they needn't check `req.kind` is theirs; `web_address` gives the id by default
+  where its family's ids are URLs (a pull request's), so a plugin overrides it only to make a
+  URL of something else (a ticket's key).
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see

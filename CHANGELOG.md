@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### A `#tag` tags only work entries and todos
+
+A `#tag` written in a PR's title or body, or a ticket's summary, no longer puts the tag on it
+(it still points the item at a tag something else carries): only one in a work entry's title or
+a todo does. To keep such an item tagged, give it the label in its tool, or put the tag on it
+with `mfd tag <entity> <tag>` (or its Tag field).
+
 ### slack names a team by its id
 
 `[slack.teams]`, `mfd slack team set` and `unset`, `mfd slack destinations`' teams, and the

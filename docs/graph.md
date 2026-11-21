@@ -81,8 +81,8 @@ flowchart TB
    each of them about one. Core checks every entity
    for that and against its kind's model; one that fails is left out and logged, so the
    page goes on without it.
-3. Core adds a `tag` per tag on an entity (its tool's, a `#tag` in its title or mentions, or put
-   on by hand; but one I took off), pointing at what carries it, and points each entity whose
+3. Core adds a `tag` per tag on an entity (its tool's, a `#tag` in its title or mentions where
+   its kind says `find_tags_in_text`, or put on by hand; but one I took off), pointing at what carries it, and points each entity whose
    title or mentions name one at it (see `move_forward.tags`).
 4. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
    (see [related entities](#related-entities)).
@@ -164,7 +164,7 @@ A view lists only what its consumer reads, so publishers can add attributes free
 Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
 looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
 them when two trackers share a key; a match no entity has yet becomes a ref with the id its
-plugin's `address` gives it (a ticket's URL, from its key), else with that text as its id.
+plugin's `web_address` gives it (a ticket's URL, from its key), else with that text as its id.
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
 `KindSpec(..., linking=True)`, and gives the pattern of its ids, if text can name them, in its
@@ -183,8 +183,8 @@ class NotesPlugin(Plugin[NotesConfig]):
 ```
 
 Core adds a kind of its own, `tag` (see `move_forward.tags`): one per tag an entity carries,
-from its tool (`Entity.tags`), a `#tag` in its title or mentions (out of code), or put on it by
-hand, but one I took off, pointing at what carries it, while each entity whose title or mentions
+from its tool (`Entity.tags`), a `#tag` in its title or mentions (out of code) where its kind
+says `find_tags_in_text`, or put on it by hand, but one I took off, pointing at what carries it, while each entity whose title or mentions
 name a tag points at it. It isn't linking, so it relates nothing through it: `related(ref,
 "tag")` gives the tags on or named by `ref`, and by the tickets or entries it belongs to (one
 hop through a linking entity, as for any kind), and a tag's `refs` what carries it. A one-word
@@ -257,10 +257,10 @@ stay. So plugins never check for ice themselves.
 ### URLs, and entities not in the graph
 
 `url_for(kind, id)` gives an entity's URL from the graph, else asks the plugins that publish
-`kind` (each of a family's publishers, in turn) for its `address`: a PR's id is its URL,
-which every plugin's `address` gives by default for a family whose ids are URLs, and jira
+`kind` (each of a family's publishers, in turn) for its `web_address`: a PR's id is its URL,
+which every plugin's `web_address` gives by default for a family whose ids are URLs, and jira
 makes a ticket's link from its key alone. `handle(kind, id)` gives what to call it the same
-way: its `handle` from the graph, else the handle its publishers' `address` gives (jira's: a
+way: its `handle` from the graph, else what its publishers' `handle` hook gives (jira's: a
 ticket's key from its URL), else the id. A plugin is never asked about a kind it doesn't publish.
 
 `identify(kind, id)` gives the id an entity of a family has, for an id kept before the
