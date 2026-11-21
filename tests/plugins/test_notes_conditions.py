@@ -14,8 +14,8 @@ from move_forward.plugins.notes.repository import NotesRepository
 READY = pr(1, reviews=[approved_review()], review_decision="APPROVED")
 
 
-def _item(config: Config, db: Database, key: str, surface: str = "dashboard") -> Item:
-    built = refresh.build_dashboard(config, db, NOW, surface=surface)  # pyright: ignore[reportArgumentType]
+def _item(config: Config, db: Database, key: str) -> Item:
+    built = refresh.build_dashboard(config, db, NOW)
     [item] = panel(built, key).items
     return item
 
@@ -53,10 +53,9 @@ def test_release_removes_the_condition_chosen_asking_first() -> None:
     config, db = stored(
         github=snapshot(mine=[READY]), work_items=[entry("APP-1 Fix", [], **conditions)]
     )
-    for surface in ("dashboard", "focus"):
-        release = _button(_item(config, db, "github.held", surface), "Release")
-        assert release.choices == {"after the release": "after the release", "ask Sam": "ask Sam"}
-        assert release.confirm is not None
+    release = _button(_item(config, db, "github.held"), "Release")
+    assert release.choices == {"after the release": "after the release", "ask Sam": "ask Sam"}
+    assert release.confirm is not None
     notice = refresh.run_action(config, db, release.name, release.fields | {"choice": "ask Sam"})
     assert notice == "released PR 1 from: ask Sam"
     assert NotesRepository(db).entries()[0].conditions == [

@@ -11,6 +11,10 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 5
 
+- **`ItemRequest` is just the `item`; `Surface` and `Form.surface` are gone**: no plugin
+  read the owner, and an item offers the same wherever it's shown (the dashboard, focus mode,
+  Act now), so a plugin's additions no longer vary by surface. A plugin that told another
+  plugin's item from its own can look at the `item`'s subjects.
 - **A pull request's `requested_teams` are the teams' ids**, `<host>/<org>/<slug>`, not their
   handles: a team's handle isn't unique, even within one publisher (github publishes the teams
   of every org whose PRs request one). Key a requested team by its id, and show its `team`

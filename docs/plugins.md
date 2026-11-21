@@ -18,7 +18,7 @@ items about what hides things, nor to a todo part ticked off), and Snooze to eve
 task. Items of several plugins with one task about one subject are snoozed as one: github's Ready
 for review and slack's Nudge reviewers share `await_review`, with the PR's head as fingerprint. A todo part ticked off, kept to untick, gets nothing added, from core or any plugin: only
 its own box acts on it. An entry whose todos are all ticked off gets what any item does. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
-Delete under Disposition, and joins core's Snooze and Pin on Act now items.
+Delete under Disposition.
 Emoji buttons retain their text labels in titles and accessible names.
 
 ## Entities

@@ -259,10 +259,6 @@ class Panel(Model):
         return item.act_now if item.act_now is not None else self.act_now and not item.deferred
 
 
-Surface = Literal["dashboard", "focus", "act_now"]
-"""Where an item is shown: the dashboard's panels, focus mode, or Act now."""
-
-
 class ItemAdditions(Model):
     """What a plugin adds to another plugin's item (`Plugin.item_actions`)."""
 

@@ -290,7 +290,7 @@ def test_ice_gets_no_tags_and_focus_parts_do() -> None:
         NOW,
         [panels.PluginPanels("x", "X", [stage])],
         {},
-        item_actions=lambda item, owner, surface: tagging.additions(item),
+        item_actions=lambda item: tagging.additions(item),
     )
     focused = built.focus_items("x.stage")
     assert focused is not None

@@ -201,7 +201,7 @@ For pages, buttons and `mfd <plugin>`.
 | `ctx` | `Context[C]` | The plugin's context. |
 | `graph` | `Graph` | Every plugin's entities. |
 | `page` | `Page` | For a page: its `query` and `path`. |
-| `form` | `Form` | For a button: its `fields` (untrusted), `surface` and `back`. `req.field(name)` reads a required one. |
+| `form` | `Form` | For a button: its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
 | `args` | `Namespace` | For `mfd <plugin>`: its parsed arguments. |
 
 ### `Previous`
@@ -222,8 +222,6 @@ What the function `item_actions` returns is called with, once per item.
 | Field | Type | What it holds |
 | --- | --- | --- |
 | `item` | `Item` | The item. |
-| `owner` | `str` | The plugin whose item it is. |
-| `surface` | `Surface` | Where it's shown: the dashboard, focus mode or Act now. |
 
 ## Context and answers
 

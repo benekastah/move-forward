@@ -45,7 +45,7 @@ item about one of my open PRs (to the same entry), and Release, with a drop-down
 conditions holding it (asking first), to every item about a PR that one holds; and Put on ice to every item about a local
 branch (with its stack and group in git stack), one of my open PRs, a ticket or a work entry.
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
-in a group when both are offered, and joins Snooze and Pin on Act now items.
+in a group when both are offered.
 
 In focus mode, work entries are split into their todos, one per page, quick ones first, each
 with its entry's Put on ice.

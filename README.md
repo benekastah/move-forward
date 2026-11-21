@@ -195,7 +195,7 @@ Every item with an entity subject but what's on ice, including a todo in the Not
 Important and Critical as one group of buttons (❗️ / ‼️), highlighting the selected level. To set
 something aside rather than raise it, Snooze or put it on ice. For an
 item about several entities, the choice applies to its first subject. Once one is set, a Clear priority button goes with them. Act now groups
-its Snooze, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
+its Snooze and Pin choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
 Reset layout, in the footer, goes back to the default order.
 Only Act now starts expanded; each panel inside a group collapses too, and starts open

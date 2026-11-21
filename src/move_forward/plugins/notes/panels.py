@@ -41,6 +41,8 @@ ICED = "notes.iced"
 TODO = "notes.todo"
 TODOS = "todos"
 """The todos panel's key."""
+DISPOSITION = "Disposition"
+"""The button group Put on ice joins, with git's Delete."""
 BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
 TODO_NEW = "notes/todo_new"
@@ -447,7 +449,7 @@ class Builder:
             )
         return actions
 
-    def put_on_ice(self, item: Item, group: str = "Disposition") -> Action | None:
+    def put_on_ice(self, item: Item) -> Action | None:
         """A Put on ice button for an item about one of git's branches (with its stack), else
         about one of my open PRs, a ticket or a work entry, unless it's on ice already."""
         if any(self.graph.hides(s.kind) for s in item.subjects):
@@ -461,7 +463,7 @@ class Builder:
                 name="notes/ice",
                 label="Put on ice",
                 fields={"repo": branch.repo_dir, "branch": branch.name},
-                group=group,
+                group=DISPOSITION,
                 icon="🧊",
             )
         ref = item.subject(PR) or item.subject(TICKET) or item.subject(ENTRY)
@@ -475,7 +477,7 @@ class Builder:
             name="notes/ice_item",
             label="Put on ice",
             fields={"kind": ref.kind, "id": ref.id},
-            group=group,
+            group=DISPOSITION,
             icon="🧊",
         )
 

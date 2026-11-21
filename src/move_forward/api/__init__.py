@@ -35,7 +35,6 @@ from move_forward.page import (
     Notify,
     Panel,
     Signals,
-    Surface,
     age,
     anchor,
 )
@@ -132,7 +131,6 @@ __all__ = [
     "Snapshots",
     "SourceError",
     "Strict",
-    "Surface",
     "age",
     "anchor",
     "attrs",

@@ -485,7 +485,7 @@ def test_an_item_snoozed_in_act_nows_focus_mode_stays_there_set_aside(
     notes = NotesRepository(app.db)
     notes.add_todo(notes.add_entry("Chores", NOW.date()), "dishes", size="quick")
     body, back = _focused(client, "/focus?cat=act&i=0")
-    step = build_dashboard(app.config, app.db, surface="focus").focus_step("act", 0)
+    step = build_dashboard(app.config, app.db).focus_step("act", 0)
     assert step is not None and "1 of 2" in body and "dishes" in body
     snooze = next(a for a in step[1].actions if a.label == "Snooze")
     response = post(client, f"/actions/act_now/snooze?back={back}", snooze.fields)

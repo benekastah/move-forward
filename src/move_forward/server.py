@@ -374,7 +374,7 @@ class App:
         the button did can be undone: as it is now, or, gone from the page, as the page showed
         it. The item shown is remembered for that.
         """
-        built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
+        built = build_dashboard(self.config, self.db, selected=tags)
         if not category:
             return render.focus_categories_page(built, tags)
         shown = tag_view.focused(built, tags)

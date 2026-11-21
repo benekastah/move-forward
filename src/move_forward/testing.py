@@ -29,7 +29,7 @@ from move_forward.graph import Entity, Graph, KindSpec
 from move_forward.kinds import FAMILIES, Family, declaring
 from move_forward.markup import Html
 from move_forward.notifications import Event
-from move_forward.page import Item, Panel, Surface
+from move_forward.page import Item, Panel
 from move_forward.panels import Dashboard
 from move_forward.plugin import (
     API_VERSION,
@@ -222,11 +222,11 @@ class Harness:
         """The plugin's panels, as its `panels` makes them (before core adds buttons)."""
         return self.plugin.panels(Request(self.ctx, self.graph(), self.snapshot()))
 
-    def dashboard(self, surface: Surface = "dashboard") -> Dashboard:
+    def dashboard(self) -> Dashboard:
         """The page core builds: Act now, the panels with every plugin's buttons, hidden
         items left out."""
         with self._installed():
-            return refresh.build_dashboard(self.config, self.db, self.now, surface=surface)
+            return refresh.build_dashboard(self.config, self.db, self.now)
 
     def act_now(self) -> list[Item]:
         """Act now's items, ranked."""

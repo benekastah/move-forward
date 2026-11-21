@@ -24,7 +24,6 @@ from move_forward.page import (
     ItemAdditions,
     Panel,
     SourceStatus,
-    Surface,
 )
 
 log = logging.getLogger(__name__)
@@ -310,12 +309,11 @@ def _sorted(
     )
 
 
-ItemActions = Callable[[Item, str, Surface], ItemAdditions]
-"""What the plugins add to an item, whoever built it (the second argument, its plugin), on a
-surface; see `Plugin.item_actions`."""
+ItemActions = Callable[[Item], ItemAdditions]
+"""What the plugins add to an item; see `Plugin.item_actions`."""
 
 
-def _no_item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
+def _no_item_actions(item: Item) -> ItemAdditions:
     return ItemAdditions()
 
 
@@ -454,22 +452,20 @@ def _known(action: Action, known: KnownAction) -> bool:
 
 def _with_item_actions(
     panel: Panel,
-    owner: str,
-    surface: Surface,
     item_actions: ItemActions,
     known: KnownAction = _any_action,
     tags_of: TagsOf = _no_tags,
 ) -> Panel:
     """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
-    badges, details and links, and the tags core's badges show (`tags_of`). `owner` is the
-    plugin whose panel it is. Buttons posting to no action `known` knows are left out. Nothing
-    is added to a part that's `done` (a todo ticked off, kept to untick): it's finished work
-    within its item, with nothing to tag, ice or reach anyone about, so only its own buttons
-    act on it. An item that's done itself (an entry whose todos are all ticked off) is still
-    there to tag, ice and so on, and gets what any item does."""
+    badges, details and links, and the tags core's badges show (`tags_of`). Buttons posting to
+    no action `known` knows are left out. Nothing is added to a part that's `done` (a todo
+    ticked off, kept to untick): it's finished work within its item, with nothing to tag, ice
+    or reach anyone about, so only its own buttons act on it. An item that's done itself (an
+    entry whose todos are all ticked off) is still there to tag, ice and so on, and gets what
+    any item does."""
 
     def add(item: Item, part: bool = False) -> Item:
-        added = ItemAdditions() if part and item.done else item_actions(item, owner, surface)
+        added = ItemAdditions() if part and item.done else item_actions(item)
         actions = [a for a in [*item.actions, *added.actions] if _known(a, known)]
         return item.model_copy(
             update={
@@ -570,7 +566,6 @@ def build(
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] | None = None,
     units: act_now.Units = act_now.no_units,
     priority_of: act_now.PriorityOf = act_now.no_priority,
-    surface: Surface = "dashboard",
     known_action: KnownAction = _any_action,
     hides: HidesKind = _hides_nothing,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
@@ -623,7 +618,7 @@ def build(
     # todo offers the same wherever it's shown.
     ranked = [
         _with_importance_actions(
-            _with_item_actions(p, p.key, "act_now", item_actions, known_action, tags_of),
+            _with_item_actions(p, item_actions, known_action, tags_of),
             priority_of,
             hides,
             parts_only=True,
@@ -650,8 +645,6 @@ def build(
                     _with_importance_actions(
                         _with_item_actions(
                             _without_hidden(shown, hidden),
-                            plugin.key,
-                            surface,
                             item_actions,
                             known_action,
                             tags_of,

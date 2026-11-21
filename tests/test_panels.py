@@ -1120,19 +1120,19 @@ def test_a_todo_mentions_a_pr_by_its_number_but_not_by_a_number_within_another(
 
 def test_focus_mode_keeps_an_item_that_left_its_category_as_it_is_now() -> None:
     config, db = stored(work_items=[entry("Chores", [todo("dishes"), todo("laundry")])])
-    before = build_dashboard(config, db, NOW, surface="focus")
+    before = build_dashboard(config, db, NOW)
     [(on, dishes), _] = before.focus_items("notes.todos") or []
     key, remembered = panels.focus_key(dishes), (on.key, dishes)
     assert before.kept("notes.todos", key, remembered) == 0  # still a step, the first
     [todo_id] = [t.id for e in NotesRepository(db).entries() for t in e.todos if t.text == "dishes"]
     NotesRepository(db).set_done(todo_id, NOW.date())
-    after = build_dashboard(config, db, NOW, surface="focus")
+    after = build_dashboard(config, db, NOW)
     kept = after.kept("notes.todos", key, remembered)
     assert isinstance(kept, panels.Kept) and (kept.panel, kept.gone) == ("notes.todos", False)
     assert (kept.item.title, kept.item.done) == ("dishes", True)
     assert [(a.name, a.checked) for a in kept.item.actions] == [("notes/todo_undone", True)]
     NotesRepository(db).delete_todo(todo_id)
-    after = build_dashboard(config, db, NOW, surface="focus")
+    after = build_dashboard(config, db, NOW)
     gone = after.kept("notes.todos", key, remembered)
     assert isinstance(gone, panels.Kept) and (gone.item.title, gone.gone) == ("dishes", True)
     assert [a for a in gone.item.actions if a.href is None] == []  # nothing left to act on

@@ -36,7 +36,7 @@ from move_forward.graph import Graph, Ref, publisher
 from move_forward.kinds import FAMILIES, PERSON
 from move_forward.markup import Html, html
 from move_forward.notifications import Event, NotificationRepository
-from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
+from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus
 from move_forward.plugin import (
     ActionError,
     ActionResult,
@@ -559,12 +559,10 @@ def build_dashboard(
     config: Config,
     db: Database,
     now: datetime | None = None,
-    surface: Surface = "dashboard",
     selected: Sequence[str] = (),
 ) -> panels.Dashboard:
-    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
-    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
-    their items, and `selected` the tags the tag view selects (see `panels.build`)."""
+    """The dashboard from whatever is stored; cheap, no network. `selected` is the tags the tag
+    view selects (see `panels.build`)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
@@ -595,10 +593,10 @@ def build_dashboard(
     contacts = people.Contacts(ContactRepository(db).all(), graph, config.people)
     tagging = tags.Tags(graph)
 
-    def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
+    def item_actions(item: Item) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
-            req = ItemRequest(item, owner, surface)
+            req = ItemRequest(item)
             added = call(
                 e.name, "item_actions (per item)", lambda add=add, req=req: add(req), found
             )
@@ -625,7 +623,6 @@ def build_dashboard(
         FeedbackRepository(db).all(),
         graph.units,
         priority.level_of(PriorityRepository(db).all(), graph),
-        surface,
         _known_action(plugins),
         graph.hides,
         contacts.importance,
@@ -909,7 +906,6 @@ def perform_action(
     """Run a plugin's action, `<plugin>/<action>`, or Act now's, `act_now/<action>`; raises
     `ActionError` when it can't. `back` is the page the button was on, when it wasn't the
     dashboard."""
-    surface: Surface = "focus" if back and back.startswith("/focus") else "dashboard"
     plugin_name, _, action_name = name.partition("/")
     if plugin_name == act_now.ACTIONS and action_name in ("tag", "untag"):
         return _tag(config, db, action_name, fields)
@@ -924,7 +920,7 @@ def perform_action(
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        result = handler(InputRequest(e.ctx, graph, form=Form(fields, surface, back)))
+        result = handler(InputRequest(e.ctx, graph, form=Form(fields, back)))
     except ActionError:
         raise
     except (CommandError, GitError) as err:  # a tool refused: said, not a crash

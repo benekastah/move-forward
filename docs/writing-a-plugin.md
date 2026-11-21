@@ -493,21 +493,19 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
   typo can't post to a 404. `req.form` is the form posted: `req.form.fields` its
-  fields, `req.form.surface` where the button was (`dashboard` or `focus`). A button with an
-  `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
-  from, and `choices` adds a drop-down beside it (label to value), posted as `choice`. Check every field: they
-  come from a form, so treat them as untrusted (a repo must be configured, a worktree must
-  be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
-  nothing force-pushes, resets or stashes. Read a required field with
+  fields. A button with an `input` has a text field, posted as `input`; `suggestions` lists what
+  it offers to pick from, and `choices` adds a drop-down beside it (label to value), posted as
+  `choice`. Check every field: they come from a form, so treat them as untrusted (a repo must
+  be configured, a worktree must be the repo's, an id must exist). Anything that deletes or
+  rewrites sets `confirm`, and nothing force-pushes, resets or stashes. Read a required field with
   `req.field(name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
 - **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
   `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
   with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
-  for `each.item`, by its subjects; `each.owner` is the plugin whose item it is and
-  `each.surface` where it's shown (`dashboard`, `focus`, `act_now`). Read your tables, or
-  make a pass over the graph, in `item_actions` itself, once, not in the function.
+  for `each.item`, by its subjects. Read your tables, or make a pass over the graph, in
+  `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
