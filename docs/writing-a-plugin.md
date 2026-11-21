@@ -496,8 +496,8 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   fields. A button with an `input` has a text field, posted as `input`; `suggestions` lists what
   it offers to pick from, and `choices` adds a drop-down beside it (label to value), posted as
   `choice`. Check every field: they come from a form, so treat them as untrusted (a repo must
-  be configured, a worktree must be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
-  nothing force-pushes, resets or stashes. Read a required field with
+  be configured, a worktree must be the repo's, an id must exist). Anything that deletes or
+  rewrites sets `confirm`, and nothing force-pushes, resets or stashes. Read a required field with
   `req.field(name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
