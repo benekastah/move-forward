@@ -60,7 +60,7 @@ class GitStackPlugin(
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def change_checks(self, req: ContextRequest[GitStackConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitStackConfig]) -> ChangeCheckTriggers:
         """After each refresh of git, whose repos it reads stacks in; no poll."""
         return ChangeCheckTriggers(watches=["git"])
 

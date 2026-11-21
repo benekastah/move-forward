@@ -204,9 +204,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a request
   answered "not modified", another plugin's entities in the graph) is also a `ChangeChecker`: it
-  says how often to ask in `change_checks(req)`, as a `ChangeCheckTriggers(poll_seconds=...)`
-  (from its section, if that has a say), and implements `changed(req)`, which says what moved in its tool (a
-  `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
+  says how often to ask in `check_triggers(req)`, as a `ChangeCheckTriggers(poll_seconds=...)`
+  (from its section, if that has a say), and implements `changed(req)`, which says what moved
+  in its tool (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
   in the plugin's own terms (repos, PRs), `everything=True` for something moved that no subject
   names, or more than one of these, and a `reason` for the log; `Changed()` says nothing moved. Core
   keeps the answer, not the plugin: the server asks that often, compares each fingerprint with the
@@ -222,7 +222,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   unless it collects only entities asked for, below, and a full collect stored within
   `refresh_seconds`; `refresh_seconds` since the last full collect that stored; something unnamed
   moved; or nothing's pending). With `changed`, `refresh_seconds` can be long. A `changed` that
-  reads another plugin's entities from the graph names that plugin in its `change_checks`'
+  reads another plugin's entities from the graph names that plugin in its `check_triggers`'
   `watches`: it's asked right after each refresh of that plugin (git_stack watches git, to see its
   repos), whether or not it also polls. A plugin with no cheap check isn't a `ChangeChecker`, and
   refreshes every `refresh_seconds`.
@@ -488,7 +488,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
   `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
   with the `Item`: it returns the `ItemAdditions` (buttons, badges, details, links)
-  for `each.item`, by its subjects. Read your tables, or make a pass over the graph, in
+  for that item, by its subjects. Read your tables, or make a pass over the graph, in
   `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in

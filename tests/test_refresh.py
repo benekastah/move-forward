@@ -50,7 +50,7 @@ class _JiraWatchingGit(JiraPlugin):
     collected_from: ClassVar[list[list[str]]] = []
     seen_by_after_collect: ClassVar[list[str]] = []
 
-    def change_checks(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(watches=["git"])
 
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:

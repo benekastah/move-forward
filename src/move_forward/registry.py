@@ -291,41 +291,45 @@ class Enabled:
         return self.plugin if isinstance(self.plugin, ChangeChecker) else None
 
     @property
-    def change_checks(self) -> ChangeCheckTriggers:
-        """When core asks the plugin's `changed` (`ChangeChecker.change_checks`, with its
+    def check_triggers(self) -> ChangeCheckTriggers:
+        """When core asks the plugin's `changed` (`ChangeChecker.check_triggers`, with its
         context); neither poll nor watch for one without a change check. One that raises, or
         answers with a `poll_seconds` other than a positive whole number or None, or `watches`
-        other than a list of plugin names, is logged (as `change_checks`) and means neither."""
+        other than a list of plugin names, is logged (as `check_triggers`) and means neither."""
         checker = self.change_checker
         if checker is None:
             return ChangeCheckTriggers()
 
         def ask() -> ChangeCheckTriggers:
-            answer = cast(object, checker.change_checks(ContextRequest(self.ctx)))
+            answer = cast(object, checker.check_triggers(ContextRequest(self.ctx)))
             # A plugin needn't be type-checked, and a bad answer would stop every plugin's checks.
             if not isinstance(answer, ChangeCheckTriggers):
-                raise TypeError(f"change_checks gave {answer!r}, not a ChangeCheckTriggers")
+                raise TypeError(f"check_triggers gave {answer!r}, not a ChangeCheckTriggers")
             seconds, names = cast(object, answer.poll_seconds), cast(object, answer.watches)
             if seconds is not None and (type(seconds) is not int or seconds <= 0):
-                raise TypeError(f"change_checks gave poll_seconds={seconds!r}, not seconds or None")
+                raise TypeError(
+                    f"check_triggers gave poll_seconds={seconds!r}, not seconds or None"
+                )
             # A bare "git" would be read as letters, and the settle step never run.
             if not isinstance(names, list) or not all(
                 isinstance(n, str) for n in cast(list[object], names)
             ):
-                raise TypeError(f"change_checks gave watches={names!r}, not a list of plugin names")
+                raise TypeError(
+                    f"check_triggers gave watches={names!r}, not a list of plugin names"
+                )
             return answer
 
-        return call(self.name, "change_checks", ask, ChangeCheckTriggers())
+        return call(self.name, "check_triggers", ask, ChangeCheckTriggers())
 
     @property
     def poll_seconds(self) -> int | None:
-        """How often `mfd serve` asks the plugin's `changed` (`change_checks`); None for none."""
-        return self.change_checks.poll_seconds
+        """How often `mfd serve` asks the plugin's `changed` (`check_triggers`); None for none."""
+        return self.check_triggers.poll_seconds
 
     @property
     def watches(self) -> list[str]:
-        """The plugins whose entities the plugin's `changed` reads (`change_checks`)."""
-        return self.change_checks.watches
+        """The plugins whose entities the plugin's `changed` reads (`check_triggers`)."""
+        return self.check_triggers.watches
 
     @property
     def fetcher(self) -> Fetcher[Any] | None:

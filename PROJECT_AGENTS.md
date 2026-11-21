@@ -60,7 +60,8 @@ what's untried where it runs).
   `mfd init` and the settings page show it (`init`), and `api_version`. What only some plugins do is
   a mixin beside `Plugin` in its bases, which core finds with `isinstance` rather than by which
   methods a plugin overrides: `Collector` (`collect` and `snapshots`, and `events`), `ChangeChecker`
-  (a collector's `changed`, with the hook `change_checks`: how often it polls, and the plugins it `watches`), `Command` (`cli`) and
+  (a collector's `changed`, with the hook `check_triggers`: how often it polls, and the plugins
+  it `watches`), `Command` (`cli`) and
   `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
   and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
   a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
@@ -69,9 +70,9 @@ what's untried where it runs).
   on its config model's field, with `LOCKED`.
 - Every plugin hook that runs with the plugin's context takes one request object, of seven kinds, so
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
-  `linking_patterns`, `change_checks`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
-  `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
-  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`, `fetch`); and one
+  `linking_patterns`, `check_triggers`); `Request(ctx, graph, snapshot)` (`entities`, `relate`,
+  `panels`, `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph,
+  full, subjects)` (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`, `fetch`); and one
   per thing I ask for: `PageRequest(ctx, graph, page)` (pages), `ActionRequest(ctx, graph, form)`
   (buttons) and `CliRequest(ctx, graph, args)` (`mfd <plugin>`).
   `changed` and `events` get what held before in `req.previous`: a `PreviousCheck` (when, the

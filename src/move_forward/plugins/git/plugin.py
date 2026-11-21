@@ -175,7 +175,7 @@ class GitPlugin(
                 worktrees[Path(wt.path).resolve()] = common
         self._watcher.sync(worktrees)
 
-    def change_checks(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         """Every 2 seconds: what the watched repos said, and the polled ones' files' times."""
         return ChangeCheckTriggers(poll_seconds=2)
 

@@ -112,7 +112,7 @@ class Context[C: BaseModel]:
 @dataclass(frozen=True)
 class ContextRequest[C: BaseModel]:
     """A hook given only the plugin's context: `snapshots`, `linking_patterns`, and a change
-    checker's `change_checks`."""
+    checker's `check_triggers`."""
 
     ctx: Context[C]
 
@@ -274,7 +274,7 @@ def adds_nothing(item: Item) -> ItemAdditions:
 
 @dataclass(frozen=True, kw_only=True)
 class ChangeCheckTriggers:
-    """`change_checks`' answer: what makes core ask the plugin's `changed`. With neither (the
+    """`check_triggers`' answer: what makes core ask the plugin's `changed`. With neither (the
     default), it's never asked."""
 
     poll_seconds: int | None = None
@@ -526,7 +526,7 @@ class ChangeChecker[C: BaseModel](ABC):
     leaves it out and refreshes on its schedule. Add it to the bases beside `Plugin[C, S]` and
     `Collector[C, S]`, with the same `C`. The registry refuses one that doesn't collect."""
 
-    def change_checks(self, req: ContextRequest[C]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[C]) -> ChangeCheckTriggers:
         """When core asks `changed`, which may depend on the plugin's section: every
         `poll_seconds` in `mfd serve`, and in each refresh that collects a plugin it `watches`,
         once that one has stored. Watch the plugins whose data `changed` reads from the graph,
@@ -553,7 +553,7 @@ class ChangeChecker[C: BaseModel](ABC):
         why in `reason`, for the log; `Changed()` says nothing moved.
 
         In `mfd serve`, core asks again as each collect of the plugin starts (when its
-        `change_checks` poll or watch another), so what moves while it runs is
+        `check_triggers` poll or watch another), so what moves while it runs is
         compared with what it read, and gives `collect` what moved since a collect last
         stored. It asks for a refresh whenever something moved since the last check: a
         different fingerprint, any subject (one still pending after a collect that failed

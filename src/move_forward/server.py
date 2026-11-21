@@ -227,8 +227,9 @@ class App:
         return True
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
-        """Ask each plugin whose `poll_seconds` (`ChangeCheckTriggers`) have passed whether it `changed`,
-        except those refreshing now, and ask for a refresh of those that did; returns them."""
+        """Ask each plugin whose `poll_seconds` (`ChangeCheckTriggers`) have passed whether it
+        `changed`, except those refreshing now, and ask for a refresh of those that did; returns
+        them."""
         now = time.monotonic() if now is None else now
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         due: list[Enabled] = []

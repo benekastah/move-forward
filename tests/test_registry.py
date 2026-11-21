@@ -338,7 +338,7 @@ def test_a_collector_is_one_that_collects_and_keeps_what_it_found() -> None:
 class _Checks(_Collects, ChangeChecker[Strict]):
     name = "checks"
 
-    def change_checks(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=30)
 
     def changed(self, req: RefreshRequest[Strict]) -> Changed:
@@ -403,7 +403,7 @@ class _NotACommand(_Plain):
 class _NotAChecker(_Plain):
     name = "not_a_checker"
 
-    def change_checks(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=60)
 
 
@@ -411,5 +411,5 @@ def test_what_a_mixin_has_without_the_mixin_is_refused() -> None:
     """Before mixins, a `cli` made a command; now it would never be called."""
     with pytest.raises(TypeError, match="not_a_command has cli but isn't a Command"):
         registry.check_plugins([_NotACommand()])
-    with pytest.raises(TypeError, match="has change_checks but isn't a ChangeChecker"):
+    with pytest.raises(TypeError, match="has check_triggers but isn't a ChangeChecker"):
         registry.check_plugins([_NotAChecker()])

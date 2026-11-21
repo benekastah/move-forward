@@ -210,7 +210,7 @@ class GitHubPlugin(
             ),
         )
 
-    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
         """Every `DEFAULT_POLL_SECONDS` (the notifications are asked no more often than GitHub
         allows), and after each refresh of git, whose branches' pushes move my PRs."""
         return ChangeCheckTriggers(poll_seconds=notifications.DEFAULT_POLL_SECONDS, watches=["git"])

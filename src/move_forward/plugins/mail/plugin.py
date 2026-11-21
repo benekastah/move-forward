@@ -70,7 +70,7 @@ class MailPlugin(
     def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
         return MessageRepository(req.ctx.db)
 
-    def change_checks(self, req: ContextRequest[MailConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[MailConfig]) -> ChangeCheckTriggers:
         """Every 120 seconds: the mailbox's STATUS, one cheap command."""
         return ChangeCheckTriggers(poll_seconds=120)
 

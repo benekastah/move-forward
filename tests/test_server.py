@@ -825,7 +825,7 @@ class _GitHubWithChecks(GitHubPlugin):
     answers: ClassVar[list[bool | Changed | Exception]] = []
     """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
@@ -878,7 +878,7 @@ class _GitHubComparingGraphs(GitHubPlugin):
     given: ClassVar[list[tuple[Graph | None, Graph]]] = []
     failing: ClassVar[list[bool]] = []
 
-    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
@@ -906,7 +906,7 @@ def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
 class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeChecker[SlackConfig]):
     """Slack, as though it collected and had a change check, which always says it moved."""
 
-    def change_checks(self, req: ContextRequest[SlackConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[SlackConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=60)
 
     def collect(self, req: RefreshRequest[SlackConfig]) -> BaseModel:
@@ -920,7 +920,7 @@ class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeCheck
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
-    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:

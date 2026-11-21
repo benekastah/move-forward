@@ -425,7 +425,7 @@ class JiraPlugin(
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def change_checks(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
+    def check_triggers(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
         """Every 60 seconds: a one-result search for a ticket of mine updated since."""
         return ChangeCheckTriggers(poll_seconds=60)
 

@@ -234,7 +234,7 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
     def watching_github(self: GitPlugin, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         return ChangeCheckTriggers(watches=["github"])
 
-    monkeypatch.setattr(_Git, "change_checks", watching_github)
+    monkeypatch.setattr(_Git, "check_triggers", watching_github)
     config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
     registry.migrate(config, db)
     refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # the first: a full collect
@@ -247,14 +247,14 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
 def test_a_section_can_set_how_often_its_plugin_is_checked_or_turn_checks_off(
     git: _Git, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`change_checks` is asked with the plugin's context, so its section decides; with no
+    """`check_triggers` is asked with the plugin's context, so its section decides; with no
     poll and nothing watched, its `changed` is never asked."""
 
     def from_section(self: GitPlugin, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         seconds = req.ctx.config.refresh_seconds
         return ChangeCheckTriggers(poll_seconds=None if seconds > 3600 else seconds)
 
-    monkeypatch.setattr(_Git, "change_checks", from_section)
+    monkeypatch.setattr(_Git, "check_triggers", from_section)
     config, db = _config(tmp_path / "x.db"), Database(":memory:")
     registry.migrate(config, db)
     e = _git(config, db, NOW)
@@ -296,10 +296,10 @@ def test_a_bad_answer_is_logged_and_means_no_poll_nor_anything_watched(
             raise answer
         return answer
 
-    monkeypatch.setattr(_Git, "change_checks", answering)
+    monkeypatch.setattr(_Git, "check_triggers", answering)
     monkeypatch.setattr(registry, "_last_logged", {})
     config, db = _config(tmp_path / "x.db"), Database(":memory:")
     registry.migrate(config, db)
     e = _git(config, db, NOW)
     assert e.poll_seconds is None and e.watches == [] and not checks(e)
-    assert "git: change_checks failed" in {r.getMessage() for r in caplog.records}
+    assert "git: check_triggers failed" in {r.getMessage() for r in caplog.records}
