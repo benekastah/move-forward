@@ -61,7 +61,7 @@ class TagAttrs(KindModel):
     handle: str
 
 
-SPEC = KindSpec(TagAttrs, tags_from_text=False)
+SPEC = KindSpec(TagAttrs, find_tags_in_text=False)
 
 
 def handle(text: str) -> str:
@@ -165,8 +165,8 @@ def _by_words(handles: Iterable[str]) -> ByWords:
 
 def _written(entity: Entity, spec: KindSpec | None) -> list[str]:
     """The `#tags` in `entity`'s title or mentions, out of their code, where its kind's
-    `tags_from_text`."""
-    texts = [entity.title, *entity.mentions] if spec is None or spec.tags_from_text else []
+    `find_tags_in_text`."""
+    texts = [entity.title, *entity.mentions] if spec is None or spec.find_tags_in_text else []
     return [t for text in texts for t in tags(prose(text))]
 
 
@@ -184,7 +184,7 @@ def tagged(
     """The entities, each pointing too at the tags its text names (but one it carries), then a
     `tag` per tag on any of them, pointing at what carries it: open while one of those is. An
     entity carries the tags it has from its text (a `#tag` in its title or mentions, out of their
-    code, where its kind's `tags_from_text`) and its tool (`Entity.tags`: labels), each refresh
+    code, where its kind's `find_tags_in_text`) and its tool (`Entity.tags`: labels), each refresh
     of its plugin finding them again, but those `removed` from it; and those `added` to it by
     hand. A tag only labels give is named only with its `#`."""
     carrying: dict[str, list[Entity]] = {}

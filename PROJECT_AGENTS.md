@@ -32,8 +32,8 @@ what's untried where it runs).
 - A plugin declares the kinds it publishes in `kinds`, named for it (`git.branch`) or for a
   family (below), each with a `KindSpec`: the
   model of its attributes, which the graph checks its entities against, and its flags
-  (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). An entity says
-  whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
+  (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `find_tags_in_text`). An
+  entity says whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
   states. What more than one tool may represent (a pull request, a ticket, a person, a team) is
   a family (`api.kinds.Family`): core declares those four, and a plugin (or a package several
   share) declares others in `families`. A plugin's kind of a family extends its model, and its

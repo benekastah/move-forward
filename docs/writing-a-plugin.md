@@ -385,7 +385,7 @@ class LinearPlugin(...):
   (Gmail's `\Inbox`) are tags too: mail's are. A tag only labels give is named only with its
   `#`, as a label is often a common word. I can take a label's tag off, until your plugin next
   refreshes. A kind whose text anyone can write (mail's subjects) is
-  `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
+  `KindSpec(..., find_tags_in_text=False)`. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `web_address(req)` (`req.kind`, `req.ids`) gives the URLs of entities that may not be in
   the graph, by id (a ticket's from its key), and `handle(req)` the text that names them (a

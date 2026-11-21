@@ -78,7 +78,7 @@ def test_text_names_a_tag_however_it_spaces_hyphenates_or_cases_it() -> None:
 def test_a_kind_others_write_doesnt_put_tags_on_its_entities() -> None:
     sale = Entity(ref=Ref(kind="y.mail", id="1"), title="#sale ends Friday")
     other = Entity(ref=Ref(kind="y.mail", id="2"), title="Sale!")
-    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)})
+    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)})
     assert [e.ref for e in found] == [sale.ref, other.ref]  # no tag, so nothing names one
 
 
@@ -178,7 +178,7 @@ def test_a_short_tag_is_named_with_its_hash() -> None:
     other = Entity(ref=Ref(kind="y.mail", id="o"), title="qa sign-off")
     found = tags.tagged(
         [_entity("1", "#qa thing"), mail, other],
-        {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)},
+        {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)},
     )
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
     assert found[2].refs == []
@@ -187,7 +187,9 @@ def test_a_short_tag_is_named_with_its_hash() -> None:
 def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
     carrier = _entity("1", "#qa thing")
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
-    found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)})
+    found = tags.tagged(
+        [carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)}
+    )
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
 
 
@@ -322,7 +324,7 @@ def test_a_tools_labels_are_tags_whatever_its_kind_says_of_its_text() -> None:
     found = {
         e.ref.id: e
         for e in tags.tagged(
-            [mail, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)}
+            [mail, other], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)}
         )
     }
     assert found["garbage-day"].refs == [mail.ref]  # a label, not the sender's #sale

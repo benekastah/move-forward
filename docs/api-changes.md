@@ -33,6 +33,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   URL as text (by default, as `address` did, the id where its family's ids are URLs), and
   `handle(req)` each id's handle (by default none). A plugin that overrode `address` overrides
   whichever of the two it answered.
+- **`KindSpec`'s `tags_from_text` is `find_tags_in_text`**, with the same meaning and default
+  (True): a kind whose text anyone can write says `KindSpec(find_tags_in_text=False)`.
 
 ## Version 4
 
