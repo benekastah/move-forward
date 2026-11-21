@@ -99,7 +99,7 @@ def test_an_entrys_buttons_are_in_act_now_and_on_each_todo_in_focus_mode() -> No
     built = refresh.build_dashboard(config, db, NOW)
     [act] = built.act_now()
     assert labels <= {a.label for a in act.actions}
-    steps = refresh.build_dashboard(config, db, NOW, surface="focus").focus_items("notes.todos")
+    steps = refresh.build_dashboard(config, db, NOW).focus_items("notes.todos")
     assert steps is not None and len(steps) == 2
     for _, step in steps:
         assert labels <= {a.label for a in step.actions}

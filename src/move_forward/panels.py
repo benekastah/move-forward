@@ -24,7 +24,6 @@ from move_forward.page import (
     ItemAdditions,
     Panel,
     SourceStatus,
-    Surface,
 )
 
 log = logging.getLogger(__name__)
@@ -310,12 +309,11 @@ def _sorted(
     )
 
 
-ItemActions = Callable[[Item, Surface], ItemAdditions]
-"""What the plugins add to an item, whoever built it (the second argument, its plugin), on a
-surface; see `Plugin.item_actions`."""
+ItemActions = Callable[[Item], ItemAdditions]
+"""What the plugins add to an item; see `Plugin.item_actions`."""
 
 
-def _no_item_actions(item: Item, surface: Surface) -> ItemAdditions:
+def _no_item_actions(item: Item) -> ItemAdditions:
     return ItemAdditions()
 
 
@@ -454,7 +452,6 @@ def _known(action: Action, known: KnownAction) -> bool:
 
 def _with_item_actions(
     panel: Panel,
-    surface: Surface,
     item_actions: ItemActions,
     known: KnownAction = _any_action,
     tags_of: TagsOf = _no_tags,
@@ -467,7 +464,7 @@ def _with_item_actions(
     there to tag, ice and so on, and gets what any item does."""
 
     def add(item: Item, part: bool = False) -> Item:
-        added = ItemAdditions() if part and item.done else item_actions(item, surface)
+        added = ItemAdditions() if part and item.done else item_actions(item)
         actions = [a for a in [*item.actions, *added.actions] if _known(a, known)]
         return item.model_copy(
             update={
@@ -568,7 +565,6 @@ def build(
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] | None = None,
     units: act_now.Units = act_now.no_units,
     priority_of: act_now.PriorityOf = act_now.no_priority,
-    surface: Surface = "dashboard",
     known_action: KnownAction = _any_action,
     hides: HidesKind = _hides_nothing,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
@@ -621,7 +617,7 @@ def build(
     # todo offers the same wherever it's shown.
     ranked = [
         _with_importance_actions(
-            _with_item_actions(p, "act_now", item_actions, known_action, tags_of),
+            _with_item_actions(p, item_actions, known_action, tags_of),
             priority_of,
             hides,
             parts_only=True,
@@ -648,7 +644,6 @@ def build(
                     _with_importance_actions(
                         _with_item_actions(
                             _without_hidden(shown, hidden),
-                            surface,
                             item_actions,
                             known_action,
                             tags_of,

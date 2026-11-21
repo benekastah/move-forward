@@ -30,7 +30,7 @@ from move_forward.keychain import TokenSettings
 from move_forward.kinds import FAMILIES, Family, is_url
 from move_forward.markup import Html
 from move_forward.notifications import Event
-from move_forward.page import Item, ItemAdditions, Panel, Surface
+from move_forward.page import Item, ItemAdditions, Panel
 from move_forward.repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
@@ -237,8 +237,6 @@ class Form:
 
     fields: dict[str, str] = field(default_factory=dict[str, str])
     """The form's fields: untrusted, as anything a form sends."""
-    surface: Surface = "dashboard"
-    """Where the button was: the dashboard or focus mode."""
     back: str | None = None
     """The page the button was on, when it wasn't the dashboard (a focus page)."""
 
@@ -271,8 +269,6 @@ class ItemRequest:
     """An item the function `item_actions` returned is asked about."""
 
     item: Item
-    surface: Surface
-    """Where it's shown: the dashboard, focus mode or Act now."""
 
 
 ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
@@ -471,7 +467,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
         on a PR), badges, details and links. Core calls it once per page and the function it
-        returns once per item, saying where it's shown (`ItemRequest`):
+        returns once per item (`ItemRequest`):
         what needs the plugin's tables or a pass over the graph is done here, once, not per
         item. Adds nothing by default."""
         return adds_nothing
