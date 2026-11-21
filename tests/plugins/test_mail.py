@@ -1089,19 +1089,16 @@ def test_the_mailbox_needs_a_host_and_a_username(section: dict[str, object], sai
         MailConfig.model_validate(section)
 
 
-@pytest.mark.parametrize(
-    "section",
-    [{"home": SECTION}, {"known_days": 60, "home": SECTION, "work": SECTION}],
-)
-def test_tables_once_accounts_are_refused_saying_how_to_keep_one(
-    section: dict[str, object],
-) -> None:
+def test_tables_once_accounts_are_refused_saying_how_to_keep_one() -> None:
+    work = {**SECTION, "keychain_service": "work-imap", "token_env": "WORK_IMAP"}
     with pytest.raises(ValidationError) as refused:
-        MailConfig.model_validate(section)
+        MailConfig.model_validate({"known_days": 60, "home": SECTION, "work": work})
     said = str(refused.value)
     assert "[mail] reads one mailbox" in said
     assert "move the keys of the one to read into [mail]" in said
-    assert "`move-forward-mail-<name>`" in said and "$MAIL_PASSWORD_<NAME>" in said
+    # Where each one's password was: by default, or where it said.
+    assert "[mail.home]'s under `move-forward-mail-home` or in $MAIL_PASSWORD_HOME" in said
+    assert "[mail.work]'s under `work-imap` or in $WORK_IMAP" in said
 
 
 def test_the_messages_of_mails_own_mailbox_are_kept_and_an_accounts_go() -> None:
@@ -1171,7 +1168,7 @@ def test_no_password_is_called_a_password(monkeypatch: pytest.MonkeyPatch) -> No
         MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
 
 
-def test_i_am_a_person_by_each_mailboxs_address_once_whoever_writes() -> None:
+def test_i_am_a_person_by_the_mailboxs_address_once_whoever_writes() -> None:
     harness = mailbox(message(1, sender=ME))  # mail I sent myself
     me = [e for e in harness.entities() if e.ref.kind == PERSON]
     assert [(e.ref.id, e.attrs["me"], e.attrs["email"]) for e in me] == [(f"mail/{ME}", True, ME)]

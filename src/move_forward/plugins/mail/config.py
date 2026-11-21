@@ -118,14 +118,21 @@ class MailConfig(TokenFields):
         if not isinstance(data, dict):
             return data
         section = cast(dict[str, Any], data)
-        tables = [k for k, v in section.items() if isinstance(v, dict)]
+        tables = {k: cast(dict[str, Any], v) for k, v in section.items() if isinstance(v, dict)}
         if tables:
             listed = " and ".join(f"[mail.{name}]" for name in tables)
+            # Where each account's password was: where it said, else its default.
+            places = "; ".join(
+                f"[mail.{name}]'s under"
+                f" `{table.get('keychain_service') or f'{DEFAULT_MAIL_KEYCHAIN_SERVICE}-{name}'}`"
+                f" or in ${table.get('token_env') or f'{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}'}"
+                for name, table in tables.items()
+            )
             raise ValueError(
-                f"[mail] reads one mailbox, so {listed} can't be accounts of their own: move the"
-                " keys of the one to read into [mail], and delete the tables; its password was"
-                " stored under `move-forward-mail-<name>` (set `keychain_service` to it, or run"
-                " `mfd token set mail`), or in $MAIL_PASSWORD_<NAME> (set `token_env` to it)"
+                f"[mail] reads one mailbox, and {listed} would be accounts of their own: move the"
+                " keys of the one to read into [mail], and delete the tables. Its password stays"
+                " where it was if [mail] sets `keychain_service` (or `token_env`) to it, else run"
+                f" `mfd token set mail`: {places}"
             )
         return section
 

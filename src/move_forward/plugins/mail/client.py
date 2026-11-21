@@ -111,8 +111,8 @@ def _fetched(data: Sequence[object]) -> Iterator[tuple[bytes, bytes]]:
 
 def collect(config: MailConfig, password: str, email: str, now: datetime) -> MailSnapshot:
     """The mailbox's unread and flagged messages since `since_days` ago, newest first: at most
-    `max_messages` unread, and every flagged one. Opened
-    read-only, and the headers fetched with `BODY.PEEK`, so nothing is marked read."""
+    `max_messages` unread, and every flagged one. Opened read-only, and the headers fetched with
+    `BODY.PEEK`, so nothing is marked read."""
     me = {a.lower() for a in (config.username, email) if "@" in a}
     with _signed_in(config, password) as imap:
         try:
