@@ -28,6 +28,6 @@ class ThreadAttrs(KindModel):
 
 class MailPerson(Person):
     """A `person`: a verified sender of mail in the mailbox, by `mail/<address>`, `handle` and
-    `email` being their address; or me, as each mailbox signs in, whether or not any mail is
+    `email` being their address; or me, as the mailbox signs in, whether or not any mail is
     there: by `mail/<address>` for an address (`handle` as written, `email` lower-cased), or by
     `mail/<login>` for a bare login (`handle` the login, `email` None)."""

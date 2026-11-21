@@ -160,17 +160,19 @@ in the browser", below, which already plans tables on the settings page.
 
 ### Accounts
 
-A plugin reads one login: github many repos but one account, jira one site. One that can read
-several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
-set of tables, pages and actions, and settles what two of them both see the way its tool needs
-(the same conversation in two mailboxes is one item). Core gives each account its token:
-`Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.
+A plugin reads one login: github many repos but one account, jira one site, mail one mailbox,
+each with at most one token, its section's. A plugin never handles several logins itself. The
+first time one needs several, core gets several instances of a plugin, each a table of its
+section (`[github.work]`, `[github.personal]`) with its own config, tables, token and snapshot,
+as though it were a plugin of its own; what two instances both see (a PR, a conversation) is
+one entity in the graph, as when two plugins publish it. That's the planned answer, for:
 
 - **github**: a personal and a work login (on github.com, or an Enterprise host). `gh` keeps
-  one active account per host, so each call would take its account's token (`gh auth token
-  --user <login>`) as `GH_TOKEN`.
+  one active account per host, so each instance's calls would take its login's token (`gh auth
+  token --user <login>`) as `GH_TOKEN`.
 - **jira**: a second site, each with its own token. Ticket keys can look alike across sites,
   so each site's projects say which site a bare key is on.
+- **mail**: a home and a work mailbox, each with its own password.
 
 ### mail
 
@@ -197,7 +199,8 @@ set of tables, pages and actions, and settles what two of them both see the way 
   people who matter rank first wherever they show up; a type I set (Set type) still beats
   theirs. It replaces the vcard plugin, removed because it read `.vcf` files from local paths,
   which only stayed current through a sync tool (vdirsyncer), while my contacts are in Google
-  and Apple Contacts. Each a source of its own, as accounts in one section or a plugin each:
+  and Apple Contacts. Each a source of its own, a plugin each (or instances of one: see
+  [Accounts](#accounts)):
   - **Google Contacts** through the People API, with the read-only `contacts.readonly` scope.
     The same setup cost as Gmail's API (see [Read Gmail without a password that can do
     more](#mail)): a personal Google Cloud project with an OAuth client and myself as a test
@@ -234,14 +237,14 @@ set of tables, pages and actions, and settles what two of them both see the way 
 - **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
   without one could open a form to make it (still behind the token and same-site checks,
   writing only the config file), filling in what can be fetched as it goes (the org's
-  teams once the org is given, like `mfd init`'s tab completion). Tables (`[slack.teams]`,
-  `[mail.<name>]`) could join the settings page then too.
+  teams once the org is given, like `mfd init`'s tab completion). Tables (`[slack.teams]`) could
+  join the settings page then too.
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day, which could also rank personal mail down at 10am and work mail down
-  at 10pm, with mail's account (`[mail.home]`, `[mail.work]`) saying which it is); whether
-  someone waiting on my team should weigh more (the `person` entities would need team
-  membership, which github already fetches); whether unknown
+  at 10pm, by which mail instance it is, `[mail.home]` or `[mail.work]`: see
+  [Accounts](#accounts)); whether someone waiting on my team should weigh more (the `person`
+  entities would need team membership, which github already fetches); whether unknown
   effort should count as "hour"; and whether notes' todos should carry `due` and
   `waiting_since` (the notes don't record due dates yet).
 

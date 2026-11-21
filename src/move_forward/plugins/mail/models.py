@@ -15,14 +15,11 @@ class Message(Model):
 
     uid: int
     """Its IMAP UID in its mailbox."""
-    account: str = ""
-    """The mailbox it's in: its account's name, empty for `[mail]`'s own."""
     message_id: str | None
     """Its Message-ID, without `<>`; None when it has none."""
     thread: str
     """The Message-ID its conversation started with (the first of `References`, else
-    `In-Reply-To`, else its own), or `uid:<uid>` for one with none (`uid:<account>:<uid>` in an
-    account's mailbox)."""
+    `In-Reply-To`, else its own), or `uid:<uid>` for one with none."""
     subject: str
     sender_name: str
     """Who it's from, by name, else by address."""

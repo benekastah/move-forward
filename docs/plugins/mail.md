@@ -68,51 +68,13 @@ It must be an `https://` link or start with `message:` or `mid:`; empty, the def
 unlinked. The page links only to http(s), so an item with a `message:` or `mid:` link goes
 through the plugin's `/mail/open` page, which sends the browser on to the mail app.
 
-### Several mailboxes
-
-Each sub-table of `[mail]` is a mailbox of its own, named by it: `[mail.home]` and `[mail.work]`
-read two. Each is complete: it says its own mailbox's keys, `host` and `username` (both
-needed), `port`, `mailbox`, `sent_mailbox`, `message_url` and `auth_servers`, each with the
-default it has in `[mail]`, and takes none of them from `[mail]`. They're about one server and
-one mailbox, so with accounts `[mail]` is no mailbox itself and says none of them: a config
-where it does is refused, naming the accounts that must say it themselves (or, with `username`,
-saying to move it to an account of its own, `[mail.home]`, and set its password with
-`mfd token set mail.home`). What's about all mail, `refresh_seconds`, `known_days`,
-`since_days`, `max_messages` and the word lists, is `[mail]`'s alone, and an account can't set
-it. An account's name starts with a letter, then up to 29 lower-case letters, digits and `_`.
-
-```toml
-[mail]
-known_days = 60
-
-[mail.home]
-host = "imap.gmail.com"
-username = "me@gmail.com"
-message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
-
-[mail.work]
-host = "imap.work.example"
-username = "me@work.example"
-message_url = "mid:{message_id}"
-```
-
-Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it under
-`move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
-`keychain_service`). With accounts, `[mail]`'s own `token_env` or `keychain_service` would name
-no mailbox's password, so a config setting either there is refused: set it in the account it
-was for. A conversation is one item whichever mailboxes have it, linked by the
-mailbox of its latest message, and a message in two (sent to both addresses) counts once, as the
-first mailbox's, flagged, to me, replying to me, from someone I know or important if either copy
-is. Only copies whose sender both servers verified merge, as anyone can write a `From` and a
-Message-ID: any other is kept once per mailbox, in the same conversation, and counted once
-among its unread. Nothing is merged within one mailbox. Each mailbox's sent mail says whom I
-know and what answers me for its own mail. A mailbox that fails to sign in fails the refresh,
-keeping what was read last.
+It reads one mailbox: a table under `[mail]` (`[mail.home]`) is refused, saying to move the keys
+of the mailbox to read into `[mail]`.
 
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with (`uid:<uid>` for a message with none, `uid:<account>:<uid>` in an account's mailbox),
+with (`uid:<uid>` for a message with none),
 pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two, but a ticket on ice it names
 doesn't hide it: its sender wrote that). Its Gmail labels, Gmail's own
@@ -122,7 +84,7 @@ still names tags in
 the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
 verified sender. That `person` is `mail/<address>`, with the address as its `handle` and
 `email`, so core joins them with the same person in other tools, a CRM say, and ranks and badges
-their mail by their contact type. Each mailbox's `username` is a `person` too, marked `me`,
+their mail by their contact type. The mailbox's `username` is a `person` too, marked `me`,
 which the page's footer names: `mail/<address>` when it's an address, with that `email`; a bare
 login (`jdoe`, as some servers sign in) is `mail/jdoe`, with no `email`, so it joins no one in
 other tools. A `username` with a `/` in it can't be in a person's id, so it's no `person` and the
