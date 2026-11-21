@@ -271,8 +271,6 @@ class ItemRequest:
     """An item the function `item_actions` returned is asked about."""
 
     item: Item
-    owner: str
-    """The plugin whose item it is."""
     surface: Surface
     """Where it's shown: the dashboard, focus mode or Act now."""
 
@@ -473,7 +471,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
         on a PR), badges, details and links. Core calls it once per page and the function it
-        returns once per item, saying whose item it is and where it's shown (`ItemRequest`):
+        returns once per item, saying where it's shown (`ItemRequest`):
         what needs the plugin's tables or a pass over the graph is done here, once, not per
         item. Adds nothing by default."""
         return adds_nothing

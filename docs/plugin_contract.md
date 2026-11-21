@@ -222,7 +222,6 @@ What the function `item_actions` returns is called with, once per item.
 | Field | Type | What it holds |
 | --- | --- | --- |
 | `item` | `Item` | The item. |
-| `owner` | `str` | The plugin whose item it is. |
 | `surface` | `Surface` | Where it's shown: the dashboard, focus mode or Act now. |
 
 ## Context and answers

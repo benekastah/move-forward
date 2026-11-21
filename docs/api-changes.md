@@ -11,6 +11,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 5
 
+- **`ItemRequest` has no `owner`**: no plugin read it, and a plugin that needs to tell another
+  plugin's item from its own can look at the `item`'s subjects. `ItemRequest(item, surface)`.
 - **A pull request's `requested_teams` are the teams' ids**, `<host>/<org>/<slug>`, not their
   handles: a team's handle isn't unique, even within one publisher (github publishes the teams
   of every org whose PRs request one). Key a requested team by its id, and show its `team`

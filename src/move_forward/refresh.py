@@ -595,10 +595,10 @@ def build_dashboard(
     contacts = people.Contacts(ContactRepository(db).all(), graph, config.people)
     tagging = tags.Tags(graph)
 
-    def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
+    def item_actions(item: Item, surface: Surface) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
-            req = ItemRequest(item, owner, surface)
+            req = ItemRequest(item, surface)
             added = call(
                 e.name, "item_actions (per item)", lambda add=add, req=req: add(req), found
             )

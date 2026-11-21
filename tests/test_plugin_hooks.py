@@ -59,7 +59,7 @@ class Hooked(JiraPlugin):
             if pr is None:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")
-            seen = f"seen by {self.name} on {each.surface}, {each.owner}'s"
+            seen = f"seen by {self.name} on {each.surface}"
             return ItemAdditions(actions=[look], badges=[seen])
 
         return additions
@@ -105,16 +105,16 @@ def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
     assert all(not a.href for a in built.panel("notes.todos").actions)
 
 
-def test_what_a_plugin_adds_says_whose_item_and_where_it_is_shown() -> None:
+def test_what_a_plugin_adds_says_where_the_item_is_shown() -> None:
     config, db = stored(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
     built = build_dashboard(config, db, NOW)
     [item] = built.panel("github.conflicts").items
-    assert "seen by jira on dashboard, github's" in item.badges
+    assert "seen by jira on dashboard" in item.badges
     html = render.dashboard_page(built, refreshing=frozenset())
-    assert "seen by jira on dashboard, github&#x27;s" in html  # a badge, as the page shows it
+    assert "seen by jira on dashboard" in html  # a badge, as the page shows it
     focus = build_dashboard(config, db, NOW, surface="focus")
     [item] = focus.panel("github.conflicts").items
-    assert "seen by jira on focus, github's" in item.badges
+    assert "seen by jira on focus" in item.badges
 
 
 def test_without_its_section_a_plugin_adds_nothing() -> None:

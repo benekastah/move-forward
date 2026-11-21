@@ -505,9 +505,9 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
   `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
   with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
-  for `each.item`, by its subjects; `each.owner` is the plugin whose item it is and
-  `each.surface` where it's shown (`dashboard`, `focus`, `act_now`). Read your tables, or
-  make a pass over the graph, in `item_actions` itself, once, not in the function.
+  for `each.item`, by its subjects; `each.surface` is where it's shown (`dashboard`, `focus`,
+  `act_now`). Read your tables, or make a pass over the graph, in `item_actions` itself, once, not
+  in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
