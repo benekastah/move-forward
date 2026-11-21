@@ -135,7 +135,7 @@ class Init:
     default, so a plugin whose `example` lacks a required key can't make the example a config
     that won't load."""
     token_help: str = ""
-    """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
+    """`mfd init`'s next step for its token, in place of the plain "`mfd token set <name>`
     stores its token": where to get one, or another way in (signing in in the browser)."""
 
 

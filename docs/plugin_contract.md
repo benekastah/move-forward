@@ -22,7 +22,7 @@ do (collecting, a change check, a command, fetching by id) is a mixin (below).
 | --- | --- | --- |
 | `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. A lower-case letter, then lower-case letters, digits and `_`; no other plugin's, none of core's (`registry.RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`); the registry refuses it otherwise. |
 | `title` | `str`, required | e.g. `GitHub`: the heading of the plugin's group on the page. |
-| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`, a `Strict` model, so its section rejects unknown keys. The registry refuses a plugin without one, and one that ignores unknown keys or holds a model that does (a table's in it, say), a `RootModel` aside. |
+| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`, a `Strict` model, so its section rejects unknown keys. The registry refuses a plugin without one, and one that ignores unknown keys or holds a model that does (the model of a field's entries, say), a `RootModel` aside. |
 | `api_version` | `int \| None`, `None` | The `API_VERSION` it was built against; one built against another is left out, said why in `mfd check` and the page's footer. |
 
 ### What it publishes and depends on
