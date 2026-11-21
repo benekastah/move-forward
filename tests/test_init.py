@@ -5,12 +5,11 @@ from dataclasses import replace
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 import pytest
 from conftest import Outside, section
 from pydantic import BaseModel, Field
-from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, registry, tomledit
 from move_forward.asking import InitSection
@@ -25,7 +24,6 @@ from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.mail import setup as mail_setup
 from move_forward.plugins.slack.config import SlackConfig
-from move_forward.strict import LOCKED, TABLES, Strict, marked
 
 
 def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
@@ -364,11 +362,6 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
     assert config.load(path).notifications.subscribe == ["dashboard.source_failing"]
 
 
-def _tables(field: FieldInfo) -> bool:
-    """A field whose entries are tables of their own, by name (`[site.<name>]`)."""
-    return marked(field, TABLES)
-
-
 LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
 """What `mfd init` writes when asked for no plugin: every plugin's section commented
 out."""
@@ -383,10 +376,9 @@ def test_every_key_of_a_plugin_left_out_is_a_commented_line(plugin: Plugin[Any, 
     shown = "\n".join(_section_lines(LEFT_OUT, plugin.name) or [])
     missing = [
         key
-        for key, field in plugin.config_model.model_fields.items()
+        for key in plugin.config_model.model_fields
         if f"\n# {key} =" not in f"\n{shown}"
         and f"# [{plugin.name}.{key}]" not in shown  # a table of its own
-        and not (_tables(field) and f"# [{plugin.name}." in shown)  # tables by name
     ]
     assert missing == []
 
@@ -511,24 +503,6 @@ class _Odd(BaseModel):
     snooze: dict[str, int] = Field(default_factory=lambda: {"notes.entry": 2, "my key": 1, "a": 3})
     when: date = date(2026, 1, 2)
     where: Path = Path("~/data/dashboard.db")
-
-
-class _LockedTables(Strict):
-    """A table of tables by name that's locked too: both markers, with a `Field` as well."""
-
-    accounts: Annotated[dict[str, int], LOCKED, TABLES] = Field(
-        default_factory=dict[str, int], max_length=9
-    )
-    """Accounts."""
-    port: Annotated[int, LOCKED] = 993
-    """A port."""
-
-
-def test_a_table_of_tables_is_left_out_whatever_else_marks_it() -> None:
-    accounts = _LockedTables.model_fields["accounts"]
-    assert marked(accounts, LOCKED) and marked(accounts, TABLES)  # both kept, with the Field's
-    assert not marked(_LockedTables.model_fields["port"], TABLES)
-    assert init.commented_defaults(_LockedTables) == "\n# A port.\n# port = 993\n"
 
 
 def test_any_default_is_written_as_its_model_reads_it() -> None:
@@ -668,11 +642,7 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
         return
     shown = "\n".join(section)
     missing = [
-        key
-        for key in keys
-        if f"{key} =" not in shown
-        and f"[{plugin.name}.{key}]" not in shown
-        and not (_tables(plugin.config_model.model_fields[key]) and f"[{plugin.name}." in shown)
+        key for key in keys if f"{key} =" not in shown and f"[{plugin.name}.{key}]" not in shown
     ]
     assert missing == []
 

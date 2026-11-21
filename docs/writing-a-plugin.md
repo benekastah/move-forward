@@ -114,9 +114,7 @@ class LinearConfig(TokenFields):
 
 - Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
   keys: a typo is an error. The registry refuses a config model that doesn't, or that holds
-  one that doesn't. A field
-  whose entries are tables of their own, by name (`[site.<name>]`), says so with `api.TABLES` in
-  its type (`Annotated[dict[str, Site], TABLES]`), and its example is one such table.
+  one that doesn't.
 - Every field has a docstring.
 - A built-in's every key appears in two places: the model and the plugin's page in
   `docs/plugins/`. A plugin from another package can't add to those pages: its model and its

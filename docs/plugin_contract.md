@@ -271,4 +271,3 @@ None`, `list[...]`, a `type` alias, generic or not).
 | Marker | What it says |
 | --- | --- |
 | `LOCKED` | The settings page shows the field but won't change it: it says where a credential goes, where items link with my login in the link, whose word decides a sender is who they claim, or what runs where. A section's `token_env` and `keychain_service` are locked without it. |
-| `TABLES` | The field's entries are tables of their own, by name (`[site.<name>]`): `mfd init` leaves it to the example's `tables`. |

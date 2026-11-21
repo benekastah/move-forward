@@ -68,7 +68,7 @@ from move_forward.plugin import (
     collect_into,
 )
 from move_forward.repositories import KvRepository
-from move_forward.strict import LOCKED, TABLES, Strict
+from move_forward.strict import LOCKED, Strict
 
 __all__ = [
     "API_VERSION",
@@ -76,7 +76,6 @@ __all__ = [
     "IMPORTED",
     "LOCKED",
     "LOOKED_UP",
-    "TABLES",
     "Action",
     "ActionError",
     "ActionHandler",
