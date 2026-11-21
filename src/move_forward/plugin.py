@@ -14,7 +14,7 @@ import inspect
 import logging
 import traceback
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, ClassVar, Protocol
@@ -64,9 +64,6 @@ class Context[C: BaseModel]:
     due_horizon: timedelta = DUE_HORIZON
     """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
     making items candidates for Act now by their due dates passes it to `due_pressure`."""
-    tokens: Mapping[str, TokenSettings] | None = None
-    """Where each of the plugin's tokens is, as `Plugin.tokens` says, for `token`; None for
-    its default: the section's own, when it says where a token is."""
 
     @property
     def log(self) -> logging.Logger:
@@ -98,29 +95,18 @@ class Context[C: BaseModel]:
         else:
             self.log.info("no longer: %s", before)
 
-    def token(self, account: str | None = None, *, secret: str = "token") -> str:
-        """The plugin's token, or that of its account `account` (see `Plugin.tokens`; `""` is
-        the plugin's own too): from its `token_env`, else from the system's secret store under
-        its `keychain_service` for `email`. Raises SourceError, saying how to give one and
-        calling it `secret` (mail's is a "password"), when neither has it, and LookupError for
-        an account the plugin keeps no token for."""
-        kept = self.tokens if self.tokens is not None else _section_token(self.config)
-        name = account or ""
-        settings = kept.get(name)
-        if settings is None:
-            raise LookupError(f"{self.name} keeps no token for {name!r}")
-        if value := keychain.token(settings, self.email):
+    def token(self, *, secret: str = "token") -> str:
+        """The plugin's token, from its section's `token_env`, else from the system's secret
+        store under its `keychain_service` for `email`. Raises SourceError, saying how to give
+        one and calling it `secret` (mail's is a "password"), when neither has it, and
+        TypeError when the section keeps no token (isn't a `TokenSettings`)."""
+        if not isinstance(self.config, TokenSettings):
+            raise TypeError(f"[{self.name}] keeps no token: it has no token_env")
+        if value := keychain.token(self.config, self.email):
             return value
-        stored = f"{self.name}.{name}" if name else self.name
         raise SourceError(
-            f"no {secret}: run `mfd token set {stored}`, or set ${settings.token_env}"
+            f"no {secret}: run `mfd token set {self.name}`, or set ${self.config.token_env}"
         )
-
-
-def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
-    """A plugin's tokens by default (`Plugin.tokens`): its section's own, as `""`, when the
-    section has `token_env` and `keychain_service`; else none."""
-    return {"": config} if isinstance(config, TokenSettings) else {}
 
 
 @dataclass(frozen=True)
@@ -402,14 +388,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     init: ClassVar[Init] = Init()
     """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
     default nothing is asked and the plugin isn't suggested."""
-
-    def tokens(self, config: C) -> dict[str, TokenSettings]:
-        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
-        account for a plugin reading several (several mailboxes, say), stored as
-        `<plugin>.<name>`. By default its section is its own token's place, when that has
-        `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
-        config is refused when two tokens share one. Its context's `token` reads them."""
-        return _section_token(config)
 
     # Refresh
 

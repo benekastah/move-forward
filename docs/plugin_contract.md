@@ -22,7 +22,7 @@ do (collecting, a change check, a command, fetching by id) is a mixin (below).
 | --- | --- | --- |
 | `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. A lower-case letter, then lower-case letters, digits and `_`; no other plugin's, none of core's (`registry.RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`); the registry refuses it otherwise. |
 | `title` | `str`, required | e.g. `GitHub`: the heading of the plugin's group on the page. |
-| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`, a `Strict` model, so its section rejects unknown keys. The registry refuses a plugin without one, and one that ignores unknown keys or holds a model that does (`[mail.<name>]`'s accounts, say), a `RootModel` aside. |
+| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`, a `Strict` model, so its section rejects unknown keys. The registry refuses a plugin without one, and one that ignores unknown keys or holds a model that does (a table's in it, say), a `RootModel` aside. |
 | `api_version` | `int \| None`, `None` | The `API_VERSION` it was built against; one built against another is left out, said why in `mfd check` and the page's footer. |
 
 ### What it publishes and depends on
@@ -49,10 +49,10 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | --- | --- | --- |
 | `questions` | `(Asker, InitSetup) -> InitSection`, asks nothing | Asks for the section's settings when the plugin is chosen; `InitSetup` has what init knows so far: my email and where it runs. |
 | `example` | `InitSection`, empty | Example values for the required settings (and its `shown`): written commented out for a plugin not chosen, uncommented by `--example` for one `example_on`. |
-| `tables` | `str`, `""` | Commented-out tables the model can't show, written after the optional keys (`[slack.teams]`, `[mail.<name>]`). |
+| `tables` | `str`, `""` | Commented-out tables the model can't show, written after the optional keys (`[slack.teams]`). |
 | `suggested` | `bool`, `False` | Whether `mfd init` offers to set it up by default. |
 | `example_on` | `bool`, `False` | `mfd init --example` writes the section on, with `example`'s values, rather than commented out. |
-| `token_help` | `str`, `""` | `mfd init`'s next step for its tokens, in place of the plain "`mfd token set <name>` stores its token". |
+| `token_help` | `str`, `""` | `mfd init`'s next step for its token, in place of the plain "`mfd token set <name>` stores its token". |
 
 ## Hooks
 
@@ -60,7 +60,6 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `tokens` | `tokens(config: C) -> dict[str, TokenSettings]` | Every token it keeps, by name (`""` for its own, one per account otherwise), for `mfd token` and loading the config. By default its section, when that has `token_env` and `keychain_service`. |
 | `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given an `InputRequest` with `page`. |
 | `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `InputRequest` with `form`. |
 
@@ -240,7 +239,6 @@ What the function `item_actions` returns is called with, once per item.
 | `kv` | `KvRepository` | Key/value state in its namespace. |
 | `name` | `str` | Its name, as `Plugin.name`. |
 | `due_horizon` | `timedelta` | How far ahead a due date starts to count (`[act_now] due_warning_days`), for `due_pressure`. |
-| `tokens` | `Mapping[str, TokenSettings] \| None` | Where each of its tokens is, as `Plugin.tokens` says, for `token`; None for its default, the section's own when it says where a token is. |
 
 ### `Context`'s methods
 
@@ -250,7 +248,7 @@ What the function `item_actions` returns is called with, once per item.
 | `today` | Today where I am: the local date. |
 | `part(name)` | The source a part of its refresh is recorded as (`github.derived`). |
 | `problem(key, text)` | Reports something wrong that isn't its refresh failing, or with None that it's gone; shown with its state on the page, kept across restarts. |
-| `token(account=None, *, secret="token")` | Its token, or an account's: from its `token_env`, else the secret store. Raises `SourceError` saying how to give one. |
+| `token(*, secret="token")` | Its token, from its section's `token_env`, else the secret store under its `keychain_service`. Raises `SourceError` saying how to give one, and `TypeError` when the section keeps no token (isn't a `TokenSettings`). |
 
 ### `Changed`
 
@@ -274,4 +272,4 @@ None`, `list[...]`, a `type` alias, generic or not).
 | Marker | What it says |
 | --- | --- |
 | `LOCKED` | The settings page shows the field but won't change it: it says where a credential goes, where items link with my login in the link, whose word decides a sender is who they claim, or what runs where. A section's `token_env` and `keychain_service` are locked without it. |
-| `TABLES` | The field's entries are tables of their own, by name (mail's `[mail.<name>]`): `mfd init` leaves it to the example's `tables`. |
+| `TABLES` | The field's entries are tables of their own, by name (`[site.<name>]`): `mfd init` leaves it to the example's `tables`. |

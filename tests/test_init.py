@@ -12,7 +12,7 @@ from conftest import Outside, section
 from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
 
-from move_forward import asking, cli, config, init, keychain, registry, tomledit
+from move_forward import asking, cli, config, init, registry, tomledit
 from move_forward.asking import InitSection
 from move_forward.git import Git
 from move_forward.plugin import Plugin
@@ -365,7 +365,7 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
 
 
 def _tables(field: FieldInfo) -> bool:
-    """A field whose entries are tables of their own, by name (mail's `[mail.<name>]`)."""
+    """A field whose entries are tables of their own, by name (`[site.<name>]`)."""
     return marked(field, TABLES)
 
 
@@ -734,40 +734,17 @@ def _section_lines(text: str, name: str) -> list[str] | None:
     return lines[start:end]
 
 
-_KEY = re.compile(r"^([a-z_]+) =")
-
-
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
-    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts, and
-    so does taking what's behind `##` instead (several mailboxes, say): its tables, each a
-    mailbox of its own, and what any of them sets moved out of the section."""
+    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts."""
     section = _example_section(plugin)
     assert section is not None
     _check_uncommented(plugin, section)
 
 
 def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
-    """`section`, a plugin's commented config, uncommented, is a config the plugin takes, and
-    so is what's behind `##` instead (see the test above)."""
-    base = _uncomment("\n".join(line for line in section if not line.startswith("##")))
-    base = base.splitlines()
-    plugin.config_model.model_validate(tomllib.loads("\n".join(base))[plugin.name])
-    instead = [line.removeprefix("## ") for line in section if line.startswith("## ")]
-    if not instead:
-        return
-    tables: list[set[str]] = []
-    for line in instead:
-        if line.startswith("["):
-            tables.append(set())
-        elif tables and (m := _KEY.match(line)):
-            tables[-1].add(m[1])
-    moved: set[str] = set[str]().union(*tables)
-    kept = [line for line in base if not ((m := _KEY.match(line)) and m[1] in moved)]
-    text = "\n".join(
-        [*kept, *(line for line in instead if line.startswith("[") or _KEY.match(line))]
-    )
-    plugin.config_model.model_validate(tomllib.loads(text)[plugin.name])
+    """`section`, a plugin's commented config, uncommented, is a config the plugin takes."""
+    plugin.config_model.model_validate(tomllib.loads(_uncomment("\n".join(section)))[plugin.name])
 
 
 def test_a_plugins_token_help_is_its_next_step(
@@ -781,28 +758,3 @@ def test_a_plugins_token_help_is_its_next_step(
         cwd=tmp_path,
     )
     assert message.endswith("For Jira: make one at https://id.example/tokens")
-
-
-def test_a_plugin_with_several_tokens_names_them_on_one_line(
-    tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def tokens(self: JiraPlugin, config: JiraConfig) -> dict[str, keychain.TokenSettings]:
-        return {"home": _Token("A_TOKEN", "a"), "work": _Token("B_TOKEN", "b")}
-
-    monkeypatch.setattr(JiraPlugin, "tokens", tokens)
-    plain = replace(JiraPlugin.init, token_help="")  # the plain line, naming each
-    monkeypatch.setattr(JiraPlugin, "init", plain)
-    message = init.init(
-        tmp_path / "config.toml",
-        scripted({"Plugins": "jira", "Jira site": "https://o.atlassian.net"}),
-        cwd=tmp_path,
-    )
-    assert message.endswith(
-        "For Jira: `mfd token set jira.home` (or export A_TOKEN) and `mfd token set jira.work`"
-        " (or export B_TOKEN) store its tokens"
-    )
-
-
-class _Token:
-    def __init__(self, env: str, service: str) -> None:
-        self.token_env, self.keychain_service = env, service

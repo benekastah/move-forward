@@ -348,13 +348,12 @@ T{
 \f[CR]mfd token set <plugin>\f[R]
 T}@T{
 Ask for a plugin\(aqs API token (jira, slack) or password (mail) without
-showing it (\f[CR]<plugin>.<account>\f[R] for one of a plugin\(aqs
-accounts, when it reads several), and store it in the system\(aqs secret
-store (the macOS keychain, Windows\(aq Credential Manager, or Linux\(aqs
-desktop keyring through \f[CR]secret\-tool\f[R]) under its
-\f[CR]keychain_service\f[R] (the plugin\(aqs, or the account\(aqs), with
-\f[CR]email\f[R] as the account; the config is refused when two tokens
-are kept under the same one, whatever its case.
+showing it, and store it in the system\(aqs secret store (the macOS
+keychain, Windows\(aq Credential Manager, or Linux\(aqs desktop keyring
+through \f[CR]secret\-tool\f[R]) under its section\(aqs
+\f[CR]keychain_service\f[R], with \f[CR]email\f[R] as the account; the
+config is refused when two tokens are kept under the same one, whatever
+its case.
 T}
 T{
 \f[CR]mfd token rotate\f[R]
@@ -366,8 +365,8 @@ T}
 T{
 \f[CR]mfd token check\f[R]
 T}@T{
-Say where each enabled plugin\(aqs tokens are found, each account\(aqs
-apart: its environment variable, the secret store, or nowhere.
+Say where each enabled plugin\(aqs token is found: its environment
+variable, the secret store, or nowhere.
 Never prints a token.
 T}
 .TE

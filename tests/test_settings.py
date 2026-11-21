@@ -225,16 +225,17 @@ def _changed(setting: settings.Setting) -> object:
 
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_no_setting_the_page_changes_moves_a_plugins_token(plugin: Plugin[Any, Any]) -> None:
-    """Every key a plugin's tokens are read by (`Plugin.tokens`) is locked: changing any
-    setting the page can change leaves where each token comes from as it was."""
+    """Every key a plugin's token is read by (its section's `token_env` and `keychain_service`)
+    is locked: changing any setting the page can change leaves where it comes from as it was."""
     sections = {name: BUILT_IN_SECTIONS[name] for name in [plugin.name, *plugin.requires]}
     config = config_module.Config.model_validate({"email": "me@x", **sections})
     section = config.section(plugin.name)
     assert section is not None
 
-    def places(section: BaseModel) -> dict[str, tuple[str, str]]:
-        tokens = plugin.tokens(section)
-        return {name: (t.token_env, t.keychain_service) for name, t in tokens.items()}
+    def places(section: BaseModel) -> tuple[str, str] | None:
+        if not isinstance(section, TokenSettings):
+            return None
+        return (section.token_env, section.keychain_service)
 
     before = places(section)
     for setting in settings.settings(config):
@@ -267,44 +268,6 @@ def test_a_plugin_of_its_own_says_which_settings_stay_in_the_file(
     assert locked == {"site": True, "token_env": True, "keychain_service": True, "page_size": False}
 
 
-class _ElsewhereConfig(Strict):
-    secret_env: Annotated[str, LOCKED] = "ELSEWHERE_TOKEN"
-    secret_service: Annotated[str, LOCKED] = "move-forward-elsewhere"
-    page_size: int = 50
-
-
-class _ElsewhereSettings:
-    def __init__(self, config: _ElsewhereConfig) -> None:
-        self.token_env = config.secret_env
-        self.keychain_service = config.secret_service
-
-
-class _ElsewherePlugin(Plugin[_ElsewhereConfig, BaseModel]):
-    """A plugin keeping its token's settings under names of its own, which it marks."""
-
-    name = "elsewhere"
-    config_model = _ElsewhereConfig
-    api_version = API_VERSION
-
-    def tokens(self, config: _ElsewhereConfig) -> dict[str, TokenSettings]:
-        return {"": _ElsewhereSettings(config)}
-
-
-def test_settings_a_plugin_marks_locked_stay_in_the_file_and_save_leaves_them(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _ElsewherePlugin()])
-    path = tmp_path / "config.toml"
-    path.write_text('email = "me@x"\n\n[elsewhere]\n', encoding="utf-8")
-    config = config_module.load(path)
-    locked = {s.key for s in settings.settings(config) if s.section == "elsewhere" and s.locked}
-    assert locked == {"secret_env", "secret_service"}
-    form = {"elsewhere:secret_env": "OTHER_TOKEN", "elsewhere:page_size": "7"}
-    settings.save(path, config, form)
-    saved = path.read_text(encoding="utf-8")
-    assert "OTHER_TOKEN" not in saved and "page_size = 7" in saved  # the form was read
-
-
 LOCKED_BY_PLUGIN: dict[str, set[str]] = {
     "git": {"repos", "github_hosts"},
     "git_stack": set(),
@@ -323,7 +286,7 @@ def test_each_built_in_locks_exactly_its_settings() -> None:
     assert builtins.keys() == LOCKED_BY_PLUGIN.keys()
     for name, plugin in builtins.items():
         section = plugin.config_model.model_validate(plugin.init.example.values)
-        assert settings.locked_keys(plugin, section) == LOCKED_BY_PLUGIN[name], name
+        assert settings.locked_keys(section) == LOCKED_BY_PLUGIN[name], name
 
 
 def test_a_marker_given_as_a_default_is_refused() -> None:

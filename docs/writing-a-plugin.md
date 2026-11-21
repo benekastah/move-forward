@@ -115,9 +115,8 @@ class LinearConfig(TokenFields):
 - Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
   keys: a typo is an error. The registry refuses a config model that doesn't, or that holds
   one that doesn't. A field
-  whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
-  with `api.TABLES` in its type (`Annotated[dict[str, Account], TABLES]`), and its example is one
-  such table.
+  whose entries are tables of their own, by name (`[site.<name>]`), says so with `api.TABLES` in
+  its type (`Annotated[dict[str, Site], TABLES]`), and its example is one such table.
 - Every field has a docstring.
 - A built-in's every key appears in two places: the model and the plugin's page in
   `docs/plugins/`. A plugin from another package can't add to those pages: its model and its
@@ -148,19 +147,16 @@ class LinearConfig(TokenFields):
 - Settings that say where a credential goes (a site, a host) are marked `LOCKED` in their type
   (`site: Annotated[str, api.LOCKED]`), so the settings page, reached with the
   dashboard's cookie, shows them without changing them; `token_env` and `keychain_service`
-  are locked already; a section keeping its token's place under other names, or building it
-  from other settings, marks those too.
+  are locked already.
 - Secrets never go in the config. Build the section on `api.keychain.TokenFields`, as jira,
   slack and mail do: it gives it `token_env` and `keychain_service`, defaulting to the
   `default_token_env` and `default_keychain_service` it sets. Read the token with
   `ctx.token()`, which raises `SourceError` saying how to give one when there's none: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it; its `Init`'s
-  `token_help` is `mfd init`'s next step for it, saying where to get one (a section that
-  keeps them under other names overrides `tokens(config)`, returning `{"": settings}`, where
-  `settings` is an `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
-  (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
-  several accounts, each with its own token, names them all in `tokens(config)`, reads one
-  with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
+  `token_help` is `mfd init`'s next step for it, saying where to get one. A plugin has at most
+  one token, its section's: one login (a site, a mailbox), not several (see
+  [roadmap.md](roadmap.md)'s Accounts). Default `keychain_service` to one named for the plugin
+  (`move-forward-linear`): the config is refused when two tokens share one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
 - Core knows no teams. A plugin keeps the ones it needs in its section (github's `teams`, by

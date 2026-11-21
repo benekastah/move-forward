@@ -163,9 +163,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     set_parser = token_commands.add_parser("set", help="ask for a token and store it")
     set_parser.add_argument(
         "plugin",
-        help="the plugin whose token to store, e.g. jira, or one of its accounts: mail.work",
+        help="the plugin whose token to store, e.g. jira",
     )
-    token_commands.add_parser("check", help="say where each plugin's tokens are found")
+    token_commands.add_parser("check", help="say where each plugin's token is found")
     token_commands.add_parser(
         "rotate", help="make a new dashboard token and sign every browser out"
     )
@@ -178,9 +178,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
 
 
 def _token(config: config_module.Config, config_path: Path, args: argparse.Namespace) -> int:
-    """`mfd token set <plugin>` (or `<plugin>.<account>`): ask for the token without echoing
-    it and store it in the system's secret store, for the top-level `email`. `mfd token
-    check`: say where each enabled plugin's tokens are found, without showing them."""
+    """`mfd token set <plugin>`: ask for the token without echoing it and store it in the
+    system's secret store, for the top-level `email`. `mfd token check`: say where each enabled
+    plugin's token is found, without showing it."""
     tokens = registry.tokens(config)
     if args.token_command == "rotate":
         path = auth.token_path(config.db_path)
