@@ -26,7 +26,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec
-from move_forward.kinds import FAMILIES, Family, declaring
+from move_forward.kinds import FAMILIES
 from move_forward.markup import Html
 from move_forward.notifications import Event
 from move_forward.page import Item, Panel
@@ -86,9 +86,8 @@ def _seed(name: str, entities: Sequence[Entity]) -> _Seed:
 class Harness:
     """A plugin enabled alone (with what `with_entities` seeds) over an in-memory database,
     run as core runs it: the graph core builds, the page it renders, its actions and pages.
-    `section` is the plugin's config section, as the TOML would have it; `families`, those
-    other plugins declare whose entities it seeds or reads. The plugin must pass core's
-    checks (`registry.check_plugins`)."""
+    `section` is the plugin's config section, as the TOML would have it. The plugin must pass
+    core's checks (`registry.check_plugins`)."""
 
     def __init__(
         self,
@@ -97,7 +96,6 @@ class Harness:
         *,
         now: datetime = NOW,
         email: str = "me@x",
-        families: Sequence[Family] = (),
     ):
         self.plugin = plugin
         self.now = now
@@ -107,7 +105,6 @@ class Harness:
         folder; gone with the harness."""
         self._section = dict(section or {})
         self._email = email
-        self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
         self._events: list[Event] | None = None
         """The events of the last `store`; None before the first."""
@@ -129,10 +126,7 @@ class Harness:
             for entity in entities:
                 kind = entity.ref.kind
                 if kind not in FAMILIES and "." not in kind:
-                    raise ValueError(
-                        f"{kind} is neither a family nor a plugin's kind: pass the family that"
-                        " another plugin declares as Harness(..., families=...)"
-                    )
+                    raise ValueError(f"{kind} is neither a family nor a plugin's kind")
                 owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
                 by_owner.setdefault(owner, []).append(entity)
             self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
@@ -282,12 +276,10 @@ class Harness:
 
     @contextmanager
     def _installed(self) -> Generator[None]:
-        """Core sees only the plugin and the seeds, and the plugin's and the given families,
-        while a call runs."""
+        """Core sees only the plugin and the seeds while a call runs."""
         saved = registry.PLUGINS
         registry.PLUGINS = [self.plugin, *self._seeds]
         try:
-            with declaring(self.name, self._families, keep=False):
-                yield
+            yield
         finally:
             registry.PLUGINS = saved

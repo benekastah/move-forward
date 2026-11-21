@@ -12,7 +12,7 @@ from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
-from move_forward.kinds import TAG, Family, Person, declaring, is_url
+from move_forward.kinds import TAG
 from move_forward.page import Badge, Item, ItemAdditions, Panel
 from move_forward.plugin import ActionError
 from move_forward.registry import enabled
@@ -106,14 +106,6 @@ def test_prs_sharing_a_tag_or_naming_it_point_at_it_but_arent_linked() -> None:
     assert graph.related(third, TAG) == []
     assert graph.units(second) == []  # not a unit of work: no ice, priority or join through it
     assert graph.related(second, "pull_request") == []
-
-
-def test_no_plugin_declares_a_family_named_tag() -> None:
-    with (
-        pytest.raises(ValueError, match="core's kind"),
-        declaring("x", [Family(TAG, "tag", Person, is_url)], keep=False),
-    ):
-        pass
 
 
 def test_words_are_compared_case_folded_and_short_tags_need_their_hash() -> None:

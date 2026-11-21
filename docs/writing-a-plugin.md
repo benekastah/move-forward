@@ -341,17 +341,6 @@ class LinearPlugin(...):
   [entities.md](entities.md#families) lists them), so it's unique across tools. Its refs
   name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it through the
   family's model, whoever publishes it.
-- **Your own families.** For something several tools share that core doesn't model (a CRM
-  deal, say), declare the family in `families`: a `Family` with its name (lower-case, no
-  dot), label, model (with a `handle`, as every family's has), id rule (`api.kinds.is_url`,
-  say) and, if it's fetched on demand, its fetched model. A plugin publishes kinds only of
-  core's families and those it declares itself, so every plugin publishing one declares it:
-  put it in a package they import, so they declare the same one. A plugin declaring a family
-  differently from core or another plugin is left out, and `mfd check` says so. The test
-  harness declares your plugin's families while it runs it, and those of other plugins
-  you read or seed when you pass them (`Harness(..., families=...)`). Task ids the family's consumers
-  share (as `REVIEW` and `AWAIT_REVIEW` are for PRs) can live in that package too: items of
-  several plugins with the same task about the same entity are snoozed as one.
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
   person in other tools (`graph.same_person`), and ranks and badges their items by contact type,

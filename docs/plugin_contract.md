@@ -29,8 +29,7 @@ do (collecting, a change check, a command, fetching by id) is a mixin (below).
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
-| `kinds` | `dict[str, KindSpec]`, `{}` | The entity kinds it publishes, each with its spec: its attributes' model, which the graph checks entities against, and its flags (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `find_tags_in_text`). A kind is named `<name>.<x>` or for a family (core's, or one in `families`); its attributes are a `KindModel`, and a family kind's extend the family's model. |
-| `families` | `tuple[Family, ...]`, `()` | Families of kinds it declares, beyond core's pull request, ticket, person and team: the model its kinds extend and the rule its ids follow. One declaring a family differently from core or another plugin is left out. |
+| `kinds` | `dict[str, KindSpec]`, `{}` | The entity kinds it publishes, each with its spec: its attributes' model, which the graph checks entities against, and its flags (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `find_tags_in_text`). A kind is named `<name>.<x>` or for a family (`api.kinds.FAMILIES`); its attributes are a `KindModel`, and a family kind's extend the family's model. |
 | `requires` | `list[str]`, `[]` | Plugins whose entities it's built on (`["git"]`); the config must enable them too. |
 | `migrations` | `list[Migration]`, `[]` | Scripts creating and changing its tables (prefixed with `name`), applied in order. Append only. |
 
