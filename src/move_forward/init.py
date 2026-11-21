@@ -129,7 +129,7 @@ def commented_defaults(
 ) -> str:
     """`model`'s optional keys but `skip`, commented out, each with its default (or its value in
     `shown`) and its docstring's `summary`. A table of tables by name (a field marked
-    `TABLES`, mail's accounts) and a key whose default is None, not in `shown`, are left out."""
+    `TABLES`) and a key whose default is None, not in `shown`, are left out."""
     shown = shown or {}
     text = ""
     for key, field in model.model_fields.items():
@@ -357,19 +357,13 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
-    config = Config.model_validate(tomllib.loads(text))
+    tokens = registry.tokens(Config.model_validate(tomllib.loads(text)))
     for plugin in registry.PLUGINS:
-        section = config.section(plugin.name)
-        if section is None or not (tokens := plugin.tokens(section)):
+        if (token := tokens.get(plugin.name)) is None:
             continue
-        names = [f"{plugin.name}.{a}" if a else plugin.name for a in tokens]
-        stores = " and ".join(
-            f"`mfd token set {name}` (or export {t.token_env})"
-            for name, t in zip(names, tokens.values(), strict=True)
+        step = (
+            plugin.init.token_help
+            or f"`mfd token set {plugin.name}` (or export {token.token_env}) stores its token"
         )
-        if plugin.init.token_help:
-            next_steps += f"\n\nFor {plugin.title}: {plugin.init.token_help}"
-        else:
-            verb = "stores its token" if len(names) == 1 else "store its tokens"
-            next_steps += f"\n\nFor {plugin.title}: {stores} {verb}"
+        next_steps += f"\n\nFor {plugin.title}: {step}"
     return next_steps

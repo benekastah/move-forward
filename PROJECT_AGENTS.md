@@ -76,9 +76,11 @@ what's untried where it runs).
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
   `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
   fingerprint, the snapshot and the graph then). Those called before there's a context take what
-  they need: `tokens(config)` (`mfd token`, and loading the config), `cli(parser)` (its docstring's first
-  line is the command's help), `pages()` and `actions()`. Who I am in a tool is a `person` it
-  publishes with `me`; what focus mode keeps on the page after a button is core's.
+  they need: `cli(parser)` (its docstring's first line is the command's help), `pages()` and
+  `actions()`. A plugin has at most one token, its section's (`token_env` and
+  `keychain_service`, a `TokenSettings`), read with `ctx.token()`: one login, never several (core
+  is to get several instances of a plugin for that; see `docs/roadmap.md`). Who I am in a tool is
+  a `person` it publishes with `me`; what focus mode keeps on the page after a button is core's.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
@@ -157,7 +159,7 @@ what's untried where it runs).
   built the same way) writes each optional key from its model, commented out with its default
   and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
   its model can't say, in its `Init`: a required key with an example value in its `example`, a
-  table of example entries (`[slack.teams]`, `[mail.<name>]`) in its `tables`, and in a
+  table of example entries (`[slack.teams]`) in its `tables`, and in a
   section's `shown` (its `example`'s, and what its `questions` return) an example
   value for a key whose default says less (or is None), where it's right for that section. A key's comment goes above it, after a blank line, wrapped
   to 100 columns (never inside a code span); write its `tables`' comments the same way.

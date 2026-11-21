@@ -28,9 +28,9 @@ decides a sender is who they claim, or what runs where: `site: Annotated[str, LO
 page is reached with the dashboard's cookie, and one that could point the site at another
 server could send it the token; only the config file changes such a setting."""
 TABLES = Tables()
-"""Marks a config field whose entries are tables of their own, by name (mail's
-`[mail.<name>]` accounts): `accounts: Annotated[dict[str, Account], TABLES] = ...`. `mfd init`
-leaves it to the plugin's example tables."""
+"""Marks a config field whose entries are tables of their own, by name (`[site.<name>]`):
+`sites: Annotated[dict[str, Site], TABLES] = ...`. `mfd init` leaves it to the plugin's example
+tables."""
 Marker = Locked | Tables
 """A marker a config field can carry. Each is a type of its own, so pydantic keeps both on a
 field carrying both."""

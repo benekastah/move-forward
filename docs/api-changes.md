@@ -43,6 +43,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   todos), as a tool's labels already tag and text anyone else can write mustn't. Text still
   names tags whatever its kind says. A kind that relied on the old default (True) must now say
   so, and one that said `tags_from_text=False` drops it.
+- **One token per plugin**: `Plugin.tokens(config)` and `Context.tokens` are gone, and so is
+  `ctx.token`'s `account`: `ctx.token(*, secret="token")` reads the section's own token, from its
+  `token_env` and `keychain_service` (build the section on `api.keychain.TokenFields`), and raises
+  `TypeError` for a section that keeps none. `mfd token set <plugin>.<account>` goes with them.
+  A plugin reads one login; several logins are planned as several instances of a plugin, from
+  core (see [roadmap.md](roadmap.md)'s Accounts).
 
 ## Version 4
 

@@ -12,6 +12,12 @@ A `#tag` written in a PR's title or body, or a ticket's summary, no longer puts 
 a todo does. To keep such an item tagged, give it the label in its tool, or put the tag on it
 with `mfd tag <entity> <tag>` (or its Tag field).
 
+### `mfd token set` takes a plugin's name alone
+
+`mfd token set <plugin>.<account>` is gone, as no plugin keeps a token per account any more
+(mail reads one mailbox: see below): run `mfd token set <plugin>` (`mfd token set mail`), and
+`mfd token check` lists one line per plugin.
+
 ### mail reads one mailbox
 
 `[mail]` reads one mailbox again: its `[mail.<name>]` accounts are gone, and a config with one

@@ -419,15 +419,13 @@ def unmet_requirements(config: Config) -> list[str]:
 
 
 def tokens(config: Config) -> dict[str, TokenSettings]:
-    """Where each enabled plugin keeps each of its tokens (`Plugin.tokens`), by the name
-    `mfd token set` takes: the plugin's, or `<plugin>.<account>` for one of several."""
-    found: dict[str, TokenSettings] = {}
-    for plugin in PLUGINS:
-        section = config.section(plugin.name)
-        if section is not None:
-            for name, settings in plugin.tokens(section).items():
-                found[f"{plugin.name}.{name}" if name else plugin.name] = settings
-    return found
+    """Where each enabled plugin whose section keeps a token (a `TokenSettings`) keeps it, by
+    the plugin's name, which `mfd token set` takes."""
+    return {
+        plugin.name: section
+        for plugin in PLUGINS
+        if isinstance(section := config.section(plugin.name), TokenSettings)
+    }
 
 
 def shared_token_services(config: Config) -> list[str]:
@@ -490,7 +488,6 @@ def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
             db=db,
             kv=KvRepository(db, plugin.name),
             name=plugin.name,
-            tokens=plugin.tokens(section),
         )
         result.append(Enabled(plugin, ctx))
     return result

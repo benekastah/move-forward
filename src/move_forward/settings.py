@@ -23,15 +23,15 @@ import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 from string.templatelib import Template
-from typing import Any, Literal, cast, get_args, get_origin
+from typing import Literal, cast, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined
 
 from move_forward import registry, render, strict, tomledit
 from move_forward.config import Config
+from move_forward.keychain import TokenSettings
 from move_forward.markup import Html, html
-from move_forward.plugin import Plugin
 
 PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]
@@ -135,13 +135,12 @@ def _fields(
     return found
 
 
-def locked_keys(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
+def locked_keys(section: BaseModel) -> frozenset[str]:
     """A plugin section's keys only the file changes: those its model marks `LOCKED`, and
-    `token_env` and `keychain_service` when it keeps a token. A plugin keeping its token's
-    settings under other names, or building them from other keys, marks those."""
+    `token_env` and `keychain_service` when it keeps a token (is a `TokenSettings`)."""
     fields = type(section).model_fields.items()
     marked = frozenset(key for key, field in fields if strict.marked(field, strict.LOCKED))
-    return marked | (TOKEN_KEYS if plugin.tokens(section) else frozenset[str]())
+    return marked | (TOKEN_KEYS if isinstance(section, TokenSettings) else frozenset[str]())
 
 
 def settings(config: Config) -> list[Setting]:
@@ -158,7 +157,7 @@ def settings(config: Config) -> list[Setting]:
     for plugin in registry.PLUGINS:
         section = config.section(plugin.name)
         if section is not None:
-            found += _fields(section, plugin.name, set(), locked_keys(plugin, section))
+            found += _fields(section, plugin.name, set(), locked_keys(section))
     return found
 
 
