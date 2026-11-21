@@ -32,8 +32,9 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 
 Core models what more than one tool may represent, in `move_forward.api.kinds`: the
 `pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`), `person`
-(`Person`) and `team` (`Team`). A plugin's kind named for a family must extend its model, adding its own fields
-(github's `number`, jira's `status`); the registry refuses one that doesn't. Refs to a
+(`Person`) and `team` (`Team`); a new family is a change to core. A plugin's kind named for a
+family must extend its model, adding its own fields (github's `number`, jira's `status`); the
+registry refuses one that doesn't. Refs to a
 family's entities name the family, whoever publishes them, so `Ref("pull_request", url)`
 finds a PR without knowing its plugin; `graph.of_kind("github.pull_request")` reads one
 plugin's. Every family's model has

@@ -1,8 +1,8 @@
 """The families of entity kinds: what more than one tool may represent (a pull request, a
-ticket, a person, a team). A plugin's kind named for a family must extend its model, adding the plugin's own fields, so
-every publisher's entities of the family carry what the family's model says and other plugins
-read them through it. A plugin's other kinds are its own, named for it (`git.branch`). See
-`docs/entities.md`."""
+ticket, a person, a team). A plugin's kind named for a family must extend its model, adding the
+plugin's own fields, so every publisher's entities of the family carry what the family's model
+says and other plugins read them through it. A plugin's other kinds are its own, named for it
+(`git.branch`). See `docs/entities.md`."""
 
 import re
 from collections.abc import Callable

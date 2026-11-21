@@ -112,7 +112,8 @@ New buttons, for what only the terminal or GitHub can do now.
 
 Adding a plugin should never mean changing core. It already doesn't for a tool that fits what
 core models and how (Linear or Shortcut publish tickets); what forces a core change today is
-anything new in shape, and a second code host (see "A second code host" under Code hosts:
+anything new in shape (a new family, which core declares in `kinds.FAMILIES`), and a second code
+host (see "A second code host" under Code hosts:
 `repo` ids and git's remotes are GitHub's). The tools in view: CRMs (Salesforce, HubSpot),
 support (Zendesk, Intercom, Front), on-call and incidents (PagerDuty, incident.io), errors
 (Sentry), a calendar (meetings to prepare for), and comments in documents (Google Docs,
@@ -123,8 +124,9 @@ Confluence, Notion, Figma). In order:
    harness plugin authors get (`move_forward.testing`). Each step below extends it as it
    lands, so it shows what a plugin can do without core, and a core change that would break
    one fails it.
-3. **The families most of those tools need.** A *conversation* (mail, support tickets,
-   chats) and an *incident*, each with the attributes a consumer ranks by; mail's threads are
+3. **The families most of those tools need**, added to core's `kinds.FAMILIES`, as a plugin
+   can't declare its own. A *conversation* (mail, support tickets, chats) and an *incident*,
+   each with the attributes a consumer ranks by; mail's threads are
    a conversation already. An *organisation* family (a CRM's account, a support tool's
    organisation) that people point at, whose type or importance counts for its people's items,
    once a plugin publishes one: contact types' `@domain` labels are the closest today.

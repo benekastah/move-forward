@@ -21,8 +21,7 @@ decides a sender is who they claim, or what runs where: `site: Annotated[str, LO
 page is reached with the dashboard's cookie, and one that could point the site at another
 server could send it the token; only the config file changes such a setting."""
 Marker = Locked
-"""A marker a config field can carry, each a type of its own (a union, once there are more), so
-pydantic keeps every one on a field carrying several."""
+"""The type of the markers a config field can carry (`LOCKED`)."""
 
 
 class Strict(BaseModel):

@@ -35,10 +35,10 @@ what's untried where it runs).
   (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `find_tags_in_text`). An
   entity says whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
   states. What more than one tool may represent (a pull request, a ticket, a person, a team) is
-  a family (`api.kinds.FAMILIES`), which core declares. A plugin's kind of a family extends its model, and its
-  ids follow the family's rule (a URL; `<host>/<login>` for a person, `<host>/<org>/<slug>`, or deeper,
-  for a team), so they're
-  unique whoever publishes them. A consumer reads
+  a family (`api.kinds.FAMILIES`), which core declares. A plugin's kind of a family extends its
+  model, and its ids follow the family's rule (a URL; `<host>/<login>` for a person,
+  `<host>/<org>/<slug>`, or deeper, for a team), so they're unique whoever publishes them.
+  A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with
