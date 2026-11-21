@@ -195,7 +195,9 @@ what's untried where it runs).
   Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
   contents; plugin contract tests assert on the entities a plugin publishes. Tests touching
   git make real repos in `tmp_path`; tests never touch the network, nor the real database or
-  its token (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor the
+  its token (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor my home
+  directory (each test's `~` is an empty one of its own: `no_real_home`, but for what's
+  resolved at import, the default config path), nor the
   secret store, nor run a program but git (not `git stack`, which can start `gh`). Files are
   made private only in a test marked `private_files`, which may run icacls on Windows; in an
   unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails

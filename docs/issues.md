@@ -18,6 +18,12 @@ wrong, add it.
   set for my org's `bacon` applies to another org's `bacon` requested on a PR of mine too. Key
   it by the team's org as well (or only apply it in `org`).
 
+- **The default config path is resolved at import.** `config.DEFAULT_CONFIG_PATH` is expanded
+  when `move_forward.config` is imported, and `config.load`'s and `--config`'s defaults are bound
+  to it, so a test's home of its own (`no_real_home`) doesn't redirect them: a test calling
+  `cli.main` with no `-c`, or `config.load()` with no path, would read my real config. No test
+  does. Resolve it where it's used, as the database path is, in a core PR.
+
 ## The skill and the dashboard disagree
 
 The work-notes skill won't clean while something's on ice, but the dashboard cleans regardless
