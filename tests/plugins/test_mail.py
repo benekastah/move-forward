@@ -1012,6 +1012,14 @@ def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
     assert not any("Weekly digest" in t for t in titles)
 
 
+def _carrying(harness: Harness, *carried: tuple[Entity, str]) -> None:
+    """Seed each entity with the tag I put on it: a seeded kind finds no `#tag` in its text
+    (unlike notes' own), and a tag only a tool's labels give is named only by its `#`."""
+    harness.with_entities([entity for entity, _ in carried])
+    for entity, tag in carried:
+        TagRepository(harness.db).add(entity.ref, tag, NOW)
+
+
 def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt() -> None:
     harness = mailbox(
         message(6, subject="Garbage day moved", thread="g"),
@@ -1021,17 +1029,15 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
         message(2, subject="Your invoice is overdue", thread="i", sender="x@billing.example"),
         message(1, subject="Re: APP-9 lunch", thread="d"),
     )
-    harness.with_entities(
-        [
-            Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out"),
-            Entity(ref=Ref(kind="notes.todo", id="8"), title="pay the #invoice"),
-            Entity(ref=Ref(kind="notes.todo", id="9"), title="#lunch", lifecycle="done"),
-            Entity(  # done, carrying a tag something open carries too
-                ref=Ref(kind="ticket", id="https://j/APP-9"),
-                title="APP-9 #garbage-day bins",
-                lifecycle="done",
-            ),
-        ]
+    _carrying(
+        harness,
+        (Entity(ref=Ref(kind="notes.todo", id="7"), title="take the bins out"), "garbage-day"),
+        (Entity(ref=Ref(kind="notes.todo", id="8"), title="pay it"), "invoice"),
+        (Entity(ref=Ref(kind="notes.todo", id="9"), title="eat", lifecycle="done"), "lunch"),
+        (  # done, carrying a tag something open carries too
+            Entity(ref=Ref(kind="ticket", id="https://j/APP-9"), title="APP-9", lifecycle="done"),
+            "garbage-day",
+        ),
     )
     items = {i.fingerprint: i for i in _items(harness)}
 
@@ -1053,9 +1059,9 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
     assert about("m1@acme.com") == []
 
 
-@pytest.mark.parametrize(("body", "about"), [("", []), ("Needs #help-wanted", ["#help-wanted"])])
-def test_mail_names_a_label_by_its_words_only_where_someone_wrote_it(
-    body: str, about: list[str]
+@pytest.mark.parametrize(("mine", "about"), [([], []), (["help-wanted"], ["#help-wanted"])])
+def test_mail_names_a_label_by_its_words_only_where_someone_chose_it(
+    mine: list[str], about: list[str]
 ) -> None:
     harness = mailbox(message(1, subject="Help wanted at the school fair", sender="pta@school.org"))
     harness.with_entities(  # a label is often common words: "help wanted" alone names nothing
@@ -1063,7 +1069,7 @@ def test_mail_names_a_label_by_its_words_only_where_someone_wrote_it(
             Entity(
                 ref=Ref(kind="pull_request", id="https://github.com/o/r/pull/1"),
                 title="Fix the build",
-                mentions=[body],
+                mentions=["Needs #help-wanted"],  # a PR's body finds no tag
                 tags=["help wanted"],
                 attrs={
                     "handle": "#1",
@@ -1078,7 +1084,10 @@ def test_mail_names_a_label_by_its_words_only_where_someone_wrote_it(
             )
         ]
     )
-    assert harness.graph().get("pull_request", "https://github.com/o/r/pull/1") is not None
+    pull = Ref(kind="pull_request", id="https://github.com/o/r/pull/1")
+    for tag in mine:
+        TagRepository(harness.db).add(pull, tag, NOW)
+    assert harness.graph().get(pull.kind, pull.id) is not None
     [item] = _items(harness)
     assert [d for d in item.details if d.startswith("about")] == [f"about {t}" for t in about]
     assert item.signals is not None and item.signals.importance == len(about)
@@ -1091,9 +1100,7 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     [alone] = _items(harness)
     assert "#garbage-day" in alone.badges
     assert not any(d.startswith("about") for d in alone.details)  # only it has the tag
-    harness.with_entities(
-        [Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")]
-    )
+    _carrying(harness, (Entity(ref=Ref(kind="notes.todo", id="7"), title="bins"), "garbage-day"))
     [shared] = _items(harness)  # tagging it by hand doesn't lose what its subject names
     assert "about #garbage-day" in shared.details
     assert shared.signals is not None and shared.signals.importance == 1
@@ -1399,11 +1406,11 @@ def test_gmails_own_labels_make_a_thread_about_nothing() -> None:
 
 
 def test_a_label_of_mine_or_the_subject_names_what_others_carry() -> None:
-    todo = Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")
+    todo = Entity(ref=Ref(kind="notes.todo", id="7"), title="take the bins out")
     labelled = mailbox(message(1, subject="Hello", labels=["\\Inbox", "Garbage Day"]))
-    labelled.with_entities([todo])
+    _carrying(labelled, (todo, "garbage-day"))
     named = mailbox(message(1, subject="Garbage day moved", labels=["Garbage Day"]))
-    named.with_entities([todo])
+    _carrying(named, (todo, "garbage-day"))
     for harness in (labelled, named):
         [item] = _items(harness)
         assert "about #garbage-day" in item.details

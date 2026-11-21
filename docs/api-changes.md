@@ -33,8 +33,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
   URL as text (by default, as `address` did, the id where its family's ids are URLs), and
   `handle(req)` each id's handle (by default none). A plugin that overrode `address` overrides
   whichever of the two it answered.
-- **`KindSpec`'s `tags_from_text` is `find_tags_in_text`**, with the same meaning and default
-  (True): a kind whose text anyone can write says `KindSpec(find_tags_in_text=False)`.
+- **`KindSpec`'s `tags_from_text` is `find_tags_in_text`, False by default**: a `#tag` in an
+  entity's title or mentions puts the tag on it only where its kind says
+  `KindSpec(find_tags_in_text=True)`, for text I write that has no labels (notes' entries and
+  todos), as a tool's labels already tag and text anyone else can write mustn't. Text still
+  names tags whatever its kind says. A kind that relied on the old default (True) must now say
+  so, and one that said `tags_from_text=False` drops it.
 
 ## Version 4
 

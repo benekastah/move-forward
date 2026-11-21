@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import NOW, pr, snapshot, stored
+from conftest import NOW, entry, pr, snapshot, stored, todo
 
 from move_forward import cli, panels, refresh, tags
 from move_forward.api.tags import handle as api_handle
@@ -43,8 +43,12 @@ def _entity(id: str, title: str, *, mentions: tuple[str, ...] = (), done: bool =
     )
 
 
-def _tagged(*entities: Entity, **specs: KindSpec) -> dict[str, Entity]:
-    found = tags.tagged(list(entities), specs, {Ref(kind="x.a", id="h"): ["by-hand"]})
+_WRITTEN = {"x.a": KindSpec(tags.TagAttrs, find_tags_in_text=True)}
+"""`_entity`'s kind, whose text I write, as notes': a `#tag` in it puts the tag on it."""
+
+
+def _tagged(*entities: Entity) -> dict[str, Entity]:
+    found = tags.tagged(list(entities), _WRITTEN, {Ref(kind="x.a", id="h"): ["by-hand"]})
     return {e.ref.id: e for e in found}
 
 
@@ -75,17 +79,21 @@ def test_text_names_a_tag_however_it_spaces_hyphenates_or_cases_it() -> None:
     assert found["2"].refs == []  # what it carries
 
 
-def test_a_kind_others_write_doesnt_put_tags_on_its_entities() -> None:
+def test_only_a_kind_that_says_so_finds_tags_in_its_text() -> None:
     sale = Entity(ref=Ref(kind="y.mail", id="1"), title="#sale ends Friday")
-    other = Entity(ref=Ref(kind="y.mail", id="2"), title="Sale!")
-    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)})
+    other = Entity(ref=Ref(kind="z.none", id="2"), title="#sale too")  # no spec at all
+    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs)})
     assert [e.ref for e in found] == [sale.ref, other.ref]  # no tag, so nothing names one
 
 
 def test_prs_sharing_a_tag_or_naming_it_point_at_it_but_arent_linked() -> None:
     config, db = stored(
         github=snapshot(
-            mine=[pr(1, title="#garbage-day prep"), pr(2, title="Garbage Day fix"), pr(3)]
+            mine=[
+                pr(1, title="Prep", labels=["garbage-day"]),
+                pr(2, title="Fix #garbage-day", body="Waiting on #qa"),  # names, doesn't carry
+                pr(3),
+            ]
         ),
     )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
@@ -123,7 +131,7 @@ def test_words_are_compared_case_folded_and_short_tags_need_their_hash() -> None
 
 
 def test_the_tags_of_a_ticket_reach_what_belongs_to_it() -> None:
-    ticket = Entity(ref=Ref(kind="ticket", id="https://jira/APP-1"), title="#chores sink")
+    ticket = Entity(ref=Ref(kind="ticket", id="https://jira/APP-1"), title="sink", tags=["chores"])
     work = Entity(ref=Ref(kind="x.pr", id="1"), title="fix", refs=[ticket.ref])
     graph = Graph(tags.tagged([ticket, work], {}), linking={"ticket": None})
     assert [t.ref for t in graph.related(work.ref, TAG)] == [Ref(kind=TAG, id="chores")]
@@ -176,10 +184,7 @@ def test_code_doesnt_name_a_tag() -> None:
 def test_a_short_tag_is_named_with_its_hash() -> None:
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="sign-off", mentions=["waiting on #QA"])
     other = Entity(ref=Ref(kind="y.mail", id="o"), title="qa sign-off")
-    found = tags.tagged(
-        [_entity("1", "#qa thing"), mail, other],
-        {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)},
-    )
+    found = tags.tagged([_entity("1", "#qa thing"), mail, other], _WRITTEN)
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
     assert found[2].refs == []
 
@@ -187,9 +192,7 @@ def test_a_short_tag_is_named_with_its_hash() -> None:
 def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
     carrier = _entity("1", "#qa thing")
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
-    found = tags.tagged(
-        [carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)}
-    )
+    found = tags.tagged([carrier, mail], _WRITTEN)
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
 
 
@@ -321,12 +324,7 @@ def test_forget_gone_keeps_tags_on_done_work_in_the_graph() -> None:
 def test_a_tools_labels_are_tags_whatever_its_kind_says_of_its_text() -> None:
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#sale", tags=["Garbage Day", "7"])
     other = _entity("2", "garbage day moved")
-    found = {
-        e.ref.id: e
-        for e in tags.tagged(
-            [mail, other], {"y.mail": KindSpec(tags.TagAttrs, find_tags_in_text=False)}
-        )
-    }
+    found = {e.ref.id: e for e in tags.tagged([mail, other], _WRITTEN)}
     assert found["garbage-day"].refs == [mail.ref]  # a label, not the sender's #sale
     assert "sale" not in found and "7" not in found
     assert found["2"].refs == []  # a tag only labels give is named only with its #
@@ -375,7 +373,7 @@ def test_every_tag_looks_alike_and_any_can_be_taken_off() -> None:
     ref = Ref(kind="x.a", id="1")
     added = {ref: ["chores"]}
     carrier = Entity(ref=ref, title="#errand", tags=["Garbage Day", "chores"])
-    graph = Graph(tags.tagged([carrier], {}, added))
+    graph = Graph(tags.tagged([carrier], _WRITTEN, added))
     found = tags.Tags(graph).additions(Item(title="t", subjects=[ref]))
     assert found.badges == ["#errand", "#garbage-day", "#chores"]
     assert [a.label for a in found.actions] == [
@@ -392,7 +390,7 @@ def test_a_tag_taken_off_leaves_what_carried_it_but_text_naming_it_still_does() 
         e.ref.id: e
         for e in tags.tagged(
             [Entity(ref=ref, title="#errand", tags=["bug"]), _entity("2", "#errand too")],
-            {},
+            _WRITTEN,
             removed={ref: {"errand", "bug"}},
         )
     }
@@ -453,15 +451,25 @@ def test_a_refresh_puts_back_only_its_own_plugins_tags() -> None:
 
 
 def test_taking_off_a_tag_mine_and_in_its_text_takes_off_both() -> None:
-    config, db = stored(github=snapshot(mine=[pr(1, title="Fix #chores")]))
-    fields = {"kind": "pull_request", "id": pr(1).url}
+    config, db = stored(work_items=[entry("Fix #chores", [todo("a")])])
+    fields = {"kind": "notes.entry", "id": "Fix #chores"}
     refresh.run_action(config, db, "act_now/tag", {**fields, "input": "chores"})
+    # Notes never refreshes, so it doesn't come back.
     assert refresh.run_action(config, db, "act_now/untag", {**fields, "tag": "chores"}) == (
-        "#chores taken off; it comes back with the next refresh if its text still has it"
+        "#chores taken off"
     )
     assert TagRepository(db).all() == {}
-    shown = _shown(config, db, pr(1).url)
+    shown = _shown(config, db, "Fix #chores")
     assert shown and all("#chores" not in badges for badges in shown)
+
+
+def test_a_tag_taken_off_comes_back_with_whatever_still_gives_it() -> None:
+    off = tags.TakenOff(on=True, plugin="x", from_tool=True, from_text=True)
+    assert (
+        off.back({"x": "X"})
+        == "; it comes back with the next refresh if X or its text still has it"
+    )
+    assert off.back({}) == ""  # x never refreshes
 
 
 def test_the_tag_command_takes_off_a_tag_from_text(

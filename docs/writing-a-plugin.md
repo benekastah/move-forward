@@ -377,15 +377,16 @@ class LinearPlugin(...):
   `gone_means_done`; one whose entities the plugin can look up after they've left the
   snapshot is `fetchable`, and the plugin a `Fetcher`, implementing `fetch(req)`; one `mfd
   priority <id>` should look in without `--kind` is `resolvable`.
-- **Tags.** A `#tag` in an entity's title or `mentions` (out of Markdown code and HTML
-  comments) puts the tag on it, and text there naming one points it at the tag (see the
-  README's Tags). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
+- **Tags.** Text in an entity's title or `mentions` (out of Markdown code and HTML comments)
+  naming a tag points it at the tag (see the README's Tags). A `#tag` there puts the tag on it
+  only where its kind says `KindSpec(..., find_tags_in_text=True)`: text I write myself in a
+  tool with no labels (notes'), not text a tool's labels already tag or anyone else can write
+  (a PR's body, mail's subjects). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
   makes them tags. Put only labels no outsider can set (people with a say in the tool, or the
   tool itself), even on a kind whose text anyone can write, and decide whether the tool's own
   (Gmail's `\Inbox`) are tags too: mail's are. A tag only labels give is named only with its
   `#`, as a label is often a common word. I can take a label's tag off, until your plugin next
-  refreshes. A kind whose text anyone can write (mail's subjects) is
-  `KindSpec(..., find_tags_in_text=False)`. Read the tags on or named by an entity with
+  refreshes. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `web_address(req)` (`req.kind`, `req.ids`) gives the URLs of entities that may not be in
   the graph, by id (a ticket's from its key), and `handle(req)` the text that names them (a

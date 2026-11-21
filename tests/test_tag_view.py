@@ -20,14 +20,14 @@ def _selecting(tags: list[str], **overrides: object) -> Dashboard:
 
 
 def _board(*tags: str) -> Dashboard:
-    """Three PRs, two tagged in their titles, and an entry with a tagged todo and one not, built
+    """Three PRs, two labelled with tags, and an entry with a tagged todo and one not, built
     with `tags` selected."""
     return _selecting(
         list(tags),
         github=snapshot(
             mine=[
-                pr(1, title="Fix #chores #urgent"),
-                pr(2, title="Bins #garbage-day"),
+                pr(1, title="Fix the sink", labels=["chores", "urgent"]),
+                pr(2, title="Bins out", labels=["garbage-day"]),
                 pr(3, title="Other"),
             ]
         ),
@@ -49,9 +49,9 @@ def test_an_item_carries_the_tags_its_badges_show() -> None:
 def test_the_filter_keeps_what_carries_any_of_the_tags() -> None:
     board = _board()
     both = tag_view.filtered(board, ["urgent", "garbage-day"])
-    assert titles(both, "github.needs_reviewer") == ["Fix #chores #urgent", "Bins #garbage-day"]
+    assert titles(both, "github.needs_reviewer") == ["Fix the sink", "Bins out"]
     one = tag_view.filtered(board, ["garbage-day"])
-    assert titles(one, "github.needs_reviewer") == ["Bins #garbage-day"]
+    assert titles(one, "github.needs_reviewer") == ["Bins out"]
     assert tag_view.filtered(board, []) is board
 
 
@@ -78,14 +78,14 @@ def test_panels_and_groups_left_empty_leave_the_page_but_focus_mode_still_knows_
 
 
 def test_act_now_shows_the_top_of_what_carries_a_tag_not_what_of_its_top_does() -> None:
-    late = pr(50, title="Late #chores")
+    late = pr(50, title="Late chore", labels=["chores"])
     overrides = {"github": snapshot(mine=[*(pr(n) for n in range(1, 12)), late])}
-    assert "Late #chores" not in str(dashboard(**overrides).act_now())  # below Act now's cut
+    assert "Late chore" not in str(dashboard(**overrides).act_now())  # below Act now's cut
     shown = _selecting(["chores"], **overrides)
     [item] = tag_view.filtered(shown, ["chores"]).act_now()
-    assert "Late #chores" in item.title and item.badges[0] == "#1"
+    assert "Late chore" in item.title and item.badges[0] == "#1"
     html = render.dashboard_page(shown, set(), tags=["chores"])
-    assert "<span class='badge'>#1</span>" in html and "Late #chores" in html
+    assert "<span class='badge'>#1</span>" in html and "Late chore" in html
 
 
 def test_focus_mode_steps_only_through_the_parts_carrying_a_tag() -> None:
@@ -128,27 +128,29 @@ def test_act_now_and_focus_mode_are_filtered() -> None:
     board = tag_view.filtered(_board("chores"), ["chores"])
     assert [i.title for i in board.act_now()] == [
         "Finish 2 quick todos: Errands",
-        "Request a reviewer: Fix #chores #urgent",
+        "Request a reviewer: Fix the sink",
     ]
     focused = board.focus_items("github.needs_reviewer") or []
-    assert [item.title for _, item in focused] == ["Fix #chores #urgent"]
+    assert [item.title for _, item in focused] == ["Fix the sink"]
     page = (
         render.focus_page(_board("garbage-day"), "github.needs_reviewer", 0, tags=["garbage-day"])
         or ""
     )
-    assert "Bins #garbage-day" in page and "1 of 1" in page
+    assert "Bins out" in page and "1 of 1" in page
     assert render.focus_page(_board("nothing"), ACT_NOW, 0, tags=["nothing"]) is not None
 
 
 def test_act_now_keeps_a_joined_items_members_whichever_carries_the_tag() -> None:
     # The PR's branch names APP-2, so the ticket's move joins the PR's item.
     config, db = stored(
-        github=snapshot(mine=[pr(2, title="Fix #chores", threads=[thread("bob")])]),
+        github=snapshot(
+            mine=[pr(2, title="Fix the tap", labels=["chores"], threads=[thread("bob")])]
+        ),
         jira=JiraSnapshot(issues=[issue("APP-2", status="In Progress")]),
     )
     shown = build_dashboard(config, db, NOW, selected=["chores"])
     [item] = tag_view.filtered(shown, ["chores"]).act_now()
-    assert item.title == "Reply: Fix #chores"
+    assert item.title == "Reply: Fix the tap"
     assert "then: Move to In Review: APP-2 Do the thing" in item.details
     snooze = next(a for a in item.actions if a.label == "Snooze")
     assert refresh.run_action(config, db, snooze.name, snooze.fields) == "snoozed until tomorrow"

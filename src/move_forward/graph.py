@@ -91,10 +91,11 @@ class KindSpec:
     (notes' todos), and keeps them where only finishing removes them."""
     resolvable: bool = False
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
-    find_tags_in_text: bool = True
-    """Whether a `#tag` in its entities' text, their title or `mentions` (a PR's body, out of its
-    code), puts the tag on them (see `tags`). False where anyone can write it, as mail's senders
-    write its subjects: their text still names tags."""
+    find_tags_in_text: bool = False
+    """Whether a `#tag` in its entities' text, their title or `mentions`, out of code, puts the
+    tag on them (see `tags`). True only for text I write myself, where the tool has no labels
+    to carry a tag (notes'): a tool's labels already tag, and text anyone else can write (mail's
+    subjects, a PR's body) mustn't. That text still names tags."""
 
 
 def _no_url(kind: str, id: str) -> str | None:

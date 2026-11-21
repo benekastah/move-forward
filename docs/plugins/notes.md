@@ -9,7 +9,8 @@ no settings yet: `email` and an empty `[notes]` make a todo list. `mfd init` sug
 `notes.entry` for each work entry, pointing at the PRs and tickets it's linked to and mentioning
 its title (for the tickets it names), `notes.todo` for each open todo, and `notes.iced` for each
 act of icing, hiding what it covers; see [entities.md](../entities.md). Entries are a linking kind: two things an entry
-names are related through it.
+names are related through it. A `#tag` written in an entry's title or a todo, out of code, puts
+the tag on it (see the README's Tags).
 
 ## Panels
 

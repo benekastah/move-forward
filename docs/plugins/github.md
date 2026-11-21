@@ -73,7 +73,7 @@ described under [Buttons](#buttons).
 ## Publishes
 
 `pull_request` (as `github.pull_request`) for every PR it fetched, mentioning its branch, title and body (so it points at the
-tickets they name, and a `#tag` in them, out of code, tags it: see the README's Tags; a ticket
+tickets and tags they name, but a `#tag` in them puts no tag on it: see the README's Tags; a ticket
 on ice that only another's PR names doesn't hide it, as its author wrote that text), with its
 labels as its tags but `placeholder_labels` and `split_pr_labels`, which are about its shape
 (only those listed: a size labeler's other sizes are tags); `person` (`<host>/<login>`) for me and everyone it knows an email for;
