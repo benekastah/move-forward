@@ -18,6 +18,7 @@ from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
+    ChangeCheckTriggers,
     Changed,
     ContextRequest,
     RefreshRequest,
@@ -49,11 +50,8 @@ class _JiraWatchingGit(JiraPlugin):
     collected_from: ClassVar[list[list[str]]] = []
     seen_by_after_collect: ClassVar[list[str]] = []
 
-    def change_check_seconds(self, req: ContextRequest[JiraConfig]) -> int | None:
-        return None
-
-    def watches(self, req: ContextRequest[JiraConfig]) -> list[str]:
-        return ["git"]
+    def check_triggers(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(watches=["git"])
 
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         def repos(graph: Graph | None) -> list[str]:

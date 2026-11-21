@@ -14,9 +14,9 @@ from move_forward.api import (
     Context,
     Entity,
     Graph,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -88,9 +88,9 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel], Command[NotesConfig]):
         items, from the notes read once for the page."""
         builder = _builder(req.ctx, req.graph)
 
-        def additions(each: ItemRequest) -> ItemAdditions:
-            found = (builder.put_on_ice(each.item), builder.add_todo(each.item))
-            return ItemAdditions(actions=[*(a for a in found if a), *builder.conditions(each.item)])
+        def additions(item: Item) -> ItemAdditions:
+            found = (builder.put_on_ice(item), builder.add_todo(item))
+            return ItemAdditions(actions=[*(a for a in found if a), *builder.conditions(item)])
 
         return additions
 

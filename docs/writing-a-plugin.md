@@ -204,14 +204,15 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a request
   answered "not modified", another plugin's entities in the graph) is also a `ChangeChecker`: it
-  says how often to ask in `change_check_seconds(req)` (from its section, if that has a say)
-  and implements `changed(req)`, which says what moved in its tool (a
-  `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
-  in the plugin's own terms (repos, PRs), `everything=True` for something moved that no subject
-  names, or more than one of these, and a `reason` for the log; `Changed()` says nothing moved. Core
-  keeps the answer, not the plugin: the server asks that often, compares each fingerprint with the
-  last, and refreshes the plugin as soon as something moved since the last check (a different
-  fingerprint, any subject, or `everything`), so name a subject only when it moved again. It asks
+  says how often to ask in `check_triggers(req)`, as a `ChangeCheckTriggers(poll_seconds=...)`
+  (from its section, if that has a say), and implements `changed(req)`, which says what moved
+  in its tool (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the
+  `subjects` that moved in the plugin's own terms (repos, PRs), `everything=True` for something
+  moved that no subject names, or more than one of these, and a `reason` for the log; `Changed()`
+  says nothing moved. Core keeps the answer, not the plugin: the server asks that often, compares
+  each fingerprint with the last, and refreshes the plugin as soon as something moved since the
+  last check (a different fingerprint, any subject, or `everything`), so name a subject only when
+  it moved again. It asks
   again as each collect of the plugin starts, so what moves while it runs is compared with what it
   read. The last fingerprint and when it was taken are `req.previous.fingerprint` and
   `req.previous.at`, for a check that needs them (which repos moved, what was updated since); other
@@ -222,9 +223,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   unless it collects only entities asked for, below, and a full collect stored within
   `refresh_seconds`; `refresh_seconds` since the last full collect that stored; something unnamed
   moved; or nothing's pending). With `changed`, `refresh_seconds` can be long. A `changed` that
-  reads another plugin's entities from the graph returns that plugin from `watches(req)`: it's asked right
-  after each refresh of that plugin (git_stack watches git, to see its repos), whether or not it
-  also has `change_check_seconds`. A plugin with no cheap check isn't a `ChangeChecker`, and
+  reads another plugin's entities from the graph names that plugin in its `check_triggers`'
+  `watches`: it's asked right after each refresh of that plugin (git_stack watches git, to see its
+  repos), whether or not it also polls. A plugin with no cheap check isn't a `ChangeChecker`, and
   refreshes every `refresh_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`
@@ -473,7 +474,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 
 ## Buttons, pages and commands
 
-- **Actions.** `actions()` maps names to handlers `(req: InputRequest) -> str |
+- **Actions.** `actions()` maps names to handlers `(req: ActionRequest) -> str |
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
   typo can't post to a 404. `req.form` is the form posted: `req.form.fields` its
@@ -487,8 +488,8 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   as "<plugin>/<name> failed" and logged.
 - **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
   `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
-  with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
-  for `each.item`, by its subjects. Read your tables, or make a pass over the graph, in
+  with the `Item`: it returns the `ItemAdditions` (buttons, badges, details, links)
+  for that item, by its subjects. Read your tables, or make a pass over the graph, in
   `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
@@ -506,7 +507,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   the category (a todo ticked off): core remembers it and shows it as the page now has it (the
   todo ticked, to untick), found by its main subject, so give what an action leaves on the
   page (a ticked todo) the same subject it had.
-- **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> Html | Response | None`
+- **Pages.** `pages()` maps keys to handlers `(req: PageRequest) -> Html | Response | None`
   (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML, built from
   t-strings with `api.html.html`, which escapes every value in one unless it's `Html` (what
@@ -516,7 +517,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   escaped too unless it's `Html`. Every page needs the dashboard's token, as every request does.
 - **Commands.** Add `Command[LinearConfig]` to the bases and implement `cli(parser)` for `mfd
   linear ...`, returning a handler `(req:
-  InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
+  CliRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
   the command's help in `mfd --help`; core refuses a `cli` without one.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the

@@ -14,7 +14,7 @@ from move_forward.change_checks import ChangeChecks, Taken, checks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Changed, ContextRequest, RefreshRequest
+from move_forward.plugin import ChangeCheckTriggers, Changed, ContextRequest, RefreshRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -231,14 +231,10 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
     plugin with a check is: a collect that didn't ask would leave the fingerprint from before
     the move, and the check after what it watches refreshes would report the move again."""
 
-    def no_poll(self: GitPlugin, req: ContextRequest[GitConfig]) -> int | None:
-        return None
+    def watching_github(self: GitPlugin, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(watches=["github"])
 
-    def watching_github(self: GitPlugin, req: ContextRequest[GitConfig]) -> list[str]:
-        return ["github"]
-
-    monkeypatch.setattr(_Git, "change_check_seconds", no_poll)
-    monkeypatch.setattr(_Git, "watches", watching_github)
+    monkeypatch.setattr(_Git, "check_triggers", watching_github)
     config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
     registry.migrate(config, db)
     refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # the first: a full collect
@@ -251,25 +247,37 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
 def test_a_section_can_set_how_often_its_plugin_is_checked_or_turn_checks_off(
     git: _Git, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`change_check_seconds` is asked with the plugin's context, so its section decides; with
-    no poll and nothing watched, its `changed` is never asked."""
+    """`check_triggers` is asked with the plugin's context, so its section decides; with no
+    poll and nothing watched, its `changed` is never asked."""
 
-    def from_section(self: GitPlugin, req: ContextRequest[GitConfig]) -> int | None:
-        return None if req.ctx.config.refresh_seconds > 3600 else req.ctx.config.refresh_seconds
+    def from_section(self: GitPlugin, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
+        seconds = req.ctx.config.refresh_seconds
+        return ChangeCheckTriggers(poll_seconds=None if seconds > 3600 else seconds)
 
-    monkeypatch.setattr(_Git, "change_check_seconds", from_section)
+    monkeypatch.setattr(_Git, "check_triggers", from_section)
     config, db = _config(tmp_path / "x.db"), Database(":memory:")
     registry.migrate(config, db)
     e = _git(config, db, NOW)
-    assert e.change_check_seconds == 600 and checks(e)
+    assert e.poll_seconds == 600 and checks(e)
     rare = Config.model_validate({"email": "me@x", "git": {"repos": [], "refresh_seconds": 7200}})
     e = _git(rare, db, NOW)
-    assert e.change_check_seconds is None and e.watches == [] and not checks(e)
+    assert e.poll_seconds is None and e.watches == [] and not checks(e)
 
 
 @pytest.mark.parametrize(
     "answer",
-    [RuntimeError("its section is broken"), "60", 0, -5, True, 1.5, ["git", None], [["git"]]],
+    [
+        RuntimeError("its section is broken"),
+        60,
+        *(
+            ChangeCheckTriggers(poll_seconds=s, watches=["git"])  # pyright: ignore[reportArgumentType]
+            for s in ("60", 0, -5, True, 1.5)
+        ),
+        *(
+            ChangeCheckTriggers(poll_seconds=60, watches=w)  # pyright: ignore[reportArgumentType]
+            for w in ("git", ["git", None], [["git"]])
+        ),
+    ],
     ids=repr,
 )
 def test_a_bad_answer_is_logged_and_means_no_poll_nor_anything_watched(
@@ -279,21 +287,19 @@ def test_a_bad_answer_is_logged_and_means_no_poll_nor_anything_watched(
     caplog: pytest.LogCaptureFixture,
     answer: object,
 ) -> None:
-    """A plugin needn't be type-checked: a raise, or an answer that isn't seconds (a list of
-    names, for `watches`), stops only that plugin's checks, not the change loop."""
+    """A plugin needn't be type-checked: a raise, or an answer that isn't a
+    `ChangeCheckTriggers` of seconds and a list of names, stops only that plugin's checks, not
+    the change loop."""
 
     def answering(self: GitPlugin, req: ContextRequest[GitConfig]) -> object:
         if isinstance(answer, Exception):
             raise answer
         return answer
 
-    monkeypatch.setattr(_Git, "change_check_seconds", answering)
-    monkeypatch.setattr(_Git, "watches", answering)
+    monkeypatch.setattr(_Git, "check_triggers", answering)
     monkeypatch.setattr(registry, "_last_logged", {})
     config, db = _config(tmp_path / "x.db"), Database(":memory:")
     registry.migrate(config, db)
     e = _git(config, db, NOW)
-    assert e.change_check_seconds is None and e.watches == [] and not checks(e)
-    assert {"git: change_check_seconds failed", "git: watches failed"} <= {
-        r.getMessage() for r in caplog.records
-    }
+    assert e.poll_seconds is None and e.watches == [] and not checks(e)
+    assert "git: check_triggers failed" in {r.getMessage() for r in caplog.records}

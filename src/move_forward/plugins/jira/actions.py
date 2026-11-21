@@ -1,11 +1,11 @@
 """Jira's buttons: change a ticket's status."""
 
-from move_forward.api import ActionError, ActionHandler, InputRequest, http
+from move_forward.api import ActionError, ActionHandler, ActionRequest, http
 from move_forward.plugins.jira import client
 from move_forward.plugins.jira.config import JiraConfig
 
 
-def transition(req: InputRequest[JiraConfig]) -> str:
+def transition(req: ActionRequest[JiraConfig]) -> str:
     """Move the ticket `key` to the status `to`, or else one of the `also` names (one per
     line): the first its workflow offers."""
     ctx, fields = req.ctx, req.form.fields

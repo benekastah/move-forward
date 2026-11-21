@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import cast
 
 from move_forward.graph import Graph
-from move_forward.plugin import Changed, Previous, RefreshRequest
+from move_forward.plugin import Changed, PreviousCheck, RefreshRequest
 from move_forward.registry import Enabled
 from move_forward.repositories import ChangeRepository
 
@@ -32,9 +32,10 @@ def said(changed: dict[str, str]) -> str:
 
 
 def checks(e: Enabled) -> bool:
-    """Whether the plugin's change check is ever asked: it's a `ChangeChecker` with a
-    `change_check_seconds` or plugins it `watches`, as its section may say."""
-    return e.change_check_seconds is not None or bool(e.watches)
+    """Whether the plugin's change check is ever asked: it's a `ChangeChecker` whose
+    `check_triggers` poll or watch other plugins, as its section may say."""
+    triggers = e.check_triggers
+    return triggers.poll_seconds is not None or bool(triggers.watches)
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ class Taken:
 
 class ChangeChecks:
     """The plugins' change checks, kept in core's tables, the graph each check was given, kept
-    here for the next (`Previous.graph`), and the plugins that had a full
+    here for the next (`PreviousCheck.graph`), and the plugins that had a full
     collect since this started: one per server, or per `mfd refresh`. A plugin may be checked
     while it collects (a collect past its timeout, or a check that started just before): what
     a check keeps then stays pending, as the collect settles only what was taken before it
@@ -81,7 +82,7 @@ class ChangeChecks:
             raise TypeError(f"{e.name} has no change check")
         answer = e.change_checker.changed(
             RefreshRequest(
-                e.ctx, graph, previous=Previous(held.checked_at, held.fingerprint, graph=previous)
+                e.ctx, graph, previous=PreviousCheck(held.checked_at, held.fingerprint, previous)
             )
         )
         if not isinstance(cast(object, answer), Changed):  # a plugin needn't be type-checked

@@ -22,14 +22,15 @@ from move_forward.kinds import PERSON
 from move_forward.page import Action, Identity, ItemAdditions, Panel
 from move_forward.plugin import (
     CliHandler,
+    CliRequest,
     Command,
     Context,
     ContextRequest,
     Fetcher,
-    InputRequest,
+    Item,
     ItemAdditionsFor,
-    ItemRequest,
     PageHandler,
+    PageRequest,
     Plugin,
     RefRequest,
     RefreshRequest,
@@ -53,8 +54,8 @@ class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
     def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
-        def additions(each: ItemRequest) -> ItemAdditions:
-            pr = each.item.subject("pull_request")
+        def additions(item: Item) -> ItemAdditions:
+            pr = item.subject("pull_request")
             if pr is None:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")
@@ -64,7 +65,7 @@ class Hooked(JiraPlugin):
         return additions
 
     def pages(self) -> dict[str, PageHandler]:
-        def hello(req: InputRequest[JiraConfig]) -> Html | None:
+        def hello(req: PageRequest[JiraConfig]) -> Html | None:
             graph, query = req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             entity = graph.get("pull_request", pr_url)
@@ -134,7 +135,7 @@ class _Counted(JiraPlugin, Command[JiraConfig]):
         The rest of the docstring isn't the help."""
         parser.add_argument("what")
 
-        def run(req: InputRequest[JiraConfig]) -> int:
+        def run(req: CliRequest[JiraConfig]) -> int:
             ctx, graph, args = req.ctx, req.graph, req.args
             print(f"{args.what}: {len(graph.of_kind('ticket'))} for {ctx.email}")
             return 3
@@ -514,8 +515,8 @@ class _Prepared(JiraPlugin):
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
-        def actions(each: ItemRequest) -> ItemAdditions:
-            pr = each.item.subject("pull_request")
+        def actions(item: Item) -> ItemAdditions:
+            pr = item.subject("pull_request")
             if pr is None or pr.id not in prs:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")

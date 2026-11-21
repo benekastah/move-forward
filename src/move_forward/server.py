@@ -70,7 +70,7 @@ requests close their connection (HTTP/1.0); the notification stream keeps writin
 NOTIFICATION_STREAM_SECONDS = 5
 """How often a connected dashboard tab checks for notifications and gets a heartbeat."""
 CHANGE_LOOP_SECONDS = 1.0
-"""How often the change loop looks for plugins whose `change_check_seconds` have passed."""
+"""How often the change loop looks for plugins whose `poll_seconds` have passed."""
 LOGIN_PATH = "/login"
 LOGIN_CHALLENGE_PATH = "/login/challenge"
 LOGIN_CODE_PATH = "/login/code"
@@ -205,7 +205,7 @@ class App:
         `only` (see `refresh.refresh`), unless a refresh is already running; returns whether
         this call did it. Each plugin refreshed, those the refresh collected again as they
         watch one refreshed too, waits its `refresh_seconds` again before it's due, and its
-        `change_check_seconds` before it's checked (each was asked as its collect started)."""
+        `poll_seconds` before it's checked (each was asked as its collect started)."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
@@ -227,13 +227,14 @@ class App:
         return True
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
-        """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
-        except those refreshing now, and ask for a refresh of those that did; returns them."""
+        """Ask each plugin whose `poll_seconds` (`ChangeCheckTriggers`) have passed whether it
+        `changed`, except those refreshing now, and ask for a refresh of those that did; returns
+        them."""
         now = time.monotonic() if now is None else now
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         due: list[Enabled] = []
         for e in plugins:
-            seconds = e.change_check_seconds
+            seconds = e.poll_seconds
             last = self._last_checked.get(e.name)
             if seconds is None or e.name in self.refreshing:
                 continue

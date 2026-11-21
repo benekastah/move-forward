@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from move_forward.api import ActionError, InputRequest
+from move_forward.api import ActionError, ActionRequest
 from move_forward.api.git import Git, GitError
 from move_forward.api.shell import DEFAULT_TIMEOUT_SECONDS
 from move_forward.plugins.git_stack.config import GitStackConfig
@@ -114,7 +114,7 @@ def cleaned(events: list[_Event]) -> str:
     return "; ".join(parts)
 
 
-def stack_clean(req: InputRequest[GitStackConfig]) -> str:
+def stack_clean(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack clean -d local --json`: untrack merged branches in every stack, iced ones
     too, and delete them, saying what it did, or how far it got before it failed. It never
     restacks or pushes, so an iced stack's unmerged branches are left as they are, and a
@@ -132,7 +132,7 @@ def stack_clean(req: InputRequest[GitStackConfig]) -> str:
     return f"cleaned {repo}: {cleaned(found.events) or 'nothing merged to clean'}"
 
 
-def stack_restack(req: InputRequest[GitStackConfig]) -> str:
+def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack restack <branch> --json`: rebase the branch's stack onto its parents, locally.
     It pushes nothing; on a conflict it stops with the conflicting branch of the stack checked out
     in the repo's checkout and a rebase in progress, and says where. A tracked name can't start with `-`, so it isn't
@@ -159,7 +159,7 @@ def stack_restack(req: InputRequest[GitStackConfig]) -> str:
     return f"restacked {tracked.name}'s stack"
 
 
-def untrack(req: InputRequest[GitStackConfig]) -> str:
+def untrack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack untrack --json` the `<repo>\t<branch>` lines of `targets`, repo by repo.
     Each must be a branch git stack tracks: `git stack untrack` takes globs too, and they'd
     match more."""

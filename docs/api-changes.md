@@ -17,10 +17,26 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 - **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
   of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
   before.
-- **`ItemRequest` is just the `item`; `Surface` and `Form.surface` are gone**: no plugin
-  read the owner, and an item offers the same wherever it's shown (the dashboard, focus mode,
-  Act now), so a plugin's additions no longer vary by surface. A plugin that told another
-  plugin's item from its own can look at the `item`'s subjects.
+- **`InputRequest` is three types, one per entry point**: a page handler (`PageHandler`) gets a
+  `PageRequest` (`ctx`, `graph`, `page`), a button's (`ActionHandler`) an `ActionRequest` (`ctx`,
+  `graph`, `form`, and `req.field(name)`), and a command's (`CliHandler`) a `CliRequest` (`ctx`,
+  `graph`, `args`), so a handler can't read another's always-empty field. Each field is now
+  required where you build one (a test). Retype each handler's `req`.
+- **`Previous` is two types, one per hook**: `changed` gets a `PreviousCheck` (`at`,
+  `fingerprint`, `graph`) in `RefreshRequest.previous`, and `events` a `PreviousRefresh[S]`
+  (`at`, `snapshot`, `graph`) in `Request.previous`, each field meaning what it did for that hook.
+  Rename the type where you build one (a test); `req.previous.<field>` reads as before.
+- **`ChangeChecker`'s `change_check_seconds` and `watches` are one hook, `check_triggers`**,
+  answering a `ChangeCheckTriggers(poll_seconds=..., watches=[...])`; by default neither, and
+  then `changed` is never asked, as before. Return what the two hooks did in one answer: git
+  stack's `watches` returning `["git"]` is `ChangeCheckTriggers(watches=["git"])`. A bad answer
+  or a raise is logged and means neither.
+- **`ItemRequest` is gone, and so are `Surface` and `Form.surface`**: the function
+  `item_actions` returns is called with the `Item` itself (`ItemAdditionsFor =
+  Callable[[Item], ItemAdditions]`): write `def additions(item: Item)`. No plugin read the
+  owner, and an item offers the same wherever it's shown (the dashboard, focus mode, Act now),
+  so a plugin's additions no longer vary by surface. A plugin that told another plugin's item
+  from its own can look at the `item`'s subjects.
 - **A pull request's `requested_teams` are the teams' ids**, `<host>/<org>/<slug>`, not their
   handles: a team's handle isn't unique, even within one publisher (github publishes the teams
   of every org whose PRs request one). Key a requested team by its id, and show its `team`

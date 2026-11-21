@@ -7,9 +7,9 @@ import sys
 from move_forward.api import (
     ActionError,
     CliHandler,
+    CliRequest,
     Context,
     Graph,
-    InputRequest,
     SourceError,
     http,
 )
@@ -144,7 +144,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     team_set.add_argument("--id", help="the channel's id, e.g. C0123456")
     team_commands.add_parser("unset").add_argument("team")
 
-    def run(req: InputRequest[SlackConfig]) -> int:
+    def run(req: CliRequest[SlackConfig]) -> int:
         ctx, args = req.ctx, req.args
         try:
             print(run_command(ctx, req.graph, args))

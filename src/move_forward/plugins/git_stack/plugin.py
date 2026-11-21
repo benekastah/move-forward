@@ -8,15 +8,16 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     ContextRequest,
     Entity,
     Event,
     Init,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -59,9 +60,9 @@ class GitStackPlugin(
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def watches(self, req: ContextRequest[GitStackConfig]) -> list[str]:
-        """Git, whose repos it reads stacks in."""
-        return ["git"]
+    def check_triggers(self, req: ContextRequest[GitStackConfig]) -> ChangeCheckTriggers:
+        """After each refresh of git, whose repos it reads stacks in; no poll."""
+        return ChangeCheckTriggers(watches=["git"])
 
     def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
@@ -98,8 +99,8 @@ class GitStackPlugin(
         """Untrack the branches an On ice item put on ice."""
         graph = req.graph
 
-        def additions(each: ItemRequest) -> ItemAdditions:
-            action = untrack_iced_action(each.item, graph)
+        def additions(item: Item) -> ItemAdditions:
+            action = untrack_iced_action(item, graph)
             return ItemAdditions(actions=[action] if action else [])
 
         return additions

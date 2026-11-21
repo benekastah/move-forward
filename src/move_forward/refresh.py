@@ -39,12 +39,12 @@ from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus
 from move_forward.plugin import (
     ActionError,
+    ActionRequest,
     ActionResult,
     Form,
-    InputRequest,
-    ItemRequest,
     Page,
-    Previous,
+    PageRequest,
+    PreviousRefresh,
     RefreshRequest,
     Request,
     Response,
@@ -131,9 +131,9 @@ class Before:
     that never did (or did only before the time was kept) isn't here. A refresh that failed
     stored nothing, so it doesn't count."""
 
-    def previous(self, name: str) -> Previous[BaseModel]:
+    def previous(self, name: str) -> PreviousRefresh[BaseModel]:
         """What held before for the plugin `name`, as its `events` gets it."""
-        return Previous(
+        return PreviousRefresh(
             self.stored_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
         )
 
@@ -151,7 +151,7 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
 
 
 def changes_of(
-    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
+    e: Enabled, previous: PreviousRefresh[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
     """The events a plugin's `events` makes of a refresh, subscribed to or not, from what held
     `previous`ly and its snapshot `after` and the graph now; none while it has no snapshot to
@@ -170,7 +170,7 @@ def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Ev
 
 
 def events_of(
-    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
+    e: Enabled, previous: PreviousRefresh[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
     """Every event a plugin makes of a refresh, subscribed to or not: `changes_of`, then
     `newly_shown_of`."""
@@ -596,10 +596,7 @@ def build_dashboard(
     def item_actions(item: Item) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
-            req = ItemRequest(item)
-            added = call(
-                e.name, "item_actions (per item)", lambda add=add, req=req: add(req), found
-            )
+            added = call(e.name, "item_actions (per item)", lambda add=add: add(item), found)
             if added is not found:
                 found = _merged(found, added)
         return found
@@ -683,7 +680,7 @@ def plugin_page(
         return None
     graph, _ = stored_graph(db, plugins)
     try:
-        return _as_html(handler(InputRequest(e.ctx, graph, page=Page(query, path))))
+        return _as_html(handler(PageRequest(e.ctx, graph, page=Page(query, path))))
     except Exception as err:
         log.exception("%s: page %s failed", e.name, path)
         raise PageFailed(path) from err
@@ -920,7 +917,7 @@ def perform_action(
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        result = handler(InputRequest(e.ctx, graph, form=Form(fields, back)))
+        result = handler(ActionRequest(e.ctx, graph, form=Form(fields, back)))
     except ActionError:
         raise
     except (CommandError, GitError) as err:  # a tool refused: said, not a crash

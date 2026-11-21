@@ -21,7 +21,7 @@ from move_forward.ids import branch_id
 from move_forward.plugin import (
     Context,
     ContextRequest,
-    Previous,
+    PreviousCheck,
     RefreshRequest,
     Request,
 )
@@ -166,7 +166,7 @@ def test_what_was_kept_under_a_key_no_repo_has_now_reads_every_repo(tmp_path: Pa
         kv=KvRepository(db, "git"),
     )
     old = str(tmp_path / "link" / "r" / ".git")
-    previous = Previous[Any](fingerprint=json.dumps({old: "digest"}))
+    previous = PreviousCheck(fingerprint=json.dumps({old: "digest"}))
     assert (
         GitPlugin(watching=False)
         .changed(RefreshRequest(ctx, Graph(), previous=previous))

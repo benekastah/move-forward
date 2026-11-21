@@ -11,14 +11,15 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     Context,
     ContextRequest,
     Entity,
+    Item,
     ItemAdditions,
     ItemAdditionsFor,
-    ItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -174,9 +175,9 @@ class GitPlugin(
                 worktrees[Path(wt.path).resolve()] = common
         self._watcher.sync(worktrees)
 
-    def change_check_seconds(self, req: ContextRequest[GitConfig]) -> int | None:
+    def check_triggers(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         """Every 2 seconds: what the watched repos said, and the polled ones' files' times."""
-        return 2
+        return ChangeCheckTriggers(poll_seconds=2)
 
     def changed(self, req: RefreshRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
@@ -300,8 +301,8 @@ class GitPlugin(
         """Delete or restore the branches an On ice item put on ice."""
         graph = req.graph
 
-        def additions(each: ItemRequest) -> ItemAdditions:
-            found = (delete_iced_action(each.item, graph), restore_iced_action(each.item, graph))
+        def additions(item: Item) -> ItemAdditions:
+            found = (delete_iced_action(item, graph), restore_iced_action(item, graph))
             return ItemAdditions(actions=[action for action in found if action])
 
         return additions

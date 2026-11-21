@@ -8,18 +8,21 @@ from pathlib import Path
 
 from move_forward import strict
 from move_forward.api import (
+    ActionRequest,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
+    CliRequest,
     Collector,
     Command,
     Context,
     ContextRequest,
     Fetcher,
     Init,
-    InputRequest,
-    ItemRequest,
+    PageRequest,
     Plugin,
-    Previous,
+    PreviousCheck,
+    PreviousRefresh,
     RefRequest,
     RefreshRequest,
     Request,
@@ -77,13 +80,16 @@ def test_every_request_context_and_answer_field_is_listed() -> None:
     for request in (
         Context,
         Changed,
+        ChangeCheckTriggers,
         ContextRequest,
         Request,
         RefreshRequest,
         RefRequest,
-        InputRequest,
-        Previous,
-        ItemRequest,
+        ActionRequest,
+        CliRequest,
+        PageRequest,
+        PreviousCheck,
+        PreviousRefresh,
     ):
         fields = [f.name for f in dataclasses.fields(request)]
         assert _listed(f"### `{request.__name__}`") == fields, request.__name__

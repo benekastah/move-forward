@@ -7,10 +7,10 @@ import pytest
 from move_forward.api import (
     API_VERSION,
     ActionHandler,
+    ActionRequest,
     Collector,
     ContextRequest,
     Entity,
-    InputRequest,
     Item,
     KindModel,
     KindSpec,
@@ -18,6 +18,7 @@ from move_forward.api import (
     Model,
     Notify,
     PageHandler,
+    PageRequest,
     Panel,
     Plugin,
     Ref,
@@ -119,13 +120,13 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
         ]
 
     def actions(self) -> dict[str, ActionHandler]:
-        def close(req: InputRequest[LinearConfig]) -> str:
+        def close(req: ActionRequest[LinearConfig]) -> str:
             return f"closed {req.field('key')}"
 
         return {"close": close}
 
     def pages(self) -> dict[str, PageHandler]:
-        def issue(req: InputRequest[LinearConfig]) -> html.Html | None:
+        def issue(req: PageRequest[LinearConfig]) -> html.Html | None:
             key = req.page.query.get("key", [""])[0]
             return html.html(t"<p>{key} at {req.page.path}</p>") if key else None
 

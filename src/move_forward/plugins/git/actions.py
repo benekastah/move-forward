@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from move_forward.api import ActionError, Graph, InputRequest, Model
+from move_forward.api import ActionError, ActionRequest, Graph, Model
 from move_forward.api.git import CatFile, Git, GitError, RefUpdate, refs, update_refs
 from move_forward.api.ids import branch_parts
 from move_forward.plugins.git import client
@@ -94,7 +94,7 @@ def _check_deletable(
         raise ActionError(f"{branch} has moved since the page showed it: look again")
 
 
-def delete_branch(req: InputRequest[GitConfig]) -> str:
+def delete_branch(req: ActionRequest[GitConfig]) -> str:
     """`git branch -D`, refused where `_check_deletable` says, given the commit the page
     showed, `sha`."""
     ctx, graph = req.ctx, req.graph
@@ -105,7 +105,7 @@ def delete_branch(req: InputRequest[GitConfig]) -> str:
     return f"deleted {branch} in {repo}"
 
 
-def delete_together(req: InputRequest[GitConfig]) -> str:
+def delete_together(req: ActionRequest[GitConfig]) -> str:
     """Delete every `<repo>\t<branch>` line of `targets`, or none: each is checked first, so
     one that can't go stops it before anything is deleted. For a stack on ice."""
     ctx, graph, fields = req.ctx, req.graph, req.form.fields
@@ -136,7 +136,7 @@ def _iced_sha(graph: Graph, repo: Path, branch: str) -> str | None:
     )
 
 
-def restore_together(req: InputRequest[GitConfig]) -> str:
+def restore_together(req: ActionRequest[GitConfig]) -> str:
     """Recreate every `<repo>\t<branch>` line of `targets` at the commit it was iced at, or
     none: each must be on ice, gone, and its commit still in the repo. For a stack on ice
     whose branches were deleted."""
@@ -174,7 +174,7 @@ def restore_together(req: InputRequest[GitConfig]) -> str:
     return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
-def delete_branches(req: InputRequest[GitConfig]) -> str:
+def delete_branches(req: ActionRequest[GitConfig]) -> str:
     """Delete every `<repo>\\t<branch>\\t<sha>` line of `targets`, each only while it's at that
     commit (see `delete_branch`; a line without one isn't checked so); one failure doesn't stop
     the rest."""
@@ -202,7 +202,7 @@ def delete_branches(req: InputRequest[GitConfig]) -> str:
     return notice
 
 
-def push_branch(req: InputRequest[GitConfig]) -> str:
+def push_branch(req: ActionRequest[GitConfig]) -> str:
     """Push a branch where git would (see `client.push_target`), or one without an upstream
     to the remote git would pick (`client.push_remote`), setting its upstream. Never
     forces."""
@@ -231,7 +231,7 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
     return f"pushed {branch}"
 
 
-def pull_branch(req: InputRequest[GitConfig]) -> str:
+def pull_branch(req: ActionRequest[GitConfig]) -> str:
     """Bring a branch up to its upstream (for one tracking a local branch, its copy on the
     remote Push sends it to), fast-forward only: refused when its upstream was
     rewritten (force-pushed), or its checkout has changes in the way. Never merges, never
@@ -293,7 +293,7 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
     return f"pulled {branch}"
 
 
-def wip_commit(req: InputRequest[GitConfig]) -> str:
+def wip_commit(req: ActionRequest[GitConfig]) -> str:
     """Commit the modified tracked files of a worktree of the repo as "WIP". Untracked files
     are left."""
     ctx = req.ctx

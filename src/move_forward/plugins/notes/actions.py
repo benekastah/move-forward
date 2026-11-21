@@ -11,8 +11,8 @@ from pathlib import Path
 from move_forward.api import (
     ActionError,
     ActionHandler,
+    ActionRequest,
     Graph,
-    InputRequest,
     Model,
     Ref,
     SourceError,
@@ -81,7 +81,7 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
     return [name for name in names if name in here]
 
 
-def ice(req: InputRequest[NotesConfig]) -> str:
+def ice(req: ActionRequest[NotesConfig]) -> str:
     """Put the branch's stack on ice, recording each branch's commit as git last saw it. An
     optional `note` says why."""
     ctx, graph, fields = req.ctx, req.graph, req.form.fields
@@ -106,7 +106,7 @@ def ice(req: InputRequest[NotesConfig]) -> str:
     return f"put {names[0]} on ice ({len(names)} branches)"
 
 
-def ice_item(req: InputRequest[NotesConfig]) -> str:
+def ice_item(req: ActionRequest[NotesConfig]) -> str:
     """Put a PR, ticket or work entry on ice, by `kind` and `id`, with what it links: an
     entry its PRs and tickets, a ticket the PRs that mention it (whose publisher lets their
     text hide them: mine, not those I'm asked to review). An optional `note` says why."""
@@ -129,14 +129,14 @@ def ice_item(req: InputRequest[NotesConfig]) -> str:
     return f"put {entity.title} on ice"
 
 
-def _ice_id(req: InputRequest[NotesConfig]) -> int:
+def _ice_id(req: ActionRequest[NotesConfig]) -> int:
     try:
         return int(req.field("ice"))
     except ValueError as e:
         raise ActionError(f"nothing on ice has the id {req.form.fields['ice']!r}") from e
 
 
-def ice_note(req: InputRequest[NotesConfig]) -> str:
+def ice_note(req: ActionRequest[NotesConfig]) -> str:
     """Say why something is on ice: `input`, in place of what's said now."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -149,7 +149,7 @@ def ice_note(req: InputRequest[NotesConfig]) -> str:
     return f"noted why {title} is on ice"
 
 
-def thaw(req: InputRequest[NotesConfig]) -> str:
+def thaw(req: ActionRequest[NotesConfig]) -> str:
     """Take what's on ice (`ice`, its id) off it: a stack, a PR, a ticket or a work entry."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -167,7 +167,7 @@ ENTRY_FIELDS = ("status", "where", "blocked-on")
 """What `entry_set` sets of an entry, as `mfd notes set` names them."""
 
 
-def _entry(notes: NotesRepository, req: InputRequest[NotesConfig]) -> Entry:
+def _entry(notes: NotesRepository, req: ActionRequest[NotesConfig]) -> Entry:
     """The entry the `entry` field names by title."""
     title = req.field("entry")
     found = next((e for e in notes.entries() if e.title == title), None)
@@ -176,7 +176,7 @@ def _entry(notes: NotesRepository, req: InputRequest[NotesConfig]) -> Entry:
     return found
 
 
-def entry_set(req: InputRequest[NotesConfig]) -> str:
+def entry_set(req: ActionRequest[NotesConfig]) -> str:
     """Set an entry's `status`, `where` (where the work lives) or `blocked-on`, named by
     `field` (or `choice`, from its drop-down), to `input` (or `text`); empty clears it."""
     ctx, fields = req.ctx, req.form.fields
@@ -193,7 +193,7 @@ def entry_set(req: InputRequest[NotesConfig]) -> str:
     return f"{entry.title}: {field} is now {text}" if text else f"{entry.title}: {field} cleared"
 
 
-def entry_link(req: InputRequest[NotesConfig]) -> str:
+def entry_link(req: ActionRequest[NotesConfig]) -> str:
     """Say an entry is about a PR or ticket: `input`, a PR URL or ticket key."""
     ctx, graph = req.ctx, req.graph
     notes = NotesRepository(ctx.db)
@@ -205,7 +205,7 @@ def entry_link(req: InputRequest[NotesConfig]) -> str:
     return f"{entry.title}: linked {value}"
 
 
-def entry_remove(req: InputRequest[NotesConfig]) -> str:
+def entry_remove(req: ActionRequest[NotesConfig]) -> str:
     """Forget an entry with its todos, for finished work: nothing is recorded as done."""
     notes = NotesRepository(req.ctx.db)
     entry = _entry(notes, req)
@@ -216,7 +216,7 @@ def entry_remove(req: InputRequest[NotesConfig]) -> str:
 # Merge conditions
 
 
-def _pr_url(req: InputRequest[NotesConfig]) -> str:
+def _pr_url(req: ActionRequest[NotesConfig]) -> str:
     pr = req.field("pr").strip()
     if not PR_URL_RE.fullmatch(pr):
         raise ActionError(f"{pr!r} isn't a pull request's URL")
@@ -227,7 +227,7 @@ def _pr_name(pr: str) -> str:
     return f"PR {pr.rsplit('/', 1)[1]}"
 
 
-def condition_add(req: InputRequest[NotesConfig]) -> str:
+def condition_add(req: ActionRequest[NotesConfig]) -> str:
     """Hold a PR (`pr`, its URL) until `input` happens: a merge condition on the entry titled
     `entry`; with `create`, one is made first, about the PR."""
     ctx = req.ctx
@@ -247,7 +247,7 @@ def condition_add(req: InputRequest[NotesConfig]) -> str:
     return f"held {_pr_name(pr)}: {text}"
 
 
-def condition_remove(req: InputRequest[NotesConfig]) -> str:
+def condition_remove(req: ActionRequest[NotesConfig]) -> str:
     """Release a PR (`pr`) from the merge condition `choice` (or `text`), in every entry that
     holds it so."""
     ctx, fields = req.ctx, req.form.fields
@@ -266,7 +266,9 @@ def condition_remove(req: InputRequest[NotesConfig]) -> str:
 # Todos
 
 
-def _todo(notes: NotesRepository, req: InputRequest[NotesConfig], done: bool) -> tuple[Entry, Todo]:
+def _todo(
+    notes: NotesRepository, req: ActionRequest[NotesConfig], done: bool
+) -> tuple[Entry, Todo]:
     """The todo the `todo` field names by id, and its entry; it must be done or open as said."""
     try:
         todo_id = int(req.field("todo"))
@@ -281,7 +283,7 @@ def _todo(notes: NotesRepository, req: InputRequest[NotesConfig], done: bool) ->
     raise ActionError(f"no todo {todo_id}")
 
 
-def todo_done(req: InputRequest[NotesConfig]) -> str:
+def todo_done(req: ActionRequest[NotesConfig]) -> str:
     """Record an open todo as done today."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -291,7 +293,7 @@ def todo_done(req: InputRequest[NotesConfig]) -> str:
     return f"done: {todo.text}"
 
 
-def todo_undone(req: InputRequest[NotesConfig]) -> str:
+def todo_undone(req: ActionRequest[NotesConfig]) -> str:
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, req, done=True)
@@ -300,7 +302,7 @@ def todo_undone(req: InputRequest[NotesConfig]) -> str:
     return f"reopened: {todo.text}"
 
 
-def todo_delete(req: InputRequest[NotesConfig]) -> str:
+def todo_delete(req: ActionRequest[NotesConfig]) -> str:
     """Drop an open todo without recording it as done."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -330,7 +332,7 @@ def link_for(graph: Graph, value: str) -> Link:
     raise ActionError(f"{value!r} is neither a PR URL nor a ticket key Jira knows")
 
 
-def todo_link(req: InputRequest[NotesConfig]) -> str:
+def todo_link(req: ActionRequest[NotesConfig]) -> str:
     """Link an open todo to a Jira ticket or a PR."""
     ctx, graph = req.ctx, req.graph
     notes = NotesRepository(ctx.db)
@@ -351,7 +353,7 @@ def _size(size: str) -> Size | None:
     return "quick" if size == "quick" else "big" if size == "big" else None
 
 
-def todo_size(req: InputRequest[NotesConfig]) -> str:
+def todo_size(req: ActionRequest[NotesConfig]) -> str:
     """Say how big an open todo is: `size`, quick or big."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -366,7 +368,7 @@ def todo_size(req: InputRequest[NotesConfig]) -> str:
     return f"{todo.text} is {size}"
 
 
-def todo_add(req: InputRequest[NotesConfig]) -> str:
+def todo_add(req: ActionRequest[NotesConfig]) -> str:
     """Add an open todo to an entry: `input` (or `text`) with an optional size, quick or big, as
     `size` (or `choice`, from its drop-down), or a leading `[quick]` or `[big]` in it, as the
     notes write a size, so it reads back the same.
@@ -403,7 +405,7 @@ def entry_title(text: str) -> str:
     return text
 
 
-def todo_new(req: InputRequest[NotesConfig]) -> str:
+def todo_new(req: ActionRequest[NotesConfig]) -> str:
     """Start a todo from nothing: `input` as a new entry's title and its one todo, sized by
     `choice` (from its drop-down), or by a leading `[quick]` or `[big]`, as the notes write a
     size, so it reads back the same; as notes alone is a todo list. An entry of that title gets

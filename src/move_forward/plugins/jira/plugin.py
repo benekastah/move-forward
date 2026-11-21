@@ -12,6 +12,7 @@ from move_forward.api import (
     Badge,
     Band,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     ContextRequest,
@@ -424,9 +425,9 @@ class JiraPlugin(
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def change_check_seconds(self, req: ContextRequest[JiraConfig]) -> int | None:
+    def check_triggers(self, req: ContextRequest[JiraConfig]) -> ChangeCheckTriggers:
         """Every 60 seconds: a one-result search for a ticket of mine updated since."""
-        return 60
+        return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look core took

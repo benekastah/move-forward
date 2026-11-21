@@ -59,8 +59,8 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given an `InputRequest` with `page`. |
-| `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `InputRequest` with `form`. |
+| `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given a `PageRequest`. |
+| `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `ActionRequest`. |
 
 ### Refresh
 
@@ -83,7 +83,7 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
 | `panels` | `panels(req: Request[C, S]) -> list[Panel]` | Its panels, from its snapshot and the graph: pure, no I/O. Called for each page, and after each refresh for a plugin I've subscribed to some event of (to find items newly shown with `notify`). |
-| `item_actions` | `item_actions(req: Request[C, S]) -> ItemAdditionsFor` | What it adds to other plugins' items (buttons, badges, details, links). Called once per page; the function it returns once per item, with an `ItemRequest`. |
+| `item_actions` | `item_actions(req: Request[C, S]) -> ItemAdditionsFor` | What it adds to other plugins' items (buttons, badges, details, links). Called once per page; the function it returns once per item, with the `Item`. |
 
 ### Upkeep
 
@@ -118,15 +118,13 @@ found, its snapshot `S`, in its own tables. One that isn't publishes from its ow
 `ChangeChecker[C]`: a `Collector` with a check of what moved in its tool far cheaper than
 collecting, so it refreshes soon after a change; or one whose `collect` reads other plugins'
 entities, so it `watches` them. One with no cheap check isn't one, and refreshes on its
-schedule. The registry refuses one that isn't a `Collector`, and one still setting
-`change_check_seconds` or `watches` as a class variable. Both are asked with its context, so its
-section can decide; with no poll and nothing watched, `changed` is never asked.
+schedule. The registry refuses one that isn't a `Collector`. `check_triggers` is asked with its
+context, so its section can decide; with no poll and nothing watched, `changed` is never asked.
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `change_check_seconds` | `change_check_seconds(req: ContextRequest[C]) -> int \| None` | How often `mfd serve` asks `changed`; None (the default) for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this gives a number or it `watches` another. Asked by the server's change loop and as each collect starts. An answer that isn't a positive whole number or None, or a raise, is logged and polls none. |
-| `watches` | `watches(req: ContextRequest[C]) -> list[str]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`); none by default. The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). An answer that isn't a list of plugin names, or a raise, is logged and watches none. |
-| `changed` | `changed(req: RefreshRequest[C]) -> Changed` (abstract) | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a `change_check_seconds` or `watches` another), and in the settle step of a refresh of a plugin it `watches`. |
+| `check_triggers` | `check_triggers(req: ContextRequest[C]) -> ChangeCheckTriggers` | When `changed` is asked (a `ChangeCheckTriggers`, below): every `poll_seconds` in `mfd serve`, and in the settle step of each refresh that collects a plugin it `watches` (git_stack: `["git"]`): once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). With either, `mfd serve` also asks `changed` as each of its collects starts. By default neither. Asked by the server's change loop, the settle step and as each collect starts. An answer that isn't a `ChangeCheckTriggers` whose `poll_seconds` is a positive whole number or None and whose `watches` is a list of plugin names, or a raise, is logged and means neither. |
+| `changed` | `changed(req: RefreshRequest[C]) -> Changed` (abstract) | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `poll_seconds` and as each of its collects starts (when its `check_triggers` poll or watch another), and in the settle step of a refresh of a plugin it `watches`. |
 
 ### `Command`
 
@@ -134,7 +132,7 @@ section can decide; with no poll and nothing watched, `changed` is never asked.
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `cli` | `cli(parser: ArgumentParser) -> CliHandler` (abstract) | Adds the arguments of `mfd <name>` and returns what runs it, given an `InputRequest` with `args`. Its docstring's first line is the command's help; the registry refuses it without one. |
+| `cli` | `cli(parser: ArgumentParser) -> CliHandler` (abstract) | Adds the arguments of `mfd <name>` and returns what runs it, given a `CliRequest`. Its docstring's first line is the command's help; the registry refuses it without one. |
 
 ### `Fetcher`
 
@@ -152,7 +150,7 @@ Every hook with a context takes one request; a field a hook isn't given keeps it
 
 ### `ContextRequest`
 
-For `snapshots`, `linking_patterns`, `change_check_seconds` and `watches`.
+For `snapshots`, `linking_patterns` and `check_triggers`.
 
 | Field | Type | What it holds |
 | --- | --- | --- |
@@ -167,7 +165,7 @@ For `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune` and
 | `ctx` | `Context[C]` | The plugin's context. |
 | `graph` | `Graph` | Every plugin's entities; empty for `entities`, and without relations for `relate`. |
 | `snapshot` | `S \| None` | What it last stored (for `events`, the snapshot now); None before its first refresh. |
-| `previous` | `Previous[S]` | For `events` only: its snapshot before this refresh, when that was stored, and the graph then. |
+| `previous` | `PreviousRefresh[S]` | For `events` only: its snapshot before this refresh, when that was stored, and the graph then. |
 
 ### `RefreshRequest`
 
@@ -179,7 +177,7 @@ For `collect` and `changed`.
 | `graph` | `Graph` | For `collect`, as stored before the refresh (in the settle step, as the plugins it watches just stored it); for `changed`, as stored when it's asked. |
 | `full` | `bool` | For `collect`: whether to fetch everything (its first collect, its `refresh_seconds` passed, something moved no subject names, or nothing named). |
 | `subjects` | `frozenset[str]` | For `collect`: what its checks said moved since a collect last stored, and the ids of its entities asked for again. |
-| `previous` | `Previous[BaseModel]` | For `changed` only: when its last check ran, what it answered, and the graph it was given. |
+| `previous` | `PreviousCheck` | For `changed` only: when its last check ran, what it answered, and the graph it was given. |
 
 ### `RefRequest`
 
@@ -191,36 +189,55 @@ For `web_address`, `handle` and `fetch`.
 | `kind` | `str` | One of its `kinds`. |
 | `ids` | `list[str]` | The entities asked about. |
 
-### `InputRequest`
+### `PageRequest`
 
-For pages, buttons and `mfd <plugin>`.
+For a page (`PageHandler`).
 
 | Field | Type | What it holds |
 | --- | --- | --- |
 | `ctx` | `Context[C]` | The plugin's context. |
 | `graph` | `Graph` | Every plugin's entities. |
-| `page` | `Page` | For a page: its `query` and `path`. |
-| `form` | `Form` | For a button: its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
-| `args` | `Namespace` | For `mfd <plugin>`: its parsed arguments. |
+| `page` | `Page` | Its `query` and `path`. |
 
-### `Previous`
+### `ActionRequest`
 
-What held before, for `changed` and `events`.
+For a button (`ActionHandler`).
 
 | Field | Type | What it holds |
 | --- | --- | --- |
-| `at` | `datetime \| None` | For `changed`, when its last check ran; for `events`, when the refresh that stored `snapshot` began. |
-| `fingerprint` | `str \| None` | For `changed`: what its last check answered. |
-| `snapshot` | `S \| None` | For `events`: its snapshot before this refresh. |
-| `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
+| `ctx` | `Context[C]` | The plugin's context. |
+| `graph` | `Graph` | Every plugin's entities. |
+| `form` | `Form` | Its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
 
-### `ItemRequest`
+### `CliRequest`
 
-What the function `item_actions` returns is called with, once per item.
+For `mfd <plugin>` (`CliHandler`).
 
 | Field | Type | What it holds |
 | --- | --- | --- |
-| `item` | `Item` | The item. |
+| `ctx` | `Context[C]` | The plugin's context. |
+| `graph` | `Graph` | Every plugin's entities. |
+| `args` | `Namespace` | Its parsed arguments. |
+
+### `PreviousCheck`
+
+What its last change check saw, for `changed`.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `at` | `datetime \| None` | When its last check ran. |
+| `fingerprint` | `str \| None` | What its last check answered. |
+| `graph` | `Graph \| None` | The graph at its last check that didn't raise: None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. |
+
+### `PreviousRefresh`
+
+What held before this refresh, for `events`.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `at` | `datetime \| None` | When the refresh that stored `snapshot` began. |
+| `snapshot` | `S \| None` | Its snapshot before this refresh. |
+| `graph` | `Graph \| None` | The graph before this refresh. |
 
 ## Context and answers
 
@@ -260,6 +277,15 @@ fingerprint differs from the last, any subject is named, or `everything`.
 | `subjects` | `frozenset[str]` | What moved since the last check, in its own terms, for `collect` to fetch just those. |
 | `everything` | `bool` | Something moved that no subject names, so the next collect is a full one. |
 | `reason` | `str` | What changed, for the log. |
+
+### `ChangeCheckTriggers`
+
+What `check_triggers` answers: when core asks `changed`. `ChangeCheckTriggers()` never asks it.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `poll_seconds` | `int \| None` | How often `mfd serve` asks it; None for no poll. |
+| `watches` | `list[str]` | Plugins whose entities it reads from the graph: it's asked in each refresh that collects one, once they've stored. |
 
 ## Config markers
 
