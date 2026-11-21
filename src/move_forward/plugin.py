@@ -112,7 +112,7 @@ class Context[C: BaseModel]:
 @dataclass(frozen=True)
 class ContextRequest[C: BaseModel]:
     """A hook given only the plugin's context: `snapshots`, `linking_patterns`, and a change
-    checker's `change_check_seconds` and `watches`."""
+    checker's `change_checks`."""
 
     ctx: Context[C]
 
@@ -135,7 +135,7 @@ class Previous[S: BaseModel]:
     """The graph then: at the plugin's last change check that didn't raise (`changed`), or
     before this refresh (`events`). For `changed`, None at the first check since the dashboard
     (or `mfd refresh`) started, as it's the one thing a restart can't rebuild; except in a
-    refresh's settle step, which gives the graph from before the refresh (see `watches`)."""
+    refresh's settle step, which gives the graph from before the refresh (see `ChangeCheckTriggers.watches`)."""
 
 
 @dataclass(frozen=True)
@@ -247,6 +247,18 @@ ItemAdditionsFor = Callable[[Item], ItemAdditions]
 def adds_nothing(item: Item) -> ItemAdditions:
     """What `Plugin.item_actions` returns by default: nothing added to any item."""
     return ItemAdditions()
+
+
+@dataclass(frozen=True, kw_only=True)
+class ChangeCheckTriggers:
+    """`change_checks`' answer: what makes core ask the plugin's `changed`. With neither (the
+    default), it's never asked."""
+
+    poll_seconds: int | None = None
+    """How often `mfd serve` asks it; None for no poll."""
+    watches: list[str] = field(default_factory=list[str])
+    """Plugins whose entities it reads from the graph (`["git"]` for git_stack): it's asked in
+    each refresh that collects one of them, once they've stored."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -491,23 +503,19 @@ class ChangeChecker[C: BaseModel](ABC):
     leaves it out and refreshes on its schedule. Add it to the bases beside `Plugin[C, S]` and
     `Collector[C, S]`, with the same `C`. The registry refuses one that doesn't collect."""
 
-    def change_check_seconds(self, req: ContextRequest[C]) -> int | None:
-        """How often `mfd serve` asks `changed`, which may depend on the plugin's section; None
-        (the default) to ask it only after a refresh of a plugin it `watches`. In `mfd serve`,
-        it's also asked as each of its collects starts. With neither (a section turning its
-        polling off, say), `changed` is never asked. One that raises, or answers other than a
-        positive whole number or None, is logged and polls none."""
-        return None
-
-    def watches(self, req: ContextRequest[C]) -> list[str]:
-        """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
-        git_stack, whose `collect` needs the repos git found: in each refresh that collects one
-        of them, once they've stored, `changed` is asked with the new graph, and the plugin
-        collected (again, if it was collected in that refresh, from the graph as it was before)
-        when it says something moved, rather than waiting for `change_check_seconds` (see
-        `refresh._settle`). None by default. One that raises, or answers other than a list of
-        plugin names, is logged and watches none."""
-        return []
+    def change_checks(self, req: ContextRequest[C]) -> ChangeCheckTriggers:
+        """When core asks `changed`, which may depend on the plugin's section: every
+        `poll_seconds` in `mfd serve`, and in each refresh that collects a plugin it `watches`,
+        once that one has stored. Watch the plugins whose data `changed` reads from the graph,
+        e.g. `["git"]` for git_stack, whose `collect` needs the repos git found: `changed` is
+        asked with the new graph, and the plugin collected (again, if it was collected in that
+        refresh, from the graph as it was before) when it says something moved, rather than
+        waiting for its poll (see `refresh._settle`). In `mfd serve`, it's also asked as each of
+        its collects starts. With neither (the default, or a section turning its polling off),
+        `changed` is never asked. One that raises, or answers with a `poll_seconds` other than a
+        positive whole number or None, or `watches` other than a list of plugin names, is logged
+        and means neither."""
+        return ChangeCheckTriggers()
 
     @abstractmethod
     def changed(self, req: RefreshRequest[C]) -> Changed:
@@ -521,8 +529,8 @@ class ChangeChecker[C: BaseModel](ABC):
         and a tool asked what moved since a time is given `req.previous.at`. Say
         why in `reason`, for the log; `Changed()` says nothing moved.
 
-        In `mfd serve`, core asks again as each collect of the plugin starts (when it has a
-        `change_check_seconds` or `watches` another), so what moves while it runs is
+        In `mfd serve`, core asks again as each collect of the plugin starts (when its
+        `change_checks` poll or watch another), so what moves while it runs is
         compared with what it read, and gives `collect` what moved since a collect last
         stored. It asks for a refresh whenever something moved since the last check: a
         different fingerprint, any subject (one still pending after a collect that failed

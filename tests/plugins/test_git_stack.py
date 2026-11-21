@@ -389,7 +389,7 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
     assert changed()
     assert not changed()
     e = next(e for e in enabled(config, db, NOW) if e.name == "git_stack")
-    assert e.watches == ["git"] and e.change_check_seconds is None
+    assert e.watches == ["git"] and e.poll_seconds is None
 
 
 def test_a_branchs_stack_is_its_own_then_its_groups_others_bottom_first() -> None:

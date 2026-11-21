@@ -8,6 +8,7 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     ContextRequest,
@@ -59,9 +60,9 @@ class GitStackPlugin(
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def watches(self, req: ContextRequest[GitStackConfig]) -> list[str]:
-        """Git, whose repos it reads stacks in."""
-        return ["git"]
+    def change_checks(self, req: ContextRequest[GitStackConfig]) -> ChangeCheckTriggers:
+        """After each refresh of git, whose repos it reads stacks in; no poll."""
+        return ChangeCheckTriggers(watches=["git"])
 
     def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right

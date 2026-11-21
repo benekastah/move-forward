@@ -17,6 +17,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 - **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
   of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
   before.
+- **`ChangeChecker`'s `change_check_seconds` and `watches` are one hook, `change_checks`**,
+  answering a `ChangeCheckTriggers(poll_seconds=..., watches=[...])`; by default neither, and
+  then `changed` is never asked, as before. Return what the two hooks did in one answer: git
+  stack's `watches` returning `["git"]` is `ChangeCheckTriggers(watches=["git"])`. A bad answer
+  or a raise is logged and means neither.
 - **`ItemRequest` is gone**: the function `item_actions` returns is called with the `Item`
   itself (`ItemAdditionsFor = Callable[[Item], ItemAdditions]`), as the request held nothing
   else. Write `def additions(item: Item)`, and `item` for `req.item`.

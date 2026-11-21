@@ -5,6 +5,7 @@ from typing import ClassVar
 from move_forward.api import (
     API_VERSION,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     Context,
@@ -69,9 +70,9 @@ class MailPlugin(
     def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
         return MessageRepository(req.ctx.db)
 
-    def change_check_seconds(self, req: ContextRequest[MailConfig]) -> int | None:
+    def change_checks(self, req: ContextRequest[MailConfig]) -> ChangeCheckTriggers:
         """Every 120 seconds: the mailbox's STATUS, one cheap command."""
-        return 120
+        return ChangeCheckTriggers(poll_seconds=120)
 
     def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
         """The mailbox's counts, as the fingerprint core compares with the last: they move when

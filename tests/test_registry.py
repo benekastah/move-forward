@@ -17,6 +17,7 @@ from move_forward.graph import Entity, KindSpec
 from move_forward.plugin import (
     API_VERSION,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     CliHandler,
     Collector,
@@ -337,23 +338,11 @@ def test_a_collector_is_one_that_collects_and_keeps_what_it_found() -> None:
 class _Checks(_Collects, ChangeChecker[Strict]):
     name = "checks"
 
-    def change_check_seconds(self, req: ContextRequest[Strict]) -> int | None:
-        return 30
+    def change_checks(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=30)
 
     def changed(self, req: RefreshRequest[Strict]) -> Changed:
         return Changed()
-
-
-class _StillAClassVariable(_Checks):
-    """As a plugin from before the hooks: the number hides the method."""
-
-    name = "still"
-    change_check_seconds = 60  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
-
-
-class _StillWatching(_Checks):
-    name = "still_watching"
-    watches = ("git",)  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
 
 
 class _ChecksNothing(_Plain, ChangeChecker[Strict]):
@@ -367,10 +356,6 @@ def test_a_change_checker_collects_and_is_asked() -> None:
     registry.check_plugins([_Checks()])
     with pytest.raises(TypeError, match="checks_nothing is a ChangeChecker but not a Collector"):
         registry.check_plugins([_ChecksNothing()])
-    with pytest.raises(TypeError, match="still's change_check_seconds is a method now"):
-        registry.check_plugins([_StillAClassVariable()])
-    with pytest.raises(TypeError, match="still_watching's watches is a method now"):
-        registry.check_plugins([_StillWatching()])
 
 
 class _FetchesNothing(_Plain, Fetcher[Strict]):
@@ -417,12 +402,14 @@ class _NotACommand(_Plain):
 
 class _NotAChecker(_Plain):
     name = "not_a_checker"
-    change_check_seconds = 60
+
+    def change_checks(self, req: ContextRequest[Strict]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=60)
 
 
 def test_what_a_mixin_has_without_the_mixin_is_refused() -> None:
     """Before mixins, a `cli` made a command; now it would never be called."""
     with pytest.raises(TypeError, match="not_a_command has cli but isn't a Command"):
         registry.check_plugins([_NotACommand()])
-    with pytest.raises(TypeError, match="has change_check_seconds but isn't a ChangeChecker"):
+    with pytest.raises(TypeError, match="has change_checks but isn't a ChangeChecker"):
         registry.check_plugins([_NotAChecker()])

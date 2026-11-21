@@ -60,7 +60,7 @@ what's untried where it runs).
   `mfd init` and the settings page show it (`init`), and `api_version`. What only some plugins do is
   a mixin beside `Plugin` in its bases, which core finds with `isinstance` rather than by which
   methods a plugin overrides: `Collector` (`collect` and `snapshots`, and `events`), `ChangeChecker`
-  (a collector's `changed`, with the hooks `change_check_seconds` and `watches`), `Command` (`cli`) and
+  (a collector's `changed`, with the hook `change_checks`: how often it polls, and the plugins it `watches`), `Command` (`cli`) and
   `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
   and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
   a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
@@ -69,7 +69,7 @@ what's untried where it runs).
   on its config model's field, with `LOCKED`.
 - Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
-  `linking_patterns`, `change_check_seconds`, `watches`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
+  `linking_patterns`, `change_checks`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
   `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
   (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`web_address`, `handle`, `fetch`); and `InputRequest(ctx,
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
@@ -88,7 +88,7 @@ what's untried where it runs).
   collects at once, from the graph as stored before the refresh; one whose `collect` needs other
   plugins' entities to know what to fetch `watches` them, and is asked whether it `changed` once
   they've stored, in the same refresh, and collected again from the new graph if so. `changed`,
-  polled every `change_check_seconds`, in each refresh of a plugin it `watches` and as each of its
+  polled every `poll_seconds`, in each refresh of a plugin it `watches` and as each of its
   own collects starts, is a cheap check of what moved in its tool, so the plugin refreshes sooner: a
   fingerprint, the subjects that moved, or both. Core keeps them (`change_checks.py`), never the
   plugin: it compares each fingerprint with the last, keeps the subjects pending until a collect

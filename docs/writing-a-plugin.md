@@ -204,8 +204,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a request
   answered "not modified", another plugin's entities in the graph) is also a `ChangeChecker`: it
-  says how often to ask in `change_check_seconds(req)` (from its section, if that has a say)
-  and implements `changed(req)`, which says what moved in its tool (a
+  says how often to ask in `change_checks(req)`, as a `ChangeCheckTriggers(poll_seconds=...)`
+  (from its section, if that has a say), and implements `changed(req)`, which says what moved in its tool (a
   `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
   in the plugin's own terms (repos, PRs), `everything=True` for something moved that no subject
   names, or more than one of these, and a `reason` for the log; `Changed()` says nothing moved. Core
@@ -222,9 +222,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   unless it collects only entities asked for, below, and a full collect stored within
   `refresh_seconds`; `refresh_seconds` since the last full collect that stored; something unnamed
   moved; or nothing's pending). With `changed`, `refresh_seconds` can be long. A `changed` that
-  reads another plugin's entities from the graph returns that plugin from `watches(req)`: it's asked right
-  after each refresh of that plugin (git_stack watches git, to see its repos), whether or not it
-  also has `change_check_seconds`. A plugin with no cheap check isn't a `ChangeChecker`, and
+  reads another plugin's entities from the graph names that plugin in its `change_checks`'
+  `watches`: it's asked right after each refresh of that plugin (git_stack watches git, to see its
+  repos), whether or not it also polls. A plugin with no cheap check isn't a `ChangeChecker`, and
   refreshes every `refresh_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`

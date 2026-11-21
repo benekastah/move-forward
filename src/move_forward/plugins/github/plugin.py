@@ -9,6 +9,7 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     Context,
@@ -209,14 +210,10 @@ class GitHubPlugin(
             ),
         )
 
-    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
-        """Every `DEFAULT_POLL_SECONDS`; the notifications are asked no more often than GitHub
-        allows."""
-        return notifications.DEFAULT_POLL_SECONDS
-
-    def watches(self, req: ContextRequest[GitHubConfig]) -> list[str]:
-        """Git, whose branches' pushes move my PRs."""
-        return ["git"]
+    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+        """Every `DEFAULT_POLL_SECONDS` (the notifications are asked no more often than GitHub
+        allows), and after each refresh of git, whose branches' pushes move my PRs."""
+        return ChangeCheckTriggers(poll_seconds=notifications.DEFAULT_POLL_SECONDS, watches=["git"])
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each

@@ -25,6 +25,7 @@ from move_forward.kinds import FAMILIES, TAG, fits, named_for
 from move_forward.plugin import (
     API_VERSION,
     ChangeChecker,
+    ChangeCheckTriggers,
     Collector,
     Command,
     Context,
@@ -207,13 +208,6 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 f"{plugin.name} is a ChangeChecker but not a Collector: what it says moved is"
                 " for a collect"
             )
-        for hook in ("change_check_seconds", "watches"):
-            if isinstance(plugin, ChangeChecker) and not callable(getattr(plugin, hook)):
-                # Set as before version 2's hooks, it hides the method core calls.
-                raise TypeError(
-                    f"{plugin.name}'s {hook} is a method now: def {hook}(self, req), returning"
-                    " what it was set to"
-                )
         fetchable = sorted(kind for kind, spec in plugin.kinds.items() if spec.fetchable)
         if fetchable and not isinstance(plugin, Fetcher):
             raise RuntimeError(
@@ -297,43 +291,41 @@ class Enabled:
         return self.plugin if isinstance(self.plugin, ChangeChecker) else None
 
     @property
-    def change_check_seconds(self) -> int | None:
-        """How often `mfd serve` asks the plugin's `changed` (`ChangeChecker.change_check_seconds`
-        with its context); None for one without a change check, or that polls none. One that
-        raises, or answers other than a positive whole number or None, is logged (as
-        `change_check_seconds`) and polls none."""
+    def change_checks(self) -> ChangeCheckTriggers:
+        """When core asks the plugin's `changed` (`ChangeChecker.change_checks`, with its
+        context); neither poll nor watch for one without a change check. One that raises, or
+        answers with a `poll_seconds` other than a positive whole number or None, or `watches`
+        other than a list of plugin names, is logged (as `change_checks`) and means neither."""
         checker = self.change_checker
         if checker is None:
-            return None
+            return ChangeCheckTriggers()
 
-        def ask() -> int | None:
-            seconds = cast(object, checker.change_check_seconds(ContextRequest(self.ctx)))
+        def ask() -> ChangeCheckTriggers:
+            answer = cast(object, checker.change_checks(ContextRequest(self.ctx)))
             # A plugin needn't be type-checked, and a bad answer would stop every plugin's checks.
+            if not isinstance(answer, ChangeCheckTriggers):
+                raise TypeError(f"change_checks gave {answer!r}, not a ChangeCheckTriggers")
+            seconds, names = cast(object, answer.poll_seconds), cast(object, answer.watches)
             if seconds is not None and (type(seconds) is not int or seconds <= 0):
-                raise TypeError(f"change_check_seconds gave {seconds!r}, not seconds or None")
-            return seconds
-
-        return call(self.name, "change_check_seconds", ask, None)
-
-    @property
-    def watches(self) -> list[str]:
-        """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`,
-        with its context); empty for one without a change check. One that raises, or answers
-        other than a list of plugin names, is logged (as `watches`) and watches none."""
-        checker = self.change_checker
-        if checker is None:
-            return []
-
-        def ask() -> list[str]:
-            names = cast(object, checker.watches(ContextRequest(self.ctx)))
+                raise TypeError(f"change_checks gave poll_seconds={seconds!r}, not seconds or None")
             # A bare "git" would be read as letters, and the settle step never run.
             if not isinstance(names, list) or not all(
                 isinstance(n, str) for n in cast(list[object], names)
             ):
-                raise TypeError(f"watches gave {names!r}, not a list of plugin names")
-            return cast(list[str], names)
+                raise TypeError(f"change_checks gave watches={names!r}, not a list of plugin names")
+            return answer
 
-        return call(self.name, "watches", ask, [])
+        return call(self.name, "change_checks", ask, ChangeCheckTriggers())
+
+    @property
+    def poll_seconds(self) -> int | None:
+        """How often `mfd serve` asks the plugin's `changed` (`change_checks`); None for none."""
+        return self.change_checks.poll_seconds
+
+    @property
+    def watches(self) -> list[str]:
+        """The plugins whose entities the plugin's `changed` reads (`change_checks`)."""
+        return self.change_checks.watches
 
     @property
     def fetcher(self) -> Fetcher[Any] | None:

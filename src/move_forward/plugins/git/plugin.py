@@ -11,6 +11,7 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     Context,
@@ -174,9 +175,9 @@ class GitPlugin(
                 worktrees[Path(wt.path).resolve()] = common
         self._watcher.sync(worktrees)
 
-    def change_check_seconds(self, req: ContextRequest[GitConfig]) -> int | None:
+    def change_checks(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         """Every 2 seconds: what the watched repos said, and the polled ones' files' times."""
-        return 2
+        return ChangeCheckTriggers(poll_seconds=2)
 
     def changed(self, req: RefreshRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a

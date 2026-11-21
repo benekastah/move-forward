@@ -32,6 +32,7 @@ from move_forward.plugin import (
     ActionError,
     ActionResult,
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     ContextRequest,
@@ -824,8 +825,8 @@ class _GitHubWithChecks(GitHubPlugin):
     answers: ClassVar[list[bool | Changed | Exception]] = []
     """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
-        return 60
+    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
@@ -877,8 +878,8 @@ class _GitHubComparingGraphs(GitHubPlugin):
     given: ClassVar[list[tuple[Graph | None, Graph]]] = []
     failing: ClassVar[list[bool]] = []
 
-    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
-        return 60
+    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         self.given.append((req.previous.graph, req.graph))
@@ -905,8 +906,8 @@ def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
 class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeChecker[SlackConfig]):
     """Slack, as though it collected and had a change check, which always says it moved."""
 
-    def change_check_seconds(self, req: ContextRequest[SlackConfig]) -> int | None:
-        return 60
+    def change_checks(self, req: ContextRequest[SlackConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=60)
 
     def collect(self, req: RefreshRequest[SlackConfig]) -> BaseModel:
         return BaseModel()
@@ -919,8 +920,8 @@ class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeCheck
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
-    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
-        return 60
+    def change_checks(self, req: ContextRequest[GitHubConfig]) -> ChangeCheckTriggers:
+        return ChangeCheckTriggers(poll_seconds=60)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         return True  # pyright: ignore[reportReturnType]  # not a Changed

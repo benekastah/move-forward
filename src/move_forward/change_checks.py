@@ -32,9 +32,10 @@ def said(changed: dict[str, str]) -> str:
 
 
 def checks(e: Enabled) -> bool:
-    """Whether the plugin's change check is ever asked: it's a `ChangeChecker` with a
-    `change_check_seconds` or plugins it `watches`, as its section may say."""
-    return e.change_check_seconds is not None or bool(e.watches)
+    """Whether the plugin's change check is ever asked: it's a `ChangeChecker` whose
+    `change_checks` poll or watch other plugins, as its section may say."""
+    triggers = e.change_checks
+    return triggers.poll_seconds is not None or bool(triggers.watches)
 
 
 @dataclass(frozen=True)

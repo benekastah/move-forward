@@ -168,7 +168,7 @@ class Harness:
         return snapshot
 
     def changed(self) -> Changed | None:
-        """Ask the plugin's change check, as the server does every `change_check_seconds`:
+        """Ask the plugin's change check, as the server does every `poll_seconds`:
         its answer when something new moved, so the server would refresh it, else None."""
         with self._installed():
             return self._checks.check(self._enabled(), self.graph())

@@ -9,6 +9,7 @@ from pathlib import Path
 from move_forward import strict
 from move_forward.api import (
     ChangeChecker,
+    ChangeCheckTriggers,
     Changed,
     Collector,
     Command,
@@ -76,6 +77,7 @@ def test_every_request_context_and_answer_field_is_listed() -> None:
     for request in (
         Context,
         Changed,
+        ChangeCheckTriggers,
         ContextRequest,
         Request,
         RefreshRequest,
