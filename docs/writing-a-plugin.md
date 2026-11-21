@@ -473,7 +473,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 
 ## Buttons, pages and commands
 
-- **Actions.** `actions()` maps names to handlers `(req: InputRequest) -> str |
+- **Actions.** `actions()` maps names to handlers `(req: ActionRequest) -> str |
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
   typo can't post to a 404. `req.form` is the form posted: `req.form.fields` its
@@ -506,7 +506,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   the category (a todo ticked off): core remembers it and shows it as the page now has it (the
   todo ticked, to untick), found by its main subject, so give what an action leaves on the
   page (a ticked todo) the same subject it had.
-- **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> Html | Response | None`
+- **Pages.** `pages()` maps keys to handlers `(req: PageRequest) -> Html | Response | None`
   (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML, built from
   t-strings with `api.html.html`, which escapes every value in one unless it's `Html` (what
@@ -516,7 +516,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   escaped too unless it's `Html`. Every page needs the dashboard's token, as every request does.
 - **Commands.** Add `Command[LinearConfig]` to the bases and implement `cli(parser)` for `mfd
   linear ...`, returning a handler `(req:
-  InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
+  CliRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
   the command's help in `mfd --help`; core refuses a `cli` without one.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the

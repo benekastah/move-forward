@@ -59,8 +59,8 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given an `InputRequest` with `page`. |
-| `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `InputRequest` with `form`. |
+| `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given a `PageRequest`. |
+| `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `ActionRequest`. |
 
 ### Refresh
 
@@ -132,7 +132,7 @@ context, so its section can decide; with no poll and nothing watched, `changed` 
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `cli` | `cli(parser: ArgumentParser) -> CliHandler` (abstract) | Adds the arguments of `mfd <name>` and returns what runs it, given an `InputRequest` with `args`. Its docstring's first line is the command's help; the registry refuses it without one. |
+| `cli` | `cli(parser: ArgumentParser) -> CliHandler` (abstract) | Adds the arguments of `mfd <name>` and returns what runs it, given a `CliRequest`. Its docstring's first line is the command's help; the registry refuses it without one. |
 
 ### `Fetcher`
 
@@ -189,17 +189,35 @@ For `web_address`, `handle` and `fetch`.
 | `kind` | `str` | One of its `kinds`. |
 | `ids` | `list[str]` | The entities asked about. |
 
-### `InputRequest`
+### `PageRequest`
 
-For pages, buttons and `mfd <plugin>`.
+For a page (`PageHandler`).
 
 | Field | Type | What it holds |
 | --- | --- | --- |
 | `ctx` | `Context[C]` | The plugin's context. |
 | `graph` | `Graph` | Every plugin's entities. |
-| `page` | `Page` | For a page: its `query` and `path`. |
-| `form` | `Form` | For a button: its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
-| `args` | `Namespace` | For `mfd <plugin>`: its parsed arguments. |
+| `page` | `Page` | Its `query` and `path`. |
+
+### `ActionRequest`
+
+For a button (`ActionHandler`).
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `ctx` | `Context[C]` | The plugin's context. |
+| `graph` | `Graph` | Every plugin's entities. |
+| `form` | `Form` | Its `fields` (untrusted) and `back`. `req.field(name)` reads a required one. |
+
+### `CliRequest`
+
+For `mfd <plugin>` (`CliHandler`).
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `ctx` | `Context[C]` | The plugin's context. |
+| `graph` | `Graph` | Every plugin's entities. |
+| `args` | `Namespace` | Its parsed arguments. |
 
 ### `PreviousCheck`
 

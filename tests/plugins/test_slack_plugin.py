@@ -27,7 +27,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.page import Item
-from move_forward.plugin import Context, InputRequest, Page, Request
+from move_forward.plugin import Context, Page, PageRequest, Request
 from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack import plugin as slack_plugin
 from move_forward.plugins.slack.config import (
@@ -412,7 +412,7 @@ def test_the_ping_page_says_what_its_last_button_did() -> None:
     [slack] = [e for e in plugins if e.name == "slack"]
     query = {"pr": [candidate.url], "notice": ["marked the first ping to alice as sent"]}
     page = slack.plugin.pages()["ping"](
-        InputRequest(slack.ctx, graph, page=Page(query, "/slack/ping"))
+        PageRequest(slack.ctx, graph, page=Page(query, "/slack/ping"))
     )
     assert isinstance(page, str) and "marked the first ping to alice as sent" in page
 

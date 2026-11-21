@@ -228,18 +228,21 @@ class Form:
 
 
 @dataclass(frozen=True)
-class InputRequest[C: BaseModel]:
-    """A hook answering what I asked for: a page (`pages`), a button (`actions`) or `mfd
-    <plugin>` (`cli`)."""
+class PageRequest[C: BaseModel]:
+    """A page I asked for (`pages`)."""
 
     ctx: Context[C]
     graph: Graph
-    page: Page = field(default_factory=Page)
-    """For a page only."""
-    form: Form = field(default_factory=Form)
-    """For a button only."""
-    args: argparse.Namespace = field(default_factory=argparse.Namespace)
-    """For `mfd <plugin>` only: its parsed arguments."""
+    page: Page
+
+
+@dataclass(frozen=True)
+class ActionRequest[C: BaseModel]:
+    """A button I pressed (`actions`)."""
+
+    ctx: Context[C]
+    graph: Graph
+    form: Form
 
     def field(self, name: str) -> str:
         """A required field of the form; `ActionError` saying "missing field" when it lacks
@@ -248,6 +251,16 @@ class InputRequest[C: BaseModel]:
             return self.form.fields[name]
         except KeyError:
             raise ActionError(f"missing field {name!r}") from None
+
+
+@dataclass(frozen=True)
+class CliRequest[C: BaseModel]:
+    """`mfd <plugin> ...` as I typed it (`cli`)."""
+
+    ctx: Context[C]
+    graph: Graph
+    args: argparse.Namespace
+    """Its parsed arguments."""
 
 
 ItemAdditionsFor = Callable[[Item], ItemAdditions]
@@ -314,10 +327,10 @@ def page_path(plugin: str, key: str) -> str:
     return f"/{plugin}/{key}" if key else f"/{plugin}"
 
 
-PageHandler = Callable[[InputRequest[Any]], Html | Response | None]
+PageHandler = Callable[[PageRequest[Any]], Html | Response | None]
 """Renders a page, as HTML built with `api.html` or a `Response`; None means not found. A bare
 t-string is built with `html`, and text that isn't `Html` is shown as text."""
-CliHandler = Callable[[InputRequest[Any]], int]
+CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 API_VERSION = 5
 """The version of `move_forward.api` this dashboard offers. A change that would break a
@@ -340,7 +353,7 @@ class ActionError(Exception):
     """Something the user needs to know; shown on the page, not a crash."""
 
 
-ActionHandler = Callable[[InputRequest[Any]], str | ActionResult]
+ActionHandler = Callable[[ActionRequest[Any]], str | ActionResult]
 """Runs a button's action; returns the notice for the page (or a result with redirect
 parameters too) and raises `ActionError` with the reason when it can't."""
 
@@ -454,7 +467,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is
-        `/slack/ping`, and "" the plugin's own `/<plugin>`. Each is given an `InputRequest`
+        `/slack/ping`, and "" the plugin's own `/<plugin>`. Each is given a `PageRequest`
         with the `page` asked for."""
         return {}
 
@@ -462,7 +475,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def actions(self) -> dict[str, ActionHandler]:
         """Button handlers by name, posted to `/actions/<plugin>/<name>`. Each is given an
-        `InputRequest` with the `form` posted."""
+        `ActionRequest` with the `form` posted."""
         return {}
 
     # Upkeep
@@ -555,7 +568,7 @@ class Command[C: BaseModel](ABC):
     @abstractmethod
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
-        `InputRequest` with the parsed `args`. Its docstring's first line is the command's help
+        `CliRequest` with the parsed `args`. Its docstring's first line is the command's help
         (`command_help`): the registry refuses an override without one."""
 
 

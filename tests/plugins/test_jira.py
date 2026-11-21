@@ -15,10 +15,10 @@ from move_forward.graph import Graph
 from move_forward.https import RequestError
 from move_forward.plugin import (
     ActionError,
+    ActionRequest,
     Context,
     ContextRequest,
     Form,
-    InputRequest,
     RefRequest,
     SourceError,
 )
@@ -387,7 +387,7 @@ def test_a_transition_that_fails_says_whether_jira_refused_or_wasnt_reached(
 
     monkeypatch.setattr(jira, "transition", transition)
     monkeypatch.setenv("JIRA_API_TOKEN", "t")
-    request = InputRequest(
+    request = ActionRequest(
         _ctx(Database(":memory:")), Graph([]), form=Form({"key": "APP-1", "to": "Done"})
     )
     with pytest.raises(ActionError, match=re.escape(said)):

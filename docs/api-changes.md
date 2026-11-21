@@ -17,6 +17,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 - **The `TABLES` config marker is gone**: no plugin's config model used it. A section's table
   of tables by name (`[slack.teams]`) is written by `mfd init` from its `Init.tables`, as
   before.
+- **`InputRequest` is three types, one per entry point**: a page handler (`PageHandler`) gets a
+  `PageRequest` (`ctx`, `graph`, `page`), a button's (`ActionHandler`) an `ActionRequest` (`ctx`,
+  `graph`, `form`, and `req.field(name)`), and a command's (`CliHandler`) a `CliRequest` (`ctx`,
+  `graph`, `args`), so a handler can't read another's always-empty field. Each field is now
+  required where you build one (a test). Retype each handler's `req`.
 - **`Previous` is two types, one per hook**: `changed` gets a `PreviousCheck` (`at`,
   `fingerprint`, `graph`) in `RefreshRequest.previous`, and `events` a `PreviousRefresh[S]`
   (`at`, `snapshot`, `graph`) in `Request.previous`, each field meaning what it did for that hook.

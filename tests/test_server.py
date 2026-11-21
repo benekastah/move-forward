@@ -36,7 +36,7 @@ from move_forward.plugin import (
     Changed,
     Collector,
     ContextRequest,
-    InputRequest,
+    PageRequest,
     RefreshRequest,
     Response,
     Snapshots,
@@ -1082,7 +1082,7 @@ def test_an_action_refreshes_its_plugin_and_fetches_what_it_touched_again(
 def test_a_plugin_page_knows_its_path(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def where(req: InputRequest[Any]) -> Html:
+    def where(req: PageRequest[Any]) -> Html:
         return markup.html(t"<p>at {req.page.path}</p>")
 
     def pages(self: SlackPlugin) -> dict[str, object]:
@@ -1095,7 +1095,7 @@ def test_a_plugin_page_knows_its_path(
 def test_a_plugin_page_of_text_not_built_as_html_shows_as_text(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def raw(req: InputRequest[Any]) -> str:
+    def raw(req: PageRequest[Any]) -> str:
         return "<b>Fix</b>"
 
     def pages(self: SlackPlugin) -> dict[str, object]:
@@ -1108,7 +1108,7 @@ def test_a_plugin_page_of_text_not_built_as_html_shows_as_text(
 def test_a_plugin_page_of_a_bare_t_string_is_built_as_html(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def bare(req: InputRequest[Any]) -> Template:
+    def bare(req: PageRequest[Any]) -> Template:
         return t"<p>{req.page.query['q'][0]}</p>"
 
     def pages(self: SlackPlugin) -> dict[str, object]:
@@ -1154,7 +1154,7 @@ def test_a_responses_html_body_shows_as_text_unless_it_is_html(
 def test_a_plugin_page_that_fails_to_build_answers_500(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def broken(req: InputRequest[Any]) -> Template:
+    def broken(req: PageRequest[Any]) -> Template:
         return t"<p>{None}</p>"
 
     def pages(self: SlackPlugin) -> dict[str, object]:
@@ -1169,7 +1169,7 @@ def test_two_plugins_pages_of_one_name_are_each_their_own(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def pages_of(name: str) -> Callable[[object], dict[str, object]]:
-        def ping(req: InputRequest[Any]) -> Html:
+        def ping(req: PageRequest[Any]) -> Html:
             return markup.html(t"<p>{name}'s ping</p>")
 
         return lambda self: {"ping": ping}
@@ -1183,7 +1183,7 @@ def test_two_plugins_pages_of_one_name_are_each_their_own(
 
 def test_a_page_can_redirect(client: HTTPConnection, monkeypatch: pytest.MonkeyPatch) -> None:
     def pages(self: SlackPlugin) -> dict[str, object]:
-        def away(req: InputRequest[Any]) -> Response:
+        def away(req: PageRequest[Any]) -> Response:
             return Response.redirect("https://slack.com/x")
 
         return {"away": away}
@@ -1280,19 +1280,19 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
 def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def injected(req: InputRequest[Any]) -> Response:
+    def injected(req: PageRequest[Any]) -> Response:
         where = req.page.query.get("to", [""])[0]
         return Response.redirect(where)
 
-    def odd(req: InputRequest[Any]) -> Response:
+    def odd(req: PageRequest[Any]) -> Response:
         return Response(status=999)
 
-    def retyped(req: InputRequest[Any]) -> Response:
+    def retyped(req: PageRequest[Any]) -> Response:
         named = req.page.query["name"][0]
         headers = {named: "text/html"}
         return Response("<b>x</b>", content_type="application/json", headers=headers)
 
-    def resized(req: InputRequest[Any]) -> Response:
+    def resized(req: PageRequest[Any]) -> Response:
         return Response("x", headers={"Content-Length": "0"})
 
     def pages(self: SlackPlugin) -> dict[str, object]:

@@ -32,7 +32,7 @@ from move_forward.act_now import PRIORITIES, UNTIL_CHANGED
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.kinds import label
-from move_forward.plugin import CliHandler, Command, InputRequest, command_help
+from move_forward.plugin import CliHandler, CliRequest, Command, command_help
 from move_forward.refresh import (
     build_dashboard,
     refresh,
@@ -450,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{args.command}] isn't in {config_path}", file=sys.stderr)
             return 1
         graph, _ = stored_graph(db, plugins)
-        return plugin_commands[args.command](InputRequest(e.ctx, graph, args=args))
+        return plugin_commands[args.command](CliRequest(e.ctx, graph, args=args))
     if args.command == "serve":
         supervisor.serve_supervised()
         port = args.port or config.port

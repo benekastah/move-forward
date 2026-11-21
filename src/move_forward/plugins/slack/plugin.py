@@ -17,16 +17,17 @@ from move_forward.api import (
     Action,
     ActionError,
     ActionHandler,
+    ActionRequest,
     CliHandler,
     Command,
     Context,
     Graph,
-    InputRequest,
     Item,
     ItemAdditions,
     ItemAdditionsFor,
     Migration,
     PageHandler,
+    PageRequest,
     Panel,
     Plugin,
     Request,
@@ -179,14 +180,14 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
         return ping_action
 
     def pages(self) -> dict[str, PageHandler]:
-        def ping(req: InputRequest[SlackConfig]) -> html.Html | None:
+        def ping(req: PageRequest[SlackConfig]) -> html.Html | None:
             ctx, graph, query = req.ctx, req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             found = pinger(ctx, graph).pings().get(pr_url)
             notice = req.page.query.get("notice", [""])[0]
             return ping_page(found, ctx.now, notice) if found else None
 
-        def where_pings_go(req: InputRequest[SlackConfig]) -> html.Html | None:
+        def where_pings_go(req: PageRequest[SlackConfig]) -> html.Html | None:
             ctx, graph = req.ctx, req.graph
             return contacts.contacts_page(ctx, graph)
 
@@ -207,7 +208,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:
-        def mark_sent(req: InputRequest[SlackConfig]) -> str:
+        def mark_sent(req: ActionRequest[SlackConfig]) -> str:
             """Record a ping as sent, so the next one to that target is a follow-up."""
             ctx, fields = req.ctx, req.form.fields
             try:

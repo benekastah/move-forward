@@ -39,10 +39,11 @@ from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus
 from move_forward.plugin import (
     ActionError,
+    ActionRequest,
     ActionResult,
     Form,
-    InputRequest,
     Page,
+    PageRequest,
     PreviousRefresh,
     RefreshRequest,
     Request,
@@ -679,7 +680,7 @@ def plugin_page(
         return None
     graph, _ = stored_graph(db, plugins)
     try:
-        return _as_html(handler(InputRequest(e.ctx, graph, page=Page(query, path))))
+        return _as_html(handler(PageRequest(e.ctx, graph, page=Page(query, path))))
     except Exception as err:
         log.exception("%s: page %s failed", e.name, path)
         raise PageFailed(path) from err
@@ -916,7 +917,7 @@ def perform_action(
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        result = handler(InputRequest(e.ctx, graph, form=Form(fields, back)))
+        result = handler(ActionRequest(e.ctx, graph, form=Form(fields, back)))
     except ActionError:
         raise
     except (CommandError, GitError) as err:  # a tool refused: said, not a crash

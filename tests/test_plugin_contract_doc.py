@@ -8,16 +8,18 @@ from pathlib import Path
 
 from move_forward import strict
 from move_forward.api import (
+    ActionRequest,
     ChangeChecker,
     ChangeCheckTriggers,
     Changed,
+    CliRequest,
     Collector,
     Command,
     Context,
     ContextRequest,
     Fetcher,
     Init,
-    InputRequest,
+    PageRequest,
     Plugin,
     PreviousCheck,
     PreviousRefresh,
@@ -83,7 +85,9 @@ def test_every_request_context_and_answer_field_is_listed() -> None:
         Request,
         RefreshRequest,
         RefRequest,
-        InputRequest,
+        ActionRequest,
+        CliRequest,
+        PageRequest,
         PreviousCheck,
         PreviousRefresh,
     ):

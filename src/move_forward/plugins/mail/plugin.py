@@ -11,10 +11,10 @@ from move_forward.api import (
     Context,
     ContextRequest,
     Entity,
-    InputRequest,
     KindSpec,
     Migration,
     PageHandler,
+    PageRequest,
     Panel,
     Plugin,
     Ref,
@@ -149,7 +149,7 @@ class MailPlugin(
     def pages(self) -> dict[str, PageHandler]:
         return {OPEN_PAGE: self._open}
 
-    def _open(self, req: InputRequest[MailConfig]) -> Response:
+    def _open(self, req: PageRequest[MailConfig]) -> Response:
         """Send the browser to a thread's latest message in the mail app, for a `message_url`
         the page won't link to itself (`message:`, `mid:`). Only a thread the mailbox has, so
         the link is always one the config made."""
