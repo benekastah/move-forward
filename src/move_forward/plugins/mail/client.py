@@ -17,7 +17,7 @@ from email.utils import getaddresses, parsedate_to_datetime
 
 from move_forward.api import SourceError
 from move_forward.api.html import shown
-from move_forward.plugins.mail.config import Mailbox
+from move_forward.plugins.mail.config import MailConfig
 from move_forward.plugins.mail.models import MAX_SUBJECT, MailSnapshot, Message
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def _quoted(mailbox: str) -> str:
 
 
 @contextmanager
-def _signed_in(config: Mailbox, secret: str) -> Generator[imaplib.IMAP4]:
+def _signed_in(config: MailConfig, secret: str) -> Generator[imaplib.IMAP4]:
     """A session over TLS, with the server's certificate checked, signed in."""
     imap = imaplib.IMAP4_SSL(
         config.host, config.port, ssl_context=ssl.create_default_context(), timeout=TIMEOUT_SECONDS
@@ -109,10 +109,10 @@ def _fetched(data: Sequence[object]) -> Iterator[tuple[bytes, bytes]]:
         yield pending
 
 
-def collect(config: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
+def collect(config: MailConfig, password: str, email: str, now: datetime) -> MailSnapshot:
     """The mailbox's unread and flagged messages since `since_days` ago, newest first: at most
-    `max_messages` unread, and every flagged one, each saying which account it's in. Opened
-    read-only, and the headers fetched with `BODY.PEEK`, so nothing is marked read."""
+    `max_messages` unread, and every flagged one. Opened read-only, and the headers fetched with
+    `BODY.PEEK`, so nothing is marked read."""
     me = {a.lower() for a in (config.username, email) if "@" in a}
     with _signed_in(config, password) as imap:
         try:
@@ -159,19 +159,12 @@ def collect(config: Mailbox, password: str, email: str, now: datetime) -> MailSn
         known = written[m.sender_email or ""] >= KNOWN_AFTER
         # Gmail's category is a guess, which a reply to me or someone I know outweighs.
         filed_aside = m.uid in aside and not (m.verified and (replies or known))
-        # A conversation is its Message-ID whichever mailbox has it, but one without any is
-        # the message's own, by its UID: that mailbox's.
-        thread = (
-            f"uid:{config.name}:{m.uid}" if config.name and m.thread == f"uid:{m.uid}" else m.thread
-        )
         messages.append(
             m.model_copy(
                 update={
                     "replies_to_me": replies,
                     "known": known,
                     "bulk": m.bulk or filed_aside,
-                    "account": config.name,
-                    "thread": thread,
                 }
             )
         )
@@ -181,7 +174,7 @@ def collect(config: Mailbox, password: str, email: str, now: datetime) -> MailSn
 _LISTED = re.compile(rb'^\(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$')
 
 
-def sent_mailbox(imap: imaplib.IMAP4, config: Mailbox) -> str | None:
+def sent_mailbox(imap: imaplib.IMAP4, config: MailConfig) -> str | None:
     """Where my sent mail is: `sent_mailbox`, else the mailbox the server marks `\\Sent`
     (RFC 6154); None when it marks none."""
     if config.sent_mailbox:
@@ -211,7 +204,7 @@ def _recipients(headers: EmailMessage) -> set[str]:
 
 
 def _my_sent(
-    imap: imaplib.IMAP4, config: Mailbox, now: datetime, me: set[str]
+    imap: imaplib.IMAP4, config: MailConfig, now: datetime, me: set[str]
 ) -> tuple[set[str], Counter[str]]:
     """What I sent in the last `known_days`, its newest `SENT_CAP`: their Message-IDs (a
     message naming one is answering me) and how often I wrote to each address (`To` and `Cc`,
@@ -275,7 +268,7 @@ def _referenced(raw: bytes) -> set[str]:
         return set()
 
 
-def status(config: Mailbox, password: str) -> str:
+def status(config: MailConfig, password: str) -> str:
     """What changes when mail comes, goes or is read: the mailbox's message count, next UID,
     UID validity and unread count, as the server says them."""
     with _signed_in(config, password) as imap:
@@ -433,7 +426,7 @@ def message(
 ) -> Message | None:
     """The message a FETCH response describes (its line and its headers), or None when the
     server left out its UID. `me` are my addresses, lower-case; `trusted` the servers whose
-    `Authentication-Results` count (`Mailbox.auth_servers`)."""
+    `Authentication-Results` count (`MailConfig.auth_servers`)."""
     uid = _UID.search(meta)
     if uid is None:
         return None

@@ -12,6 +12,17 @@ A `#tag` written in a PR's title or body, or a ticket's summary, no longer puts 
 a todo does. To keep such an item tagged, give it the label in its tool, or put the tag on it
 with `mfd tag <entity> <tag>` (or its Tag field).
 
+### mail reads one mailbox
+
+`[mail]` reads one mailbox again: its `[mail.<name>]` accounts are gone, and a config with one
+is refused, saying so. To move, keep the mailbox to read: copy its account's keys (`host`,
+`username`, and any of `port`, `mailbox`, `sent_mailbox`, `message_url`, `auth_servers`) into
+`[mail]`, and delete the `[mail.<name>]` tables. Its password stays where it is if you also set
+`keychain_service = "move-forward-mail-<name>"` (or `token_env = "MAIL_PASSWORD_<NAME>"`, if
+you exported it); or store it again with `mfd token set mail`. A conversation without a
+Message-ID is `uid:<uid>` again, not `uid:<name>:<uid>`. Reading several mailboxes will come
+back as several instances of the plugin (see docs/roadmap.md).
+
 ### slack names a team by its id
 
 `[slack.teams]`, `mfd slack team set` and `unset`, `mfd slack destinations`' teams, and the

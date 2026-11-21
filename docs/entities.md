@@ -67,9 +67,9 @@ gone.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
-| `person` | github: me, and everyone it knows an email for; mail: me, by each mailbox's `username` (an address, or a bare login without `email`; none with a `/`), and whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>`, or `mail/<login>` | | |
+| `person` | github: me, and everyone it knows an email for; mail: me, by the mailbox's `username` (an address, or a bare login without `email`; none with a `/`), and whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>`, or `mail/<login>` | | |
 | `team` | github: each of my `teams`, and each team a PR requests | `<host>/<owner>/<slug>` | | |
-| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a message with none, `uid:<uid>` (`uid:<account>:<uid>` in one of several mailboxes) | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
+| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a message with none, `uid:<uid>` | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
 | `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |
@@ -142,7 +142,7 @@ points at a person is about them, so core ranks and badges its items by their co
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `handle` | string | their name in the tool, a login; mail's is their address |
-| `me` | bool | the person using the dashboard, as the tool knows them (github's login, each mailbox's address): the page's footer names each plugin's by handle |
+| `me` | bool | the person using the dashboard, as the tool knows them (github's login, the mailbox's address): the page's footer names each plugin's by handle |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
 

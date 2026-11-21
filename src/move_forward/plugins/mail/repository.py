@@ -90,6 +90,47 @@ MIGRATIONS = [
     ALTER TABLE mail_message_labels_by_account RENAME TO mail_message_labels;
     """,
     ),
+    Migration(
+        "0007_one_mailbox",
+        # One mailbox again: a message is its UID. The tables are fetched, so only [mail]'s own
+        # rows are kept, which it reads on as it did; an account's go, read again by the next
+        # refresh of the one mailbox that's left.
+        """
+    CREATE TABLE mail_messages_one ( -- fetched: unread and flagged messages, headers only
+        uid INTEGER PRIMARY KEY,
+        position INTEGER NOT NULL,     -- newest first
+        message_id TEXT,
+        thread TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        sender_email TEXT,
+        to_me INTEGER NOT NULL,
+        bulk INTEGER NOT NULL,
+        flagged INTEGER NOT NULL,
+        seen INTEGER NOT NULL,
+        verified INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        important INTEGER NOT NULL,
+        replies_to_me INTEGER NOT NULL,
+        known INTEGER NOT NULL
+    );
+    INSERT INTO mail_messages_one
+        SELECT uid, position, message_id, thread, subject, sender_name, sender_email, to_me,
+            bulk, flagged, seen, verified, date, important, replies_to_me, known
+        FROM mail_messages WHERE account = '';
+    DROP TABLE mail_messages;
+    ALTER TABLE mail_messages_one RENAME TO mail_messages;
+    CREATE TABLE mail_message_labels_one ( -- fetched: their Gmail labels, Gmail's own and mine
+        uid INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        PRIMARY KEY (uid, label)
+    );
+    INSERT INTO mail_message_labels_one
+        SELECT uid, label FROM mail_message_labels WHERE account = '' ORDER BY rowid;
+    DROP TABLE mail_message_labels;
+    ALTER TABLE mail_message_labels_one RENAME TO mail_message_labels;
+    """,
+    ),
 ]
 
 
@@ -104,7 +145,6 @@ class MessageRepository:
         a failure leaves the old one."""
         rows = [
             (
-                m.account,
                 m.uid,
                 position,
                 m.message_id,
@@ -124,29 +164,23 @@ class MessageRepository:
             )
             for position, m in enumerate(snapshot.messages)
         ]
-        labels = [
-            (m.account, m.uid, label)
-            for m in snapshot.messages
-            for label in dict.fromkeys(m.labels)
-        ]
+        labels = [(m.uid, label) for m in snapshot.messages for label in dict.fromkeys(m.labels)]
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM mail_messages")
             conn.execute("DELETE FROM mail_message_labels")
             conn.executemany(
-                "INSERT INTO mail_messages (account, uid, position, message_id, thread, subject,"
+                "INSERT INTO mail_messages (uid, position, message_id, thread, subject,"
                 " sender_name, sender_email, to_me, bulk, flagged, seen, verified, date, important,"
-                " replies_to_me, known) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " replies_to_me, known) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
-            conn.executemany(
-                "INSERT INTO mail_message_labels (account, uid, label) VALUES (?, ?, ?)", labels
-            )
+            conn.executemany("INSERT INTO mail_message_labels (uid, label) VALUES (?, ?)", labels)
 
     def load(self) -> MailSnapshot:
         labels = self._labels()
         return MailSnapshot(
             messages=[
-                _message(row, labels.get((row["account"], row["uid"]), []))
+                _message(row, labels.get(row["uid"], []))
                 for row in self._db.query("SELECT * FROM mail_messages ORDER BY position")
             ]
         )
@@ -159,25 +193,21 @@ class MessageRepository:
         if not rows:
             return None
         labels = self._db.query(
-            "SELECT label FROM mail_message_labels WHERE account = ? AND uid = ? ORDER BY rowid",
-            (rows[0]["account"], rows[0]["uid"]),
+            "SELECT label FROM mail_message_labels WHERE uid = ? ORDER BY rowid", (rows[0]["uid"],)
         )
         return _message(rows[0], [row["label"] for row in labels])
 
-    def _labels(self) -> dict[tuple[str, int], list[str]]:
-        """Every message's labels by account and uid, as they came."""
-        found: dict[tuple[str, int], list[str]] = {}
-        for row in self._db.query(
-            "SELECT account, uid, label FROM mail_message_labels ORDER BY rowid"
-        ):
-            found.setdefault((row["account"], row["uid"]), []).append(row["label"])
+    def _labels(self) -> dict[int, list[str]]:
+        """Every message's labels by uid, as they came."""
+        found: dict[int, list[str]] = {}
+        for row in self._db.query("SELECT uid, label FROM mail_message_labels ORDER BY rowid"):
+            found.setdefault(row["uid"], []).append(row["label"])
         return found
 
 
 def _message(row: sqlite3.Row, labels: list[str]) -> Message:
     return Message(
         uid=row["uid"],
-        account=row["account"],
         message_id=row["message_id"],
         thread=row["thread"],
         subject=row["subject"],

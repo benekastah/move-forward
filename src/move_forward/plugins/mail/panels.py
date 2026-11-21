@@ -28,11 +28,8 @@ class Thread:
 
     @property
     def unread(self) -> int:
-        """Its unread messages, a message in two of my mailboxes counted once."""
-        unread = [m for m in self.messages if not m.seen]
-        return len({m.message_id for m in unread if m.message_id}) + sum(
-            not m.message_id for m in unread
-        )
+        """How many of its messages are unread."""
+        return sum(not m.seen for m in self.messages)
 
     @property
     def flagged(self) -> bool:
@@ -59,18 +56,16 @@ def threads(snapshot: MailSnapshot | None) -> list[Thread]:
 
 
 def message_url(config: MailConfig, message: Message) -> str | None:
-    """The link its mailbox's config makes to `message`, its Message-ID and the username
-    percent-encoded; None without a template (or a mailbox: one since taken out of the config),
-    or for a message with no Message-ID when the template needs one. `@` stays as it is: it's
-    safe in a path and a fragment, and mail apps' links expect it so."""
-    mailbox = config.mailbox_named(message.account)
-    template = mailbox.message_url if mailbox else ""
-    if mailbox is None or not template:
+    """The link the config makes to `message`, its Message-ID and the username percent-encoded;
+    None without a template, or for a message with no Message-ID when the template needs one.
+    `@` stays as it is: it's safe in a path and a fragment, and mail apps' links expect it so."""
+    template = config.message_url
+    if not template:
         return None
     if message.message_id is None and "{message_id}" in template:
         return None
     return template.replace("{message_id}", quote(message.message_id or "", safe="@")).replace(
-        "{username}", quote(mailbox.username, safe="@")
+        "{username}", quote(config.username, safe="@")
     )
 
 
@@ -200,11 +195,6 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
     )
 
 
-def _listed(names: list[str]) -> str:
-    """`a`, `a and b`, `a, b and c`."""
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
-
-
 def panels(
     config: MailConfig, plugin: str, snapshot: MailSnapshot | None, graph: Graph
 ) -> list[Panel]:
@@ -215,8 +205,8 @@ def panels(
             key="inbox",
             priority=Band.ASKED,
             title="Mail",
-            description=f"Unread and flagged mail in {_listed([m.shown for m in config.mailboxes()])}"
-            ", newest first; lists and automated mail last.",
+            description=f"Unread and flagged mail in {config.mailbox}, newest first; lists and"
+            " automated mail last.",
             items=[_item(config, plugin, thread, graph) for thread in threads(snapshot)],
             act_now=True,
         )

@@ -22,12 +22,11 @@ from move_forward.api import (
     Response,
     attrs,
 )
-from move_forward.api.keychain import TokenSettings
 from move_forward.api.kinds import PERSON
 from move_forward.plugins.mail import client
-from move_forward.plugins.mail.config import Mailbox, MailConfig
+from move_forward.plugins.mail.config import MailConfig
 from move_forward.plugins.mail.kinds import THREAD, MailPerson, ThreadAttrs
-from move_forward.plugins.mail.models import MailSnapshot, Message
+from move_forward.plugins.mail.models import MailSnapshot
 from move_forward.plugins.mail.panels import OPEN_PAGE, link, message_url, panels, threads
 from move_forward.plugins.mail.repository import MIGRATIONS, MessageRepository
 from move_forward.plugins.mail.setup import INIT
@@ -40,42 +39,10 @@ def person_id(key: str) -> str:
     return f"mail/{key}"
 
 
-def password(ctx: Context[MailConfig], mailbox: Mailbox) -> str:
-    """`mailbox`'s password (`ctx.token`, which says "no password" and how to give one when
+def password(ctx: Context[MailConfig]) -> str:
+    """The mailbox's password (`ctx.token`, which says "no password" and how to give one when
     there's none)."""
-    return ctx.token(mailbox.name, secret="password")
-
-
-def merged(read: list[Message], more: list[Message]) -> list[Message]:
-    """`read`, from the mailboxes before, with another mailbox's messages: a copy of one already
-    read (the same Message-ID from the same sender, each copy's sender verified) adds only
-    what's about me there, flagged, to me, replying to me, from someone I know or important, to
-    the first copy. Only verified copies merge, as anyone can write a `From` and a Message-ID:
-    unverified, a message sent to two of my addresses is kept twice, in one conversation, as the
-    copies name the same one (but a message with no Message-ID, which is its mailbox's alone).
-    Within a mailbox nothing is merged."""
-    first: dict[tuple[str, str | None], int] = {
-        (m.message_id, m.sender_email): i for i, m in enumerate(read) if m.message_id and m.verified
-    }
-    found = list(read)
-    taken: set[int] = set()  # a mailbox has one copy of a message: more claim to be it
-    for message in more:
-        i = first.get((message.message_id, message.sender_email)) if message.message_id else None
-        if not message.verified or i is None or i in taken:
-            found.append(message)
-            continue
-        taken.add(i)
-        copy = found[i]
-        found[i] = copy.model_copy(
-            update={
-                "flagged": copy.flagged or message.flagged,
-                "to_me": copy.to_me or message.to_me,
-                "replies_to_me": copy.replies_to_me or message.replies_to_me,
-                "known": copy.known or message.known,
-                "important": copy.important or message.important,
-            }
-        )
-    return found
+    return ctx.token(secret="password")
 
 
 class MailPlugin(
@@ -94,19 +61,10 @@ class MailPlugin(
     }
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
 
-    def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
-        """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
-        return {m.name: m for m in config.mailboxes()}
-
     def collect(self, req: RefreshRequest[MailConfig]) -> MailSnapshot:
-        """Every mailbox's unread and flagged mail, newest first. A conversation is one whichever
-        mailboxes have it, and a message sent to two of my addresses is one (`merged`)."""
+        """The mailbox's unread and flagged mail, newest first."""
         ctx = req.ctx
-        messages: list[Message] = []
-        for mailbox in ctx.config.mailboxes():
-            found = client.collect(mailbox, password(ctx, mailbox), ctx.email, ctx.now)
-            messages = merged(messages, found.messages)
-        return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
+        return client.collect(ctx.config, password(ctx), ctx.email, ctx.now)
 
     def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
         return MessageRepository(req.ctx.db)
@@ -116,30 +74,26 @@ class MailPlugin(
         return 120
 
     def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
-        """The mailboxes' counts, as the fingerprint core compares with the last: they move
-        when mail comes, goes or is read. One `STATUS` each, without opening the mailbox."""
+        """The mailbox's counts, as the fingerprint core compares with the last: they move when
+        mail comes, goes or is read. One `STATUS`, without opening the mailbox."""
         ctx = req.ctx
-        now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
+        now = client.status(ctx.config, password(ctx))
         return Changed(fingerprint=now, reason="the mailbox changed")
 
     def entities(self, req: Request[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []
         people: dict[str, Entity] = {}
-        for mailbox in req.ctx.config.mailboxes():  # me, as each mailbox signs in
-            me = mailbox.username.strip()
-            # An address is me by it, with that email; a bare login (`jdoe`) is me by the
-            # login, with no email to join me with elsewhere. A `/` can't go in a person's id
-            # (`mail/<id>`), so such a username is no one, and the footer leaves it out.
-            address = me.lower() if "@" in me else None
-            if me and "/" not in me:
-                people.setdefault(
-                    address or me,
-                    Entity(
-                        ref=Ref(kind=PERSON, id=person_id(address or me)),
-                        title=me,
-                        attrs=attrs(MailPerson(handle=me, email=address, me=True)),
-                    ),
-                )
+        me = req.ctx.config.username.strip()  # me, as the mailbox signs in
+        # An address is me by it, with that email; a bare login (`jdoe`) is me by the login,
+        # with no email to join me with elsewhere. A `/` can't go in a person's id
+        # (`mail/<id>`), so such a username is no one, and the footer leaves it out.
+        address = me.lower() if "@" in me else None
+        if me and "/" not in me:
+            people[address or me] = Entity(
+                ref=Ref(kind=PERSON, id=person_id(address or me)),
+                title=me,
+                attrs=attrs(MailPerson(handle=me, email=address, me=True)),
+            )
         for thread in threads(req.snapshot):
             latest = thread.latest
             email = latest.sender_email

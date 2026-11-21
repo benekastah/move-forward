@@ -3,29 +3,6 @@
 from move_forward.api import Asker, Init, InitSection, InitSetup
 from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, KNOWN_AUTH_SERVERS
 
-TABLES = """\
-## Several mailboxes instead: a table each, saying its own host, port, username, mailbox,
-## sent_mailbox, message_url and auth_servers (each with the same default as [mail]'s), and
-## its own token_env and keychain_service, and none of them in [mail]. Each one's password:
-## `mfd token set mail.<name>`, or $MAIL_PASSWORD_<NAME> (`mail.home`, $MAIL_PASSWORD_HOME).
-##
-## [mail.home]
-## host = "imap.gmail.com"
-## username = "me@example.com"
-## message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
-##
-## [mail.work]
-## host = "imap.work.example"
-## port = 993
-## username = "me@work.example"
-## mailbox = "INBOX"
-## sent_mailbox = "Sent"
-## message_url = "mid:{message_id}"
-## auth_servers = ["mx.work.example"]
-## token_env = "MAIL_PASSWORD_WORK"
-## keychain_service = "move-forward-mail-work"
-"""
-
 
 def shown(host: str) -> dict[str, object]:
     """`auth_servers` as the host's known ones (Gmail's), or `[]` for another server, which
@@ -59,4 +36,4 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
     return InitSection(found, shown(host))
 
 
-INIT = Init(questions=questions, example=EXAMPLE, tables=TABLES)
+INIT = Init(questions=questions, example=EXAMPLE)
