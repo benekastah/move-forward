@@ -561,7 +561,8 @@ def build_dashboard(
     now: datetime | None = None,
     selected: Sequence[str] = (),
 ) -> panels.Dashboard:
-    """The dashboard from whatever is stored; cheap, no network. `selected` the tags the tag view selects (see `panels.build`)."""
+    """The dashboard from whatever is stored; cheap, no network. `selected` is the tags the tag
+    view selects (see `panels.build`)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)

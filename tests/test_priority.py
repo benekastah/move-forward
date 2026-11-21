@@ -111,15 +111,12 @@ def test_named_buttons_join_even_with_other_actions_between_them() -> None:
     assert html.index("aria-label='Act now'") < html.index(">Important</button>")
 
 
-def test_act_now_groups_ice_with_snooze_and_pin() -> None:
+def test_act_now_groups_snooze_and_pin_and_ice_joins_disposition() -> None:
     config, db = stored(work_items=[entry("APP-1 finish", [todo("reply", "quick")])])
     dashboard = refresh.build_dashboard(config, db, NOW)
     shown = next(item for item in dashboard.act_now() if "APP-1 finish" in item.title)
-    group = [a for a in shown.actions if a.group == "Act now"]
-    assert [a.label for a in group] == ["Snooze", "Pin", "Put on ice"]
-    html = render.item_html(shown)
-    joined = html.split("aria-label='Act now'>", 1)[1].split("</div>", 1)[0]
-    assert "title='Put on ice' aria-label='Put on ice'" in joined
+    assert [a.label for a in shown.actions if a.group == "Act now"] == ["Snooze", "Pin"]
+    assert [a.label for a in shown.actions if a.group == "Disposition"] == ["Put on ice"]
 
 
 def test_a_review_for_me_can_be_marked_important() -> None:

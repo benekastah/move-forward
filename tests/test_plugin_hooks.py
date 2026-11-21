@@ -96,21 +96,14 @@ def test_a_plugins_context_has_the_due_horizon(monkeypatch: pytest.MonkeyPatch) 
     assert told == [timedelta(days=14)]
 
 
-def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
+def test_a_plugin_adds_buttons_and_badges_to_another_plugins_items() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
     [item] = built.panel("github.conflicts").items
     assert [a.href for a in item.actions if a.href] == [f"/jira/hello?pr={pr(1).url}"]
     html = render.dashboard_page(built, refreshing=frozenset())
     assert f"<a class='button link-action' href='/jira/hello?pr={pr(1).url}'>Look</a>" in html
     assert all(not a.href for a in built.panel("notes.todos").actions)
-
-
-def test_a_plugin_adds_a_badge_to_another_plugins_item() -> None:
-    config, db = stored(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
-    built = build_dashboard(config, db, NOW)
-    [item] = built.panel("github.conflicts").items
     assert "seen by jira" in item.badges
-    html = render.dashboard_page(built, refreshing=frozenset())
     assert "seen by jira" in html  # a badge, as the page shows it
 
 

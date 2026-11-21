@@ -457,8 +457,8 @@ def _with_item_actions(
     tags_of: TagsOf = _no_tags,
 ) -> Panel:
     """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
-    badges, details and links, and the tags core's badges show (`tags_of`). Buttons posting to no action `known` knows are left out. Nothing
-    is added to a part that's `done` (a todo ticked off, kept to untick): it's finished work
+    badges, details and links, and the tags core's badges show (`tags_of`). Buttons posting to no action `known` knows are
+    left out. Nothing is added to a part that's `done` (a todo ticked off, kept to untick): it's finished work
     within its item, with nothing to tag, ice or reach anyone about, so only its own buttons
     act on it. An item that's done itself (an entry whose todos are all ticked off) is still
     there to tag, ice and so on, and gets what any item does."""
