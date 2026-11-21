@@ -80,8 +80,10 @@ REAL_HOME = Path.home()
 
 @pytest.fixture(autouse=True)
 def no_real_home(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Every test's home directory is an empty one of its own, so nothing a test does with `~`
-    (a link in `~/.local`, a file under `~/.config`) reaches mine. Returns it."""
+    """Every test's home directory is an empty one of its own, so what a test does with `~` at
+    run time (a link in `~/.local`, a file under `~/.config`) doesn't reach mine. Not what's
+    resolved when `move_forward.config` is imported: see the default config path in
+    `docs/issues.md`. Returns it."""
     home = tmp_path_factory.mktemp("home")
     for name in ("HOME", "USERPROFILE"):
         monkeypatch.setenv(name, str(home))
