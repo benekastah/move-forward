@@ -7,18 +7,19 @@ wrong, add it.
 
 ## Bugs
 
-- **A newer system pandoc fails the pre-push hook.** `dev.py man --check` (run by `dev.py
-  static`, so by the pre-push hook) fails with "man: man/mfd.1 is out of date with README.md"
-  when the committed page is right. It makes the page with pypandoc, which uses the
-  highest-versioned pandoc it finds: one on PATH (or `PYPANDOC_PANDOC`, which overrides the
-  search) before the one `pypandoc_binary` bundles. Here the system pandoc is 3.11 and the
+- **A newer system pandoc fails the pre-push hook.** `dev.py man --check` (run by `dev.py static`,
+  so by the pre-push hook) fails with "man: man/mfd.1 is out of date with README.md" when the
+  committed page is right. It makes the page with pypandoc, which uses the highest-versioned
+  pandoc among the one on PATH and the one `pypandoc_binary` bundles (PATH wins a tie), unless
+  `PYPANDOC_PANDOC` is set, which replaces the search. Here the system pandoc is 3.11 and the
   pinned binary bundles 3.9, so the page comes out different. Workaround, never skipping the
   hook: set `PYPANDOC_PANDOC` to the bundled binary, as in
   `PYPANDOC_PANDOC=<repo>/.venv/lib/python3.15/site-packages/pypandoc/files/pandoc git push`.
-  The fix belongs in python-template's `dev.py` (python-template has no issues file), and this
-  repo shouldn't patch it locally: make `dev.py man` use pypandoc's bundled pandoc, or fail
-  with a message naming both versions, so a newer system pandoc can't change the page, and
-  every project gets the fix through `copier update`.
+  The fix belongs in python-template's `dev.py` (it has no issues file of its own, only
+  `template/docs/issues.md`, the copy projects get), and this repo shouldn't patch it locally:
+  make `dev.py man` use pypandoc's bundled pandoc, or fail with a message naming both versions,
+  so a newer system pandoc can't change the page, and every project gets the fix through `copier update`.
+
 - **Gmail links don't open the message.** The `message_url` `mfd init` suggests for Gmail,
   `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`, doesn't
   open the message (seen on a personal Gmail). Find what does: the Message-ID's encoding in
