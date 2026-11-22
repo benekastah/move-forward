@@ -15,9 +15,10 @@ wrong, add it.
   pinned binary bundles 3.9, so the page comes out different. Workaround, never skipping the
   hook: set `PYPANDOC_PANDOC` to the bundled binary, as in
   `PYPANDOC_PANDOC=<repo>/.venv/lib/python3.15/site-packages/pypandoc/files/pandoc git push`.
-  The fix belongs in python-template's `dev.py` (python-template has no issues file), not in
-  each project: make `man` point pypandoc at its own bundled pandoc, or fail naming both
-  versions, so a newer system pandoc can't change the page.
+  The fix belongs in python-template's `dev.py` (python-template has no issues file), and this
+  repo shouldn't patch it locally: make `dev.py man` use pypandoc's bundled pandoc, or fail
+  with a message naming both versions, so a newer system pandoc can't change the page, and
+  every project gets the fix through `copier update`.
 - **Gmail links don't open the message.** The `message_url` `mfd init` suggests for Gmail,
   `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`, doesn't
   open the message (seen on a personal Gmail). Find what does: the Message-ID's encoding in
