@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from git_client import GitError
+from git_client import GitError, NoAnswerError
 
 from move_forward.git import Git
 from move_forward.shell import CommandError, run
@@ -152,7 +152,7 @@ def quiet_git(directory: Path, *args: str) -> str:
     no git."""
     try:
         return Git(directory).run(*args)
-    except GitError, FileNotFoundError:
+    except GitError, NoAnswerError, FileNotFoundError:
         return ""
 
 

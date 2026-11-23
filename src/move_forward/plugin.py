@@ -332,7 +332,7 @@ PageHandler = Callable[[PageRequest[Any]], Html | Response | None]
 t-string is built with `html`, and text that isn't `Html` is shown as text."""
 CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
-API_VERSION = 5
+API_VERSION = 6
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""

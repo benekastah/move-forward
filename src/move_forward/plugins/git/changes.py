@@ -1,8 +1,8 @@
 """Telling cheaply that a repository moved, for `GitPlugin.changed`, in the repos it can't
 watch (see `watch`): a commit, a checkout, a branch made or deleted, a rebase, a push or a
 fetch, or a change to the config (an upstream set, a branch git stack tracks). They all
-rewrite files git keeps its refs or config in, so the times, sizes and identities of those
-files say so, without running git.
+rewrite files git keeps its refs or config in. Git identifies the common directory, then
+the times, sizes and identities of those files say what moved.
 
 Edits not yet committed aren't seen: the plugin's `git status` every `status_seconds` catches
 those. The index is left out, because editors rewrite it whenever they ask git for the
@@ -12,7 +12,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from move_forward.api.git import git_common_dir
+from move_forward.api.git import GitCache
+from move_forward.plugins.git.client import common_dir
 
 
 def _ref_files(common: Path) -> list[Path]:
@@ -28,13 +29,18 @@ def _ref_files(common: Path) -> list[Path]:
     ]
 
 
-def fingerprints(repos: list[Path]) -> dict[str, str]:
+def fingerprints(
+    repos: list[Path], *, cache: GitCache | None = None, watched: set[str] | None = None
+) -> dict[str, str]:
     """For each repository among `repos` (once, however many of its worktrees are listed),
     by its common git directory: a digest of its ref files that changes when any of them
-    does."""
+    does. The watcher reports changes for any common directories listed in `watched`."""
     found: dict[str, str] = {}
-    commons = {common for repo in repos if (common := git_common_dir(repo))}
+    cache = cache if cache is not None else GitCache()
+    commons = {common for repo in repos if (common := common_dir(repo, cache)) is not None}
     for common in sorted(commons):
+        if watched is not None and str(common) in watched:
+            continue
         digest = hashlib.sha256()
         for path in sorted(_ref_files(common)):
             try:

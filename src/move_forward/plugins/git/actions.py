@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import Field
 
 from move_forward.api import ActionError, ActionRequest, Graph, Model
-from move_forward.api.git import CatFile, Git, GitError, RefUpdate, refs, update_refs
+from move_forward.api.git import CatFile, Git, GitError, NoAnswerError, RefUpdate, refs, update_refs
 from move_forward.api.ids import branch_parts
 from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
@@ -194,7 +194,7 @@ def delete_branches(req: ActionRequest[GitConfig]) -> str:
             _check_deletable(graph, repo, branch, read[repo], sha)
             Git(repo).run("branch", "-D", branch)
             done.append(branch)
-        except (ActionError, GitError) as e:
+        except (ActionError, GitError, NoAnswerError) as e:
             failed.append(f"{branch}: {e}")
     notice = f"deleted {len(done)} branches"
     if failed:
@@ -258,7 +258,7 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
             )
     try:
         git.run("fetch", "--quiet", remote)
-    except GitError as e:
+    except (GitError, NoAnswerError) as e:
         raise ActionError(f"couldn't fetch {remote}: {e}") from e
     try:
         upstream = git.run("rev-parse", "--verify", upstream_ref)
@@ -288,7 +288,7 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
                     f"{branch} has uncommitted changes in {worktree}: commit or set them aside"
                 )
             checkout.run("merge", "--ff-only", "--quiet", upstream)
-    except GitError as e:
+    except (GitError, NoAnswerError) as e:
         raise ActionError(f"couldn't pull {branch}: {e}") from e
     return f"pulled {branch}"
 

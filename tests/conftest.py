@@ -863,8 +863,7 @@ def section[M: BaseModel](config: Config, name: str, model: type[M]) -> M:
 
 
 def git_directory(path: Path) -> Path:
-    """A checkout as git finds one, but with nothing in it: for what reads a repo by its files
-    alone (`git_common_dir`), without starting git to make it."""
+    """An empty checkout that Git recognizes, made without starting a process."""
     (path / ".git" / "objects").mkdir(parents=True)
     (path / ".git" / "refs").mkdir()
     (path / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")

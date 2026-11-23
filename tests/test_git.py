@@ -8,6 +8,7 @@ from git_client import NotStartedError
 from git_client.testing import real_git
 
 from move_forward import shell
+from move_forward.api.git import NotARepositoryError, git_common_dir
 from move_forward.git import GIT_ENV, Git
 from move_forward.shell import DEFAULT_TIMEOUT_SECONDS
 
@@ -26,6 +27,8 @@ def test_no_git_starts_once_the_dashboard_stops(
         git.ok("init")
     with pytest.raises(NotStartedError):  # a long-lived one too, e.g. a CatFile's
         git.popen("init")
+    with pytest.raises(NotStartedError):
+        git_common_dir(git.read_only())
     assert not (tmp_path / ".git").exists()
 
 
@@ -33,6 +36,15 @@ def test_a_long_lived_git_starts_until_then(tmp_path: Path) -> None:
     with Git(tmp_path).popen("version") as git:
         out, _ = git.communicate()
     assert out.startswith(b"git version ")
+
+
+def test_git_common_dir_uses_the_dashboard_client(tmp_path: Path) -> None:
+    with pytest.raises(NotARepositoryError):
+        git_common_dir(Git(tmp_path))
+    Git(tmp_path).run("init", "-q")
+    subdirectory = tmp_path / "subdirectory"
+    subdirectory.mkdir()
+    assert git_common_dir(Git(subdirectory)).resolve() == (tmp_path / ".git").resolve()
 
 
 def test_a_command_is_stopped_after_two_minutes_unless_given_its_own_timeout(

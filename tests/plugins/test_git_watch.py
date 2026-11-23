@@ -199,7 +199,7 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
         assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
         assert _until(lambda: checks.check(Enabled(plugin, ctx(1)), Graph([])) is not None)
-        assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+        assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}
     finally:
         plugin.stop_watching()
 

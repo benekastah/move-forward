@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from move_forward.api import Graph, Model
-from move_forward.api.git import git_common_dir
+from move_forward.api.git import Git, NotARepositoryError, git_common_dir
 
 BRANCH = "git.branch"
 
@@ -43,11 +43,10 @@ def configs(repo_dirs: list[str]) -> str:
     stack keeps its record."""
     found: list[str] = []
     for repo in sorted(repo_dirs):
-        common = git_common_dir(Path(repo))  # a linked worktree's is the main repository's
-        path = common / "config" if common else None
         try:
-            stat = path.stat() if path else None
-        except OSError:
+            common = git_common_dir(Git(Path(repo)))  # a linked worktree shares it with main
+            stat = (common / "config").stat()
+        except NotARepositoryError, OSError:
             stat = None
         found.append(json.dumps([repo, stat and [stat.st_ino, stat.st_mtime_ns, stat.st_size]]))
     return hashlib.sha256("\n".join(found).encode()).hexdigest()

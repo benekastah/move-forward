@@ -26,7 +26,6 @@ from move_forward.plugin import (
     Request,
 )
 from move_forward.plugins.git import changes, client
-from move_forward.plugins.git import plugin as git_plugin
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo
 from move_forward.plugins.git.plugin import GitPlugin
@@ -71,7 +70,8 @@ def _read_as(monkeypatch: pytest.MonkeyPatch, github_repos: dict[Path, str | Non
         )
 
     for repo in github_repos:
-        repo.mkdir(exist_ok=True)
+        if not repo.exists():
+            git_directory(repo)
     monkeypatch.setattr(client, "collect_repo", read)
 
 
@@ -137,7 +137,7 @@ def test_the_plugin_says_changed_after_a_move_and_keeps_it_until_a_refresh_reads
     assert server.changed(ctx)
     # Kept until a refresh reads it, but asking for one only once: nothing new moved since.
     assert not server.changed(ctx)
-    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}
     server.refresh(ctx)
     assert not server.changed(ctx)
     assert ChangeRepository(db).get("git").subjects == set()
@@ -148,6 +148,15 @@ def test_a_repo_reached_through_a_symbolic_link_is_known_by_where_it_is(tmp_path
     repo = _repo(tmp_path / "r")
     (tmp_path / "link").symlink_to(repo, target_is_directory=True)
     assert list(changes.fingerprints([tmp_path / "link", repo])) == [str(repo / ".git")]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="making a symbolic link needs a privilege")
+def test_a_symbolic_link_to_the_git_directory_keeps_its_resolved_identity(tmp_path: Path) -> None:
+    repo = _repo(tmp_path / "r")
+    common = tmp_path / "git-directory"
+    (repo / ".git").rename(common)
+    (repo / ".git").symlink_to(common, target_is_directory=True)
+    assert list(changes.fingerprints([repo])) == [str(common)]
 
 
 def test_what_was_kept_under_a_key_no_repo_has_now_reads_every_repo(tmp_path: Path) -> None:
@@ -172,7 +181,6 @@ def test_what_was_kept_under_a_key_no_repo_has_now_reads_every_repo(tmp_path: Pa
         .changed(RefreshRequest(ctx, Graph(), previous=previous))
         .everything
     )
-    assert git_plugin._repos_of([repo], frozenset({old})) is None  # pyright: ignore[reportPrivateUsage]
 
 
 def test_after_a_change_only_the_repos_that_moved_are_read_again(
@@ -245,7 +253,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     assert not server.changed(ctx(10))  # status_seconds not up yet
     assert not server.changed(ctx(40, status_seconds=0))  # off
     assert server.changed(ctx(40))
-    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}
     server.refresh(ctx(40))  # reads it, untracked file and all
     assert not server.changed(ctx(80))
 
@@ -286,7 +294,7 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
     (repo / "new.txt").unlink()
     (repo / "other.txt").unlink()
     assert not server.changed(ctx(160))  # back as stored: nothing to read again
-    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}
 
 
 def test_edits_back_as_the_last_look_saw_them_after_a_newer_store_are_still_seen(
@@ -346,7 +354,7 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     with pytest.raises(GitError):
         server.refresh(ctx)
     assert ChangeRepository(db).get("git").full_at is None  # the next collect reads every repo
-    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}  # kept
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}  # kept
     assert not server.changed(ctx)  # no refresh every check
 
 

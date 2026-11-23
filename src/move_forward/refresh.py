@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from string.templatelib import Template
 from typing import Annotated
 
-from git_client import GitError
+from git_client import GitError, NoAnswerError
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from move_forward import (
@@ -920,7 +920,7 @@ def perform_action(
         result = handler(ActionRequest(e.ctx, graph, form=Form(fields, back)))
     except ActionError:
         raise
-    except (CommandError, GitError) as err:  # a tool refused: said, not a crash
+    except (CommandError, GitError, NoAnswerError) as err:
         raise ActionError(str(err)) from err
     except Exception as err:
         log.exception("%s failed", name)

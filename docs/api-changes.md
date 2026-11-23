@@ -9,6 +9,27 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 6
+
+- **`api.git` uses py-git-client 0.0.3**. Pass a configured client to
+  `git_common_dir(Git(repo))`. The new `git_dir(Git(repo))` gives a linked worktree's own Git
+  directory. Both resolve repository locations through Git, including from a subdirectory, and
+  raise `NotARepositoryError` when Git finds no repository. See the
+  [py-git-client changelog](https://github.com/benekastah/py-git-client/blob/85cfd8a1f918c7e9b07007465292c1cce9f1bb2a/CHANGELOG.md#003-unreleased).
+- **`config_key` is gone.** For `config(git)` lookups, use Git's spelling of each key, with a
+  lower-case section and name and the subsection's case preserved, e.g.
+  `branch.Topic.pushremote`. Use `git.run("config", "--get", key)` for a key supplied by a user.
+- **`GitTimeoutError` and `NotStartedError` now inherit from `NoAnswerError`.** Catch
+  `(GitError, NoAnswerError)` to report both failed commands and commands that got no answer.
+  `CatFile` applies the client's timeout to each request. Object reads can raise
+  `WrongTypeError`, `CorruptObjectError` or `MissingObjectError`.
+- **`Git.read_only()` gives the dashboard's `ReadOnlyGit` view.** Use it for library reads such
+  as `resolve`, `refs`, `config` and `CatFile`. Run commands such as `log` through `Git`.
+  Pass `cache=GitCache()` to clients that can share repository locations within one refresh.
+- **`Git.write_configs(ConfigSet(...), ConfigUnset(...))` replaces `write_config`.** It returns
+  `ConfigResult` values. Captured commands that read the caller's stdin now need explicit
+  `input=`. Use `passthrough` when Git should handle its own stdin.
+
 ## Version 5
 
 - **`Plugin.families` is gone, and with it `api.kinds.Family`, `is_url`, `is_host_login` and

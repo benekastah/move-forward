@@ -1,12 +1,13 @@
 import os
 import shutil
+import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from git_client import GitError, GitTimeoutError
+from git_client import Arg, GitError, GitTimeoutError
 from git_client.testing import GitCall, RepoTemplates
 
 from move_forward.api.git import git_common_dir
@@ -141,8 +142,11 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     _commit(other, "a.txt")
     second = tmp_path / "repo2"
     Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
-    assert list(local.folded([second, other, repo])) == [repo, other]  # the main checkout stays
-    assert list(local.folded([second, other])) == [second, other]  # the first listed, without it
+    now = datetime.now(UTC)
+    with_main = local.collect([second, other, repo], now, 30, [])
+    without_main = local.collect([second, other], now, 30, [])
+    assert [Path(r.dir) for r in with_main.repos] == [repo, other]
+    assert [Path(r.dir) for r in without_main.repos] == [second, other]
 
 
 def test_a_main_checkout_with_its_git_directory_elsewhere_is_kept_over_its_worktree(
@@ -150,17 +154,20 @@ def test_a_main_checkout_with_its_git_directory_elsewhere_is_kept_over_its_workt
 ) -> None:
     """Its `.git` is a file, as a linked worktree's is, but names the repository itself."""
     repo = tmp_path / "repo"
+    repo_git = tmp_path / "repo.git"
     repo.mkdir()
-    Git(repo).run("init", "-q", "-b", "main", f"--separate-git-dir={tmp_path / 'repo.git'}")
+    Git(repo).run("init", "-q", "-b", "main", f"--separate-git-dir={repo_git}")
     _commit(repo, "a.txt")
     second = tmp_path / "repo2"
     Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
-    assert local.folded([second, repo]) == [repo]
+    # Some Git versions list the separate Git directory as a worktree.
+    found = local.collect([second, repo], datetime.now(UTC), 30, [repo_git.as_posix()])
+    assert [Path(r.dir) for r in found.repos] == [repo]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows' names can't end in a space")
 def test_a_main_checkout_is_found_whatever_its_git_directorys_name(tmp_path: Path) -> None:
-    """Its `.git` file is read as git reads it: as bytes, taking off only the line ending."""
+    """Git directory names can have trailing spaces and non-UTF-8 bytes."""
     odd = tmp_path / "odd"
     odd.mkdir()
     # Ending in a space; and on Linux, where a name is any bytes, not UTF-8.
@@ -168,7 +175,8 @@ def test_a_main_checkout_is_found_whatever_its_git_directorys_name(tmp_path: Pat
     Git(odd).run("init", "-q", "-b", "main", f"--separate-git-dir={elsewhere}")
     _commit(odd, "a.txt")
     Git(odd).run("worktree", "add", "-q", "-b", "side", str(tmp_path / "odd2"))
-    assert local.folded([tmp_path / "odd2", odd]) == [odd]
+    found = local.collect([tmp_path / "odd2", odd], datetime.now(UTC), 30, [elsewhere.as_posix()])
+    assert [Path(r.dir) for r in found.repos] == [odd]
 
 
 def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(
@@ -253,9 +261,9 @@ def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path
     Git(repo).run("config", "branch.FeAture.pushRemote", "zeta")
     config = local.RepoConfig.read(repo)
     assert config.remotes() == Git(repo).run("remote").split() == ["Mid", "alpha", "zeta"]
-    assert config.get("branch.FeAture.pushRemote") == config.get("BRANCH.FeAture.PUSHREMOTE")
-    assert config.get("branch.FeAture.pushRemote") == "zeta"
-    assert config.get("branch.feature.pushRemote") is None  # a branch's name keeps its case
+    assert config.get("branch.FeAture.pushremote") == "zeta"
+    assert config.get("branch.feature.pushremote") is None  # a branch's name keeps its case
+    assert local.push_remote(repo, "FeAture") == "zeta"
 
 
 def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
@@ -271,28 +279,37 @@ def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
     git_calls.clear()  # those making the repos
     local.collect([repo], datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert sorted(args[0] for args in git_calls) == sorted(
-        ["worktree", "config", "for-each-ref", "--no-optional-locks", "rev-list", "log"]
+        [
+            "rev-parse",
+            "worktree",
+            "config",
+            "for-each-ref",
+            "--no-optional-locks",
+            "rev-list",
+            "log",
+        ]
     )
 
 
-def test_a_collect_of_the_repos_that_moved_starts_no_git_in_the_others(
+def test_a_partial_collect_only_checks_the_git_directory_of_a_repo_it_keeps(
     tmp_path: Path, git_calls: list[GitCall]
 ) -> None:
-    """As many gits as reading the moved repo alone: none to find out the others are kept."""
+    """Every refresh locates each configured checkout. It reads the moved repo's contents."""
     moved, kept = tmp_path / "moved", tmp_path / "kept"
     for repo in (moved, kept):
         _init_repo(repo)
         _commit(repo, "a.txt")
     now = datetime.now(UTC) + timedelta(seconds=1)
     before = local.collect([moved, kept], now, 30, [])
+    common = git_common_dir(Git(moved))
     git_calls.clear()
     local.collect([moved], now, 30, [])
     alone = sorted(call[0] for call in git_calls)
     git_calls.clear()
     found = local.collect(
-        [moved, kept], now, 30, [], only={str(git_common_dir(moved))}, previous=before
+        [moved, kept], now, 30, [], subjects=frozenset({str(common)}), previous=before
     )
-    assert sorted(call[0] for call in git_calls) == alone
+    assert sorted(call[0] for call in git_calls) == sorted([*alone, "rev-parse"])
     assert found.repos == before.repos
 
 
@@ -428,25 +445,25 @@ def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: P
 def _hangs(monkeypatch: pytest.MonkeyPatch, hung: Path, command: str) -> list[str]:
     """git times out on `command` in `hung`; returns the commands each run there."""
     ran: list[str] = []
-    real = Git.run
+    real = Git.process
 
-    def run(self: Git, *args: str, **kwargs: Any) -> str:
+    def process(self: Git, *args: Arg, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
         if Path(self.directory) == hung:
-            ran.append(args[0])
-            if args[0] == command:
-                raise GitTimeoutError(list(args), None, "")
+            first = os.fsdecode(args[0])
+            ran.append(first)
+            if first == command:
+                raise GitTimeoutError([os.fsdecode(arg) for arg in args], None, "")
         return real(self, *args, **kwargs)
 
-    monkeypatch.setattr(Git, "run", run)
+    monkeypatch.setattr(Git, "process", process)
     return ran
 
 
-@pytest.mark.parametrize("command", ["rev-list", "worktree"])
+@pytest.mark.parametrize("command", ["rev-parse", "rev-list", "worktree"])
 def test_a_repo_whose_git_times_out_is_kept_as_read_before(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
 ) -> None:
-    """Not stored afresh without what timed out (its branches' counts), nor, for its worktree
-    list, asked again and timed out twice."""
+    """A timeout reading metadata, worktrees or branch counts keeps the previous checkout."""
     hung, good = tmp_path / "hung", tmp_path / "good"
     for repo in (hung, good):
         _init_repo(repo)

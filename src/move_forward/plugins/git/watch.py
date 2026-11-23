@@ -23,7 +23,6 @@ its thread stops on an error, what it covers is left to the polling in `changes`
 """
 
 import logging
-import os
 import sys
 import threading
 from collections.abc import Callable, Iterable
@@ -31,7 +30,7 @@ from pathlib import Path, PurePosixPath
 
 from watchfiles._rust_notify import RustNotify
 
-from move_forward.api.git import Git, GitError, printable
+from move_forward.api.git import Git, GitCache, GitError, NoAnswerError, git_dir, printable
 
 log = logging.getLogger(__name__)
 
@@ -72,28 +71,12 @@ def moves_repo(relative: Path) -> bool:
     return False
 
 
-def git_dir(worktree: Path) -> Path | None:
-    """A worktree's own git directory: `.git` in the main worktree, or for a linked one the
-    directory its `.git` file names. None when it isn't a checkout."""
-    dot = worktree / ".git"
-    if dot.is_dir():
-        return dot
-    if not dot.is_file():
-        return None
-    # As git (and py-git-client's `git_common_dir`) reads it: bytes, with only the line
-    # ending taken off, so a path that isn't UTF-8 or ends in a space is kept as it is.
-    line = dot.read_bytes().rstrip(b"\r\n")
-    if not line.startswith(b"gitdir: "):
-        return None
-    return (worktree / os.fsdecode(line.removeprefix(b"gitdir: "))).resolve()
-
-
 def tracked_dirs(worktree: Path) -> set[Path]:
     """The worktree and every directory in its index, i.e. with a file git tracks or a new
     one staged."""
     try:
         out = printable(Git(worktree).run("ls-files", "-z", strip=False))
-    except GitError:
+    except GitError, NoAnswerError, OSError:
         return {worktree}
     found = {worktree}
     for name in out.split("\0"):
@@ -186,35 +169,39 @@ class Watcher:
             dead = self._dead(True) or (PER_DIRECTORY and self._dead(False))
             return set() if dead else set(self._worktrees)
 
-    def sync(self, worktrees: dict[Path, Path]) -> None:
+    def sync(self, worktrees: dict[Path, Path], *, cache: GitCache | None = None) -> None:
         """Watch exactly these worktrees (each with its common git directory, all resolved)
         and their repos, following what each tracks."""
         with self._sync_lock:
+            cache = cache if cache is not None else GitCache()
+            indexes: dict[Path, Path] = {}
+            for worktree in worktrees:
+                try:
+                    indexes[worktree] = (git_dir(Git(worktree, cache=cache)) / "index").resolve()
+                except GitError, NoAnswerError, OSError:
+                    # Poll this worktree if its index couldn't be located for watching.
+                    continue
+            watched = {w: c for w, c in worktrees.items() if w in indexes}
             commons = frozenset(c for c in worktrees.values() if c.is_dir())
             if PER_DIRECTORY:
                 repos_ok = self._ensure(True, commons)
-                dirs = frozenset(d for w in worktrees for d in self._tracked(w) if d.is_dir())
+                dirs = frozenset(
+                    d for w, index in indexes.items() for d in self._tracked(w, index) if d.is_dir()
+                )
                 worktrees_ok = self._ensure(False, dirs) and repos_ok
             else:
-                trees = commons | {w for w in worktrees if w.is_dir()}
+                trees = commons | {w for w in watched if w.is_dir()}
                 repos_ok = worktrees_ok = self._ensure(True, trees)
-            indexes: dict[Path, Path] = {}
-            for worktree in worktrees:
-                if (own := git_dir(worktree)) is not None:
-                    indexes[(own / "index").resolve()] = worktree
             with self._lock:
                 self._repos = set(commons) if repos_ok else set()
-                self._worktrees = dict(worktrees) if worktrees_ok else {}
-                self._indexes = indexes if worktrees_ok else {}
+                self._worktrees = watched if worktrees_ok else {}
+                self._indexes = {index: w for w, index in indexes.items()} if worktrees_ok else {}
 
-    def _tracked(self, worktree: Path) -> set[Path]:
+    def _tracked(self, worktree: Path, index: Path) -> set[Path]:
         """`tracked_dirs`, listed again only when the worktree's index changed."""
-        own = git_dir(worktree)
         try:
-            stat = (own / "index").stat() if own else None
+            stat = index.stat()
         except OSError:
-            stat = None
-        if stat is None:
             return tracked_dirs(worktree)
         key = (stat.st_mtime_ns, stat.st_size)
         listed = self._listed.get(worktree)

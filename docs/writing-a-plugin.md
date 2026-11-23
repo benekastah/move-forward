@@ -44,7 +44,8 @@ Context, Graph`; imports are absolute, as Ruff enforces): everything a plugin ma
 there, and core's own modules may change without notice. Its submodules group the rest:
 `api.html` (`html` and `Html` to build HTML, `page`, `shown` to drop hidden characters,
 `buttons`, `linkable`), `api.shell` (`run`, `CommandError`), `api.git` (`Git`, `GitError`,
-`GitTimeoutError`, `NotARepositoryError`, and py-git-client's `git_common_dir`, `config`, `config_key`, `refs`, `printable`, `CatFile`, and `update_refs` with its `RefUpdate`), `api.http`
+`NoAnswerError`, and Git helpers including `git_common_dir`, `git_dir`, `config`, `refs`,
+`printable`, `CatFile`, and `update_refs` with its `RefUpdate`), `api.http`
 (`request`, `RequestError`), `api.localtime` (`local`, `day`, `at`), `api.ids`
 (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`TokenFields`,
 `TokenSettings`, `token`, `read`, `write`, `delete`). Ruff refuses any other core import
@@ -58,12 +59,15 @@ plugin needs, so a new py-git-client changes the API's version rather than break
 quietly. Ruff refuses an import of `git_client` in a plugin, as `tests/test_api.py` does. Run
 a command with `run` (its output stripped, or as git printed it with `strip=False`, for a
 parser), `ok` (a yes-or-no answer, as `merge-base --is-ancestor` gives) or `resolve` (an
-object id, or None); a failure raises `GitError`, with git's `stderr` and `stdout`. Pass what
-git printed through `printable` before storing or showing it: it replaces the bytes that
-aren't UTF-8, which neither the database nor the page can take. Nothing starts once
-the dashboard is stopping, but a long-lived git (`popen`, as a py-git-client `CatFile` uses)
-has no timeout: a plugin that keeps one closes it when the dashboard stops (`api.shell.stopping`),
-so a stuck git can't hold up shutdown.
+object id, or None). A failed command raises `GitError`, with Git's `stderr` and `stdout`.
+Catch `NoAnswerError` as well to handle timeouts and commands skipped during shutdown. Pass
+what Git printed through `printable` before storing or showing it to replace bytes that aren't
+UTF-8. `CatFile` applies the client's timeout to each request. When using `popen` directly,
+close the process when the dashboard stops (`api.shell.stopping`).
+
+Pass `Git(repo)` to `git_common_dir` and `git_dir`. For typed reads only, use `Git(repo).read_only()`
+to keep the dashboard settings. Use a fresh `GitCache` for each refresh and pass it as `cache=`
+to the clients that share metadata in that refresh.
 
 The built-ins' tests use py-git-client's pytest plugin, `git_client.testing` (this repo loads
 it in `pyproject.toml`'s `addopts`); a plugin of your own loads it in its own tests, with `-p

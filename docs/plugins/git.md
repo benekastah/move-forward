@@ -21,9 +21,10 @@ each directory in the index, on its own, so ignored trees (`node_modules`, `buil
 On Linux each watched directory takes an inotify watch, counted against
 `fs.inotify.max_user_watches`. What it can't watch (over that limit, say), or a watch
 that stopped on an error until the next refresh watches it anew, is polled instead, as it
-says in the log: refs and config every 2 seconds by the times of the files
-git keeps them in, without running git, and edits every `status_seconds` (30; 0 leaves
-them to `refresh_seconds`) by `git status`. `git status` takes no lock, so it never gets in
+says in the log. Every 2 seconds Git locates the repositories, and the dashboard checks
+the times of the files that hold the polled refs and config. Edits are checked with
+`git status` every `status_seconds` (30; 0 leaves them to `refresh_seconds`).
+`git status` takes no lock, so it never gets in
 the way of your own git commands; in a very large repo, git's own file watcher makes it
 cheap: `git config core.fsmonitor true` (built in on macOS and Windows; on Linux it takes
 Watchman) and `git config core.untrackedCache true`.

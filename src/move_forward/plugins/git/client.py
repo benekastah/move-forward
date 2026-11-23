@@ -7,20 +7,22 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from itertools import repeat
 from pathlib import Path, PurePosixPath
 
 from move_forward.api.git import (
     Git,
+    GitCache,
     GitError,
-    GitTimeoutError,
+    NoAnswerError,
     config,
-    config_key,
     git_common_dir,
+    git_dir,
     printable,
     refs,
 )
+from move_forward.api.ids import branch_parts
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
-from move_forward.plugins.git.watch import git_dir
 
 log = logging.getLogger(__name__)
 
@@ -151,7 +153,7 @@ class RepoConfig:
     `git config --list`."""
 
     values: dict[str, str]
-    """Each key's last value, by the key as git lists it (`config_key`): its section and name
+    """Each key's last value, by the key as git lists it: its section and name
     lower-cased, a subsection (a branch's or a remote's name) as it is. A key set without a
     value has an empty one."""
 
@@ -163,9 +165,8 @@ class RepoConfig:
         return cls({printable(key): printable(values[-1] or "") for key, values in listed})
 
     def get(self, key: str) -> str | None:
-        """`key`'s value (`branch.<name>.remote`, in any case but the subsection's), or None when
-        it's unset or empty."""
-        return self.values.get(config_key(key)) or None
+        """`key`'s value, using the key as git lists it, or None when it's unset or empty."""
+        return self.values.get(key) or None
 
     def remotes(self) -> list[str]:
         """The remotes, by name, as `git remote` lists them: each with a key of its own, sorted."""
@@ -221,7 +222,7 @@ class Refs:
 def _local_default(config: RepoConfig, refs: Refs) -> str:
     """The default branch when no remote's `HEAD` says: `init.defaultBranch`, `main` or
     `master`, the first there is locally."""
-    configured = config.get("init.defaultBranch")
+    configured = config.get("init.defaultbranch")
     for name in [*([configured] if configured else []), FALLBACK_DEFAULT_BRANCH, "master"]:
         if f"refs/heads/{name}" in refs.names:
             return name
@@ -269,7 +270,7 @@ def push_remote(repo: Path, branch: str) -> str | None:
 def _push_remote(config: RepoConfig, branch: str) -> str | None:
     """Its push remote, `remote.pushDefault`, its remote, or the only remote there is. None
     when there are several and nothing says which."""
-    for key in (f"branch.{branch}.pushRemote", "remote.pushDefault", f"branch.{branch}.remote"):
+    for key in (f"branch.{branch}.pushremote", "remote.pushdefault", f"branch.{branch}.remote"):
         if (name := config.get(key)) and name != ".":
             return name
     names = config.remotes()
@@ -391,8 +392,6 @@ def _off_default(
                 strip=False,
             )
         )
-    except GitTimeoutError:
-        raise  # fails the repo's read, which keeps what was read before
     except GitError:
         return {b.name: (None, None) for b in branches}
     parents: dict[str, list[str]] = {}
@@ -442,19 +441,57 @@ def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
     return parse_worktrees(printable(Git(repo).run("worktree", "list", "--porcelain", strip=False)))
 
 
-def folded(repos: list[Path]) -> list[Path]:
-    """`repos` with one path per repository, by its common git directory, read without
-    running git: a path that's a worktree of another listed one is folded into it, keeping the
-    main checkout (the one whose own git directory is the repository's) if it's listed, else
-    the first listed. A path that isn't a repository is kept, to fail, and be said, on its
-    own."""
-    by_common: dict[Path, Path] = {}
-    for repo in repos:
-        common = git_common_dir(repo) or repo.resolve()
-        own = git_dir(repo)
-        if common not in by_common or (own is not None and own.resolve() == common):
-            by_common[common] = repo
+def common_dir(repo: Path, cache: GitCache) -> Path | None:
+    """The common git directory, if Git can identify it for a change check or watcher."""
+    try:
+        return git_common_dir(Git(repo, cache=cache))
+    except GitError, NoAnswerError, OSError:
+        return None
+
+
+@dataclass(frozen=True)
+class _Checkout:
+    """A configured checkout's Git directories, or the failure to read them."""
+
+    path: Path
+    common: Path | None = None
+    own: Path | None = None
+    error: Exception | None = None
+
+    @classmethod
+    def read(cls, path: Path, cache: GitCache) -> _Checkout:
+        try:
+            git = Git(path, cache=cache)
+            return cls(path, common=git_common_dir(git), own=git_dir(git))
+        except (GitError, NoAnswerError, OSError) as e:
+            return cls(path, error=e)
+
+
+def _folded(checkouts: list[_Checkout]) -> list[_Checkout]:
+    """Keep one path per repository, preferring its main checkout, and every failed lookup."""
+    by_common: dict[tuple[bool, Path], _Checkout] = {}
+    for checkout in checkouts:
+        key = (checkout.error is not None, checkout.common or checkout.path)
+        if key not in by_common or checkout.own == checkout.common:
+            by_common[key] = checkout
     return list(by_common.values())
+
+
+def _repos_of(
+    checkouts: list[_Checkout], subjects: frozenset[str], cache: GitCache
+) -> set[str] | None:
+    """The common git directories `subjects` name directly or by branch id. Unknown
+    subjects ask for a full collect."""
+    known = {str(c.common) for c in checkouts if c.common is not None}
+    found: set[str] = set()
+    for subject in subjects:
+        repo_dir, branch = branch_parts(subject)
+        if branch and (common := common_dir(Path(repo_dir), cache)) is not None:
+            subject = str(common)
+        if subject not in known:
+            return None
+        found.add(subject)
+    return found
 
 
 def collect(
@@ -462,34 +499,49 @@ def collect(
     now: datetime,
     commit_history_days: int,
     ignored_worktree_globs: list[str],
-    only: set[str] | None = None,
+    subjects: frozenset[str] | None = None,
     previous: LocalSnapshot | None = None,
     github_hosts: Sequence[str] = GITHUB_HOSTS,
 ) -> LocalSnapshot:
-    """Every repo among `repos`, or with `only` (common git directories, see
-    `changes.fingerprints`) just those, keeping the rest as `previous` has them; a repo
-    `previous` lacks is read anyway. A repo git can't read (or that times out) is logged and
+    """Every repo among `repos`, or the ones `subjects` name, keeping the rest as `previous`
+    has them. An unknown subject asks for every repo, and a repo `previous` lacks is read
+    anyway. A repo git can't read (or that times out) is logged and
     kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
     read, the first error is raised."""
-    existing = folded([repo for repo in repos if repo.exists()])
+    existing = [repo for repo in repos if repo.exists()]
     before = {r.dir: r for r in previous.repos} if previous else {}
-    failed: list[Exception] = []
-
-    def one(repo: Path) -> LocalRepo | None:
-        if only is not None and str(repo) in before and str(git_common_dir(repo)) not in only:
-            return before[str(repo)]
-        try:
-            return collect_repo(
-                repo, now, commit_history_days, ignored_worktree_globs, github_hosts
-            )
-        except (GitError, OSError) as e:  # a hung git (GitTimeoutError), say
-            failed.append(e)
-            kept = "keeping what was read before" if str(repo) in before else "leaving it out"
-            log.warning("can't read %s, so %s: %s", repo, kept, e)
-            return before.get(str(repo))
-
+    cache = GitCache()
     with ThreadPoolExecutor(max_workers=max(1, len(existing))) as pool:
-        found = list(pool.map(one, existing))
-    if failed and len(failed) == len(existing):
+        checkouts = list(pool.map(_Checkout.read, existing, repeat(cache)))
+        only = None if subjects is None else _repos_of(checkouts, subjects, cache)
+        folded = _folded(checkouts)
+
+        def one(checkout: _Checkout) -> LocalRepo | Exception:
+            repo = checkout.path
+            if checkout.error is not None:
+                return checkout.error
+            if only is not None and str(repo) in before and str(checkout.common) not in only:
+                return before[str(repo)]
+            try:
+                return collect_repo(
+                    repo, now, commit_history_days, ignored_worktree_globs, github_hosts
+                )
+            except (GitError, NoAnswerError, OSError) as e:
+                return e
+
+        results = list(pool.map(one, folded))
+    found: list[LocalRepo] = []
+    failed: list[Exception] = []
+    for checkout, result in zip(folded, results, strict=True):
+        if isinstance(result, LocalRepo):
+            found.append(result)
+            continue
+        failed.append(result)
+        previous_repo = before.get(str(checkout.path))
+        kept = "keeping what was read before" if previous_repo is not None else "leaving it out"
+        log.warning("can't read %s, so %s: %s", checkout.path, kept, result)
+        if previous_repo is not None:
+            found.append(previous_repo)
+    if failed and len(failed) == len(folded):
         raise failed[0]
-    return LocalSnapshot(repos=[r for r in found if r is not None])
+    return LocalSnapshot(repos=found)

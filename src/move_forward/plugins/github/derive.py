@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 from pydantic import Field
 
 from move_forward.api import Model
-from move_forward.api.git import Git, GitError, printable
+from move_forward.api.git import Git, GitError, NoAnswerError, printable
 from move_forward.plugins.github import codeowners
 from move_forward.plugins.github.models import (
     DerivedSnapshot,
@@ -101,7 +101,7 @@ def suggest_reviewers(
                 *dirs,
             )
         )
-    except GitError:
+    except GitError, NoAnswerError:
         return []
     by_email = Counter(out.split())
     login_by_email = {email: login for login, email in emails.items() if email}

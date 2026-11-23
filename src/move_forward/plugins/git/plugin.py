@@ -30,8 +30,7 @@ from move_forward.api import (
     Snapshots,
     attrs,
 )
-from move_forward.api.git import GitError, git_common_dir
-from move_forward.api.ids import branch_parts
+from move_forward.api.git import GitCache, GitError, NoAnswerError
 from move_forward.plugins.git import actions, changes, client, watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.kinds import BranchAttrs, RepoAttrs
@@ -54,21 +53,6 @@ _FINGERPRINTS = TypeAdapter(dict[str, str])
 """`changes.fingerprints`, as the fingerprint core keeps (`Changed.fingerprint`)."""
 CLONES = "clones"
 """The problem (`Context.problem`) of the repos that are each a clone of one GitHub repo."""
-
-
-def _repos_of(repos: list[Path], subjects: frozenset[str]) -> set[str] | None:
-    """The common git directories of `repos` that `subjects` name, each by its own or by a
-    branch's id (`branch_id`); None when one names neither."""
-    known = {str(common) for repo in repos if (common := git_common_dir(repo)) is not None}
-    found: set[str] = set()
-    for subject in subjects:
-        repo_dir, branch = branch_parts(subject)
-        if branch and (common := git_common_dir(Path(repo_dir))) is not None:
-            subject = str(common)
-        if subject not in known:
-            return None
-        found.add(subject)
-    return found
 
 
 class GitPlugin(
@@ -107,14 +91,12 @@ class GitPlugin(
         GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
         previous = LocalRepository(ctx.db).load()
-        only = _repos_of(ctx.config.repos, req.subjects)
-        partial = not req.full and only is not None
         found = client.collect(
             ctx.config.repos,
             ctx.now,
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
-            only=only if partial else None,
+            subjects=None if req.full else req.subjects,
             previous=previous,
             github_hosts=ctx.config.github_hosts,
         )
@@ -167,13 +149,14 @@ class GitPlugin(
     def _watch(self, snapshot: LocalSnapshot) -> None:
         assert self._watcher is not None
         worktrees: dict[Path, Path] = {}
+        cache = GitCache()
         for repo in snapshot.repos:
-            if (common := git_common_dir(Path(repo.dir))) is None:
+            if (common := client.common_dir(Path(repo.dir), cache)) is None:
                 continue
             self._ids[common] = str(common)
             for wt in repo.worktrees:
                 worktrees[Path(wt.path).resolve()] = common
-        self._watcher.sync(worktrees)
+        self._watcher.sync(worktrees, cache=cache)
 
     def check_triggers(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
         """Every 2 seconds: what the watched repos said, and the polled ones' files' times."""
@@ -197,12 +180,12 @@ class GitPlugin(
 
         fingerprint = req.previous.fingerprint
         before = None if fingerprint is None else _FINGERPRINTS.validate_json(fingerprint)
-        polled = [repo for repo in ctx.config.repos if str(git_common_dir(repo)) not in watched]
-        now = changes.fingerprints(polled)
+        cache = GitCache()
+        now = changes.fingerprints(ctx.config.repos, cache=cache, watched=watched)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
         if before is not None:
             moved |= changes.moved(before, now)
-        moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
+        moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set(), cache)
         return Changed(
             fingerprint=_FINGERPRINTS.dump_json(now).decode(),
             subjects=frozenset(moved),
@@ -210,7 +193,9 @@ class GitPlugin(
             reason="a repo moved or was edited",
         )
 
-    def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
+    def _edited(
+        self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path], cache: GitCache
+    ) -> set[str]:
         """The repos (common git directories) with a worktree whose uncommitted edits moved
         since the last look, asking `git status` of the worktrees the watcher saw edited, and
         of those it doesn't watch once `status_seconds` have passed since the last look. Edits
@@ -235,12 +220,15 @@ class GitPlugin(
                     continue
                 try:
                     status = client.worktree_status(path)
-                except GitError:  # gone since; the next read finds out
+                except GitError, NoAnswerError:  # try again after the next edit or poll
                     continue
                 last = self._statuses.get(resolved)
-                self._statuses[resolved] = status
                 if status != (wt.modified, wt.untracked) and status != last:
-                    found.add(str(git_common_dir(Path(repo.dir))))
+                    common = client.common_dir(Path(repo.dir), cache)
+                    if common is None:
+                        continue
+                    found.add(str(common))
+                self._statuses[resolved] = status
         return found
 
     def entities(self, req: Request[GitConfig, LocalSnapshot]) -> list[Entity]:
