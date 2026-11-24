@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from conftest import NOW
+from git_client.testing import GitCall
 
 from move_forward.api.git import git_common_dir
 from move_forward.change_checks import ChangeChecks
@@ -200,6 +201,24 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
         assert _until(lambda: checks.check(Enabled(plugin, ctx(1)), Graph([])) is not None)
         assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(Git(repo)))}
+    finally:
+        plugin.stop_watching()
+
+
+def test_change_poll_uses_the_watch_for_known_checkouts(
+    tmp_path: Path, git_calls: list[GitCall]
+) -> None:
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin = GitPlugin()
+    ctx = _plugin_context(repo, db)
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
+    try:
+        plugin.changed(RefreshRequest(ctx(0), Graph()))  # starts watching
+        git_calls.clear()
+        plugin.changed(RefreshRequest(ctx(2), Graph()))
+        assert not git_calls
     finally:
         plugin.stop_watching()
 

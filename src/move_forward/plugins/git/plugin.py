@@ -181,11 +181,13 @@ class GitPlugin(
         fingerprint = req.previous.fingerprint
         before = None if fingerprint is None else _FINGERPRINTS.validate_json(fingerprint)
         cache = GitCache()
-        now = changes.fingerprints(ctx.config.repos, cache=cache, watched=watched)
+        watched_worktrees: set[Path] = watcher.worktrees if watcher else set()
+        polled = [repo for repo in ctx.config.repos if repo.resolve() not in watched_worktrees]
+        now = changes.fingerprints(polled, cache=cache, watched=watched)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
         if before is not None:
             moved |= changes.moved(before, now)
-        moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set(), cache)
+        moved |= self._edited(ctx, edited_now, watched_worktrees, cache)
         return Changed(
             fingerprint=_FINGERPRINTS.dump_json(now).decode(),
             subjects=frozenset(moved),
