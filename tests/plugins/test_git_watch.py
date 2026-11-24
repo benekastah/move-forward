@@ -11,13 +11,13 @@ import pytest
 from conftest import NOW
 from git_client.testing import GitCall
 
-from move_forward.api.git import git_common_dir
+from move_forward.api.git import GitCache, git_common_dir
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.git import Git
 from move_forward.graph import Graph
 from move_forward.plugin import Context, ContextRequest, RefreshRequest
-from move_forward.plugins.git import watch
+from move_forward.plugins.git import client, watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
@@ -175,10 +175,12 @@ def test_a_worktree_no_longer_found_stops_being_watched(
     assert watcher.take() == (set(), set())
 
 
-def _plugin_context(repo: Path, db: Database) -> Callable[[float], Context[GitConfig]]:
+def _plugin_context(
+    repo: Path, db: Database, *, config: GitConfig | None = None
+) -> Callable[[float], Context[GitConfig]]:
     def ctx(seconds: float) -> Context[GitConfig]:
         return Context(
-            config=GitConfig(repos=[repo], status_seconds=0),  # watching alone
+            config=config if config is not None else GitConfig(repos=[repo], status_seconds=0),
             email="me@example.com",
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
@@ -219,6 +221,67 @@ def test_change_poll_uses_the_watch_for_known_checkouts(
         git_calls.clear()
         plugin.changed(RefreshRequest(ctx(2), Graph()))
         assert not git_calls
+    finally:
+        plugin.stop_watching()
+
+
+@pytest.mark.parametrize("watching", [False, True])
+def test_edits_in_a_linked_worktree_are_seen_when_the_main_lookup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, watching: bool
+) -> None:
+    main, linked = _repo(tmp_path / "main"), tmp_path / "linked"
+    Git(main).run("worktree", "add", "-q", "--detach", str(linked))
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin, checks = GitPlugin(watching=watching), ChangeChecks()
+    config = GitConfig(repos=[main, linked], status_seconds=0 if watching else 1)
+    ctx = _plugin_context(main, db, config=config)
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
+    common = git_common_dir(Git(main))
+    lookup = client.common_dir
+
+    def common_dir(path: Path, cache: GitCache) -> Path | None:
+        return None if path == main else lookup(path, cache)
+
+    monkeypatch.setattr(client, "common_dir", common_dir)
+    try:
+        assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None
+        (linked / "src" / "deep" / "a.py").write_text("changed\n", encoding="utf-8")
+
+        def changed() -> bool:
+            answer = checks.check(Enabled(plugin, ctx(1)), Graph([]))
+            return answer is not None and answer.subjects == frozenset({str(common)})
+
+        assert _until(changed) if watching else changed()
+    finally:
+        plugin.stop_watching()
+
+
+@pytest.mark.parametrize("replace_checkout", [False, True])
+def test_the_plugin_detects_a_repo_replaced_at_its_watched_path(
+    tmp_path: Path, replace_checkout: bool
+) -> None:
+    repo, replacement = _repo(tmp_path / "r"), _repo(tmp_path / "another")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin, checks = GitPlugin(), ChangeChecks()
+    ctx = _plugin_context(repo, db)
+    kept = plugin.snapshots(ContextRequest(ctx(0)))
+    kept.save(plugin.collect(RefreshRequest(ctx(0), Graph())))
+    try:
+        assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None
+        if replace_checkout:
+            repo.rename(tmp_path / "old")
+            replacement.rename(repo)
+        else:
+            (repo / ".git").rename(tmp_path / "old")
+            (replacement / ".git").rename(repo / ".git")
+        assert checks.check(Enabled(plugin, ctx(1)), Graph([])) is not None
+
+        kept.save(plugin.collect(RefreshRequest(ctx(1), Graph())))
+        checks.check(Enabled(plugin, ctx(2)), Graph([]))
+        (repo / "src" / "deep" / "a.py").write_text("changed\n", encoding="utf-8")
+        assert _until(lambda: checks.check(Enabled(plugin, ctx(3)), Graph([])) is not None)
     finally:
         plugin.stop_watching()
 

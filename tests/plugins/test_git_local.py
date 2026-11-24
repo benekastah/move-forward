@@ -478,21 +478,30 @@ def test_a_repo_whose_git_times_out_is_kept_as_read_before(
     assert ran.count(command) == 1
 
 
-def test_a_failed_main_checkout_is_refreshed_through_its_linked_worktree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("ignore_main", [False, True])
+def test_a_failed_main_checkout_keeps_its_identity_and_precedence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ignore_main: bool
 ) -> None:
-    main, linked = tmp_path / "main", tmp_path / "linked"
-    _init_repo(main)
-    _commit(main, "first.txt")
+    main, clone, linked = tmp_path / "main", tmp_path / "clone", tmp_path / "linked"
+    for repo in (main, clone):
+        _init_repo(repo)
+        _commit(repo, "first.txt")
+        Git(repo).run("remote", "add", "origin", "https://github.com/acme/widgets.git")
     Git(main).run("worktree", "add", "-q", "-b", "side", str(linked))
     now = datetime.now(UTC) + timedelta(seconds=1)
-    before = local.collect([linked, main], now, 30, [])
+    repos = [main, clone, linked]
+    globs = [f"*/{main.name}"] if ignore_main else []
+    before = local.collect(repos, now, 30, globs)
     _commit(linked, "new.txt")
     _hangs(monkeypatch, main, "rev-parse")
 
-    found = local.collect([linked, main], now, 30, [], previous=before)
+    found = local.collect(repos, now, 30, globs, previous=before)
 
-    assert [r.dir for r in found.repos] == [str(main)]
+    assert [r.dir for r in found.repos] == [str(main), str(clone)]
+    visible = [linked] if ignore_main else [main, linked]
+    assert [Path(wt.path).resolve() for wt in found.repos[0].worktrees] == [
+        path.resolve() for path in visible
+    ]
     assert found.repos[0].branches != before.repos[0].branches
 
 

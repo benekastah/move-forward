@@ -23,6 +23,7 @@ its thread stops on an error, what it covers is left to the polling in `changes`
 """
 
 import logging
+import stat
 import sys
 import threading
 from collections.abc import Callable, Iterable
@@ -31,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from watchfiles._rust_notify import RustNotify
 
 from move_forward.api.git import Git, GitCache, GitError, NoAnswerError, git_dir, printable
+from move_forward.plugins.git.client import METADATA_TIMEOUT_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +88,18 @@ def tracked_dirs(worktree: Path) -> set[Path]:
     return found
 
 
+def _identity(path: Path) -> tuple[int, ...] | None:
+    """A directory's identity or a Git pointer file's identity and modification time."""
+    try:
+        found = path.stat()
+    except OSError:
+        return None
+    identity = (found.st_dev, found.st_ino)
+    if stat.S_ISREG(found.st_mode):
+        return (*identity, found.st_mtime_ns, found.st_size)
+    return identity
+
+
 class _Watch:
     """One `RustNotify` over a set of paths, and the thread handing over its changes."""
 
@@ -136,6 +150,10 @@ class Watcher:
         """The common git directories whose refs are watched."""
         self._worktrees: dict[Path, Path] = {}
         """The worktrees whose edits are watched, with their common git directories."""
+        self._anchors: dict[Path, dict[Path, tuple[int, ...] | None]] = {}
+        """Each watched checkout's root and Git entry points as they were when attached."""
+        self._replaced: set[Path] = set()
+        """Disappeared or replaced checkouts since the last `sync`, left to polling."""
         self._indexes: dict[Path, Path] = {}
         """Each watched worktree, by its index file."""
         self._moved: set[Path] = set()
@@ -156,9 +174,11 @@ class Watcher:
 
     @property
     def repos(self) -> set[Path]:
-        """The repos watched; none while the watch of them is dead, so they're polled."""
+        """The repos still covered by a live watch after the last `take`."""
         with self._lock:
-            return set() if self._dead(True) else set(self._repos)
+            if self._dead(True):
+                return set()
+            return self._repos - {self._worktrees[w] for w in self._replaced}
 
     @property
     def worktrees(self) -> set[Path]:
@@ -167,7 +187,7 @@ class Watcher:
         with self._lock:
             # The recursive watch sees every worktree's index; on Linux the other its files.
             dead = self._dead(True) or (PER_DIRECTORY and self._dead(False))
-            return set() if dead else set(self._worktrees)
+            return set() if dead else set(self._worktrees) - self._replaced
 
     def sync(self, worktrees: dict[Path, Path], *, cache: GitCache | None = None) -> None:
         """Watch exactly these worktrees (each with its common git directory, all resolved)
@@ -177,25 +197,39 @@ class Watcher:
             indexes: dict[Path, Path] = {}
             for worktree in worktrees:
                 try:
-                    indexes[worktree] = (git_dir(Git(worktree, cache=cache)) / "index").resolve()
+                    git = Git(worktree, cache=cache, timeout=METADATA_TIMEOUT_SECONDS)
+                    indexes[worktree] = (git_dir(git) / "index").resolve()
                 except GitError, NoAnswerError, OSError:
                     # Poll this worktree if its index couldn't be located for watching.
                     continue
             watched = {w: c for w, c in worktrees.items() if w in indexes}
+            anchors = {
+                w: {p: _identity(p) for p in {w, w / ".git", c, indexes[w].parent}}
+                for w, c in watched.items()
+            }
+            with self._lock:
+                replaced = bool(self._replaced) or any(
+                    w in self._anchors and self._anchors[w] != anchor
+                    for w, anchor in anchors.items()
+                )
+            if replaced:
+                self._listed.clear()
             commons = frozenset(c for c in worktrees.values() if c.is_dir())
             if PER_DIRECTORY:
-                repos_ok = self._ensure(True, commons)
+                repos_ok = self._ensure(True, commons, replace=replaced)
                 dirs = frozenset(
                     d for w, index in indexes.items() for d in self._tracked(w, index) if d.is_dir()
                 )
-                worktrees_ok = self._ensure(False, dirs) and repos_ok
+                worktrees_ok = self._ensure(False, dirs, replace=replaced) and repos_ok
             else:
                 trees = commons | {w for w in watched if w.is_dir()}
-                repos_ok = worktrees_ok = self._ensure(True, trees)
+                repos_ok = worktrees_ok = self._ensure(True, trees, replace=replaced)
             with self._lock:
                 self._repos = set(commons) if repos_ok else set()
                 self._worktrees = watched if worktrees_ok else {}
                 self._indexes = {index: w for w, index in indexes.items()} if worktrees_ok else {}
+                self._anchors = anchors if worktrees_ok else {}
+                self._replaced.clear()
 
     def _tracked(self, worktree: Path, index: Path) -> set[Path]:
         """`tracked_dirs`, listed again only when the worktree's index changed."""
@@ -210,10 +244,10 @@ class Watcher:
             self._listed[worktree] = listed
         return listed[1]
 
-    def _ensure(self, recursive: bool, paths: frozenset[Path]) -> bool:
-        """Watch `paths` (recursively or not), unless they already are; whether they are."""
+    def _ensure(self, recursive: bool, paths: frozenset[Path], *, replace: bool) -> bool:
+        """Watch `paths`, renewing the watch if a checkout was replaced at the same path."""
         current = self._watches.get(recursive)
-        if current is not None and current.paths == paths and not current.dead:
+        if current is not None and current.paths == paths and not (current.dead or replace):
             return True
         if current is not None:
             current.close()
@@ -229,9 +263,16 @@ class Watcher:
 
     def take(self) -> tuple[set[Path], set[Path]]:
         """The repos (common git directories) that moved and the worktrees edited since
-        the last call."""
+        the last call. A replacement checkout needs a refresh even if its watch went quiet."""
         with self._lock:
-            moved, edited = self._moved, self._edited
+            moved = self._moved - {self._worktrees[w] for w in self._replaced}
+            for worktree, anchor in self._anchors.items():
+                if worktree not in self._replaced and any(
+                    _identity(path) != identity for path, identity in anchor.items()
+                ):
+                    self._replaced.add(worktree)
+                    moved.add(self._worktrees[worktree])
+            edited = self._edited - self._replaced
             self._moved, self._edited = set(), set()
         return moved, edited
 

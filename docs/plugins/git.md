@@ -21,8 +21,9 @@ each directory in the index, on its own, so ignored trees (`node_modules`, `buil
 On Linux each watched directory takes an inotify watch, counted against
 `fs.inotify.max_user_watches`. What it can't watch (over that limit, say), or a watch
 that stopped on an error until the next refresh watches it anew, is polled instead, as it
-says in the log. Every 2 seconds Git locates the repositories, and the dashboard checks
-the times of the files that hold the polled refs and config. Edits are checked with
+says in the log. Every 2 seconds the dashboard checks the times of the files that hold
+the polled refs and config. Replacing a watched checkout at the same path refreshes it
+and sets up a new watch. Edits are checked with
 `git status` every `status_seconds` (30; 0 leaves them to `refresh_seconds`).
 `git status` takes no lock, so it never gets in
 the way of your own git commands; in a very large repo, git's own file watcher makes it
@@ -41,11 +42,11 @@ the unpushed commits of any branch git stack tracks (with the git_stack plugin),
 stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` (180) says how far back commits count: yours
 (by the repo's `user.email`) towards the directories you work in, and others' towards the
-github plugin's reviewer suggestions. A
-repo git can't read (one whose git hangs, say) is logged and kept as it was last read, or
-left out if it never was (a path that isn't a repo), so it doesn't hold up the others,
-until its next change or the next full read (every `refresh_seconds`); a worktree deleted
-without `git worktree remove` is left out.
+github plugin's reviewer suggestions. If Git can't read a configured checkout, another
+configured worktree of the same repo can refresh it under its usual path. A repo Git
+can't read is logged and kept as it was last read, or left out if it never was, until its
+next change or the next full read (every `refresh_seconds`). A worktree deleted without
+`git worktree remove` is left out.
 
 Remotes can have any names. "The default branch" is the default branch on every remote
 (`upstream/main` and `origin/main` in a fork): a commit on any of them is on the default

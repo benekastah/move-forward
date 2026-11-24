@@ -44,6 +44,8 @@ _REFS_FORMAT = f"%(refname)%09%(symref)%09{_FOR_EACH_REF_FORMAT}"
 """`Refs.read`'s: each ref's full name and what it points at if it's symbolic, then a branch's
 fields as `parse_branches` reads them."""
 FALLBACK_DEFAULT_BRANCH = "main"
+METADATA_TIMEOUT_SECONDS = 1.0
+"""How long a change check or watcher setup waits for a Git metadata command."""
 
 
 def parse_worktrees(porcelain: str) -> list[tuple[str, str | None]]:
@@ -436,15 +438,16 @@ def _pushed_copy(repo: Path, branch: Branch, config: RepoConfig, refs: Refs) -> 
     return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
-def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
+def read_worktrees(repo: Path, *, timeout: float | None = None) -> list[tuple[str, str | None]]:
     """`git worktree list`'s worktrees: each one's path and the branch checked out there."""
-    return parse_worktrees(printable(Git(repo).run("worktree", "list", "--porcelain", strip=False)))
+    git = Git(repo) if timeout is None else Git(repo, timeout=timeout)
+    return parse_worktrees(printable(git.run("worktree", "list", "--porcelain", strip=False)))
 
 
 def common_dir(repo: Path, cache: GitCache) -> Path | None:
     """The common git directory, if Git can identify it promptly."""
     try:
-        return git_common_dir(Git(repo, cache=cache, timeout=1.0))
+        return git_common_dir(Git(repo, cache=cache, timeout=METADATA_TIMEOUT_SECONDS))
     except GitError, NoAnswerError, OSError:
         return None
 
@@ -494,6 +497,17 @@ def _repos_of(
     return found
 
 
+def _members(repo: Path) -> set[Path]:
+    """Git's worktree paths, including checkouts hidden by the dashboard's globs."""
+    try:
+        return {
+            Path(path).resolve()
+            for path, _ in read_worktrees(repo, timeout=METADATA_TIMEOUT_SECONDS)
+        }
+    except GitError, NoAnswerError, OSError:
+        return set()
+
+
 def collect(
     repos: list[Path],
     now: datetime,
@@ -505,9 +519,10 @@ def collect(
 ) -> LocalSnapshot:
     """Every repo among `repos`, or the ones `subjects` name, keeping the rest as `previous`
     has them. An unknown subject asks for every repo, and a repo `previous` lacks is read
-    anyway. A repo git can't read (or that times out) is logged and
-    kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
-    read, the first error is raised."""
+    anyway. When a configured checkout fails, a healthy configured worktree of the same
+    repository can refresh its previous row. Other failures are logged and the previous row
+    is kept or left out, so they don't fail the rest; when none can be read, the first error
+    is raised."""
     existing = [repo for repo in repos if repo.exists()]
     before = {r.dir: r for r in previous.repos} if previous else {}
     cache = GitCache()
@@ -530,11 +545,18 @@ def collect(
                 return e
 
         results = list(pool.map(one, folded))
-    fresh = {index: result for index, result in enumerate(results) if isinstance(result, LocalRepo)}
-    by_worktree = {
-        Path(wt.path).resolve(): index for index, repo in fresh.items() for wt in repo.worktrees
-    }
-    found = dict(fresh)
+        found = {i: result for i, result in enumerate(results) if isinstance(result, LocalRepo)}
+        failed_paths = {
+            checkout.path.resolve()
+            for checkout, result in zip(folded, results, strict=True)
+            if isinstance(result, Exception) and str(checkout.path) in before
+        }
+        by_worktree: dict[Path, int] = {}
+        if failed_paths:
+            for index, members in zip(
+                found, pool.map(_members, (folded[i].path for i in found)), strict=True
+            ):
+                by_worktree.update((path, index) for path in members & failed_paths)
     failed: list[Exception] = []
     for index, (checkout, result) in enumerate(zip(folded, results, strict=True)):
         if isinstance(result, LocalRepo):
@@ -542,9 +564,11 @@ def collect(
         failed.append(result)
         previous_repo = before.get(str(checkout.path))
         alternate = by_worktree.get(checkout.path.resolve())
-        if previous_repo is not None and alternate is not None:
-            # Keep the repository's ID while using fresh data from another worktree.
-            found[alternate] = fresh[alternate].model_copy(update={"dir": previous_repo.dir})
+        if previous_repo is not None and alternate is not None and alternate in found:
+            # Keep the prior ID and the earliest position of the paired checkouts.
+            found[min(index, alternate)] = found.pop(alternate).model_copy(
+                update={"dir": previous_repo.dir}
+            )
             log.warning(
                 "can't read %s directly, so using another worktree: %s", checkout.path, result
             )

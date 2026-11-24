@@ -75,9 +75,6 @@ class GitPlugin(
         self._watching = watching
         """Whether `changed` watches the repos (see `watch`), or only polls them."""
         self._watcher: watch.Watcher | None = None
-        self._ids: dict[Path, str] = {}
-        """Each watched repo's id, the common git directory `changes` and `collect` name it
-        by, by its resolved path, as the watcher has it."""
         self._statuses: dict[Path, tuple[int, int]] = {}
         """Each worktree's (modified, untracked) counts as `_edited` last saw them, by its
         resolved path."""
@@ -151,11 +148,11 @@ class GitPlugin(
         worktrees: dict[Path, Path] = {}
         cache = GitCache()
         for repo in snapshot.repos:
-            if (common := client.common_dir(Path(repo.dir), cache)) is None:
-                continue
-            self._ids[common] = str(common)
+            # The stored checkout may have failed while its linked worktrees still work.
             for wt in repo.worktrees:
-                worktrees[Path(wt.path).resolve()] = common
+                path = Path(wt.path).resolve()
+                if (common := client.common_dir(path, cache)) is not None:
+                    worktrees[path] = common
         self._watcher.sync(worktrees, cache=cache)
 
     def check_triggers(self, req: ContextRequest[GitConfig]) -> ChangeCheckTriggers:
@@ -173,10 +170,8 @@ class GitPlugin(
         ctx = req.ctx
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
-        watched: set[str] = (
-            {self._ids[c] for c in watcher.repos if c in self._ids} if watcher else set()
-        )
-        moved = {self._ids[c] for c in moved_now if c in self._ids}
+        watched: set[str] = {str(common) for common in watcher.repos} if watcher else set()
+        moved = {str(common) for common in moved_now}
 
         fingerprint = req.previous.fingerprint
         before = None if fingerprint is None else _FINGERPRINTS.validate_json(fingerprint)
@@ -222,11 +217,11 @@ class GitPlugin(
                     continue
                 try:
                     status = client.worktree_status(path)
-                except GitError, NoAnswerError:  # try again after the next edit or poll
+                except GitError, NoAnswerError, OSError:  # try again after the next edit or poll
                     continue
                 last = self._statuses.get(resolved)
                 if status != (wt.modified, wt.untracked) and status != last:
-                    common = client.common_dir(Path(repo.dir), cache)
+                    common = client.common_dir(resolved, cache)
                     if common is None:
                         continue
                     found.add(str(common))
