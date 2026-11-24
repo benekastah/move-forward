@@ -223,8 +223,8 @@ what's untried where it runs).
   ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
   only Windows CI sets, as that runner's store is thrown away after the job.
 - **No new runtime dependencies.** pydantic, watchfiles (git watching its repos) and
-  py-git-client (running git, from its repository, by a release's commit: it has no
-  dependencies of its own) are the only ones; tools are reached through their CLIs (`gh`,
+  py-git-client (running git, from its repository, pinned to a commit before the 0.0.3 release: it has no
+  required dependencies of its own) are the only ones; tools are reached through their CLIs (`gh`,
   `git`) or the standard library.
 - **Linux, macOS and Windows**, as in `AGENTS.md`, and here: text people write by hand is
   read as `"utf-8-sig"` with `errors="replace"`, and `tests/test_encoding.py` checks every
