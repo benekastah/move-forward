@@ -22,6 +22,7 @@ from conftest import (
     stored,
     titles,
 )
+from git_client import GitTimeoutError
 from git_client.testing import FakeGit
 from legacy import save_json_snapshot
 
@@ -573,6 +574,26 @@ def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> No
     before = changes.configs([str(linked)])
     Git(repo).run("config", "branch.side.stackParent", "main")  # as `git stack` records it
     assert changes.configs([str(linked)]) != before
+
+
+def test_a_config_lookup_timeout_does_not_hide_changes_in_other_repos(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hung, good = tmp_path / "a", tmp_path / "b"
+    good.mkdir()
+    Git(good).run("init", "-q", "-b", "main")
+    real = changes.git_common_dir
+
+    def common_dir(git: Git) -> Path:
+        if Path(git.directory) == hung:
+            raise GitTimeoutError(["rev-parse"], None, "")
+        return real(git)
+
+    monkeypatch.setattr(changes, "git_common_dir", common_dir)
+    repos = [str(hung), str(good)]
+    before = changes.configs(repos)
+    Git(good).run("config", "branch.side.stackParent", "main")
+    assert changes.configs(repos) != before
 
 
 def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:
