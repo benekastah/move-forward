@@ -273,7 +273,19 @@ def test_edits_in_a_linked_worktree_are_seen_when_the_main_lookup_fails(
         plugin.stop_watching()
 
 
-@pytest.mark.parametrize("replace_checkout", [False, True])
+@pytest.mark.parametrize(
+    "replace_checkout",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                sys.platform == "win32",
+                reason="Windows prevents renaming a checkout containing its open .git watch",
+            ),
+        ),
+    ],
+)
 def test_the_plugin_detects_a_repo_replaced_at_its_watched_path(
     tmp_path: Path, replace_checkout: bool
 ) -> None:
