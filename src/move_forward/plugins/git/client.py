@@ -442,9 +442,9 @@ def read_worktrees(repo: Path) -> list[tuple[str, str | None]]:
 
 
 def common_dir(repo: Path, cache: GitCache) -> Path | None:
-    """The common git directory, if Git can identify it for a change check or watcher."""
+    """The common git directory, if Git can identify it promptly."""
     try:
-        return git_common_dir(Git(repo, cache=cache))
+        return git_common_dir(Git(repo, cache=cache, timeout=1.0))
     except GitError, NoAnswerError, OSError:
         return None
 
@@ -530,18 +530,29 @@ def collect(
                 return e
 
         results = list(pool.map(one, folded))
-    found: list[LocalRepo] = []
+    fresh = {index: result for index, result in enumerate(results) if isinstance(result, LocalRepo)}
+    by_worktree = {
+        Path(wt.path).resolve(): index for index, repo in fresh.items() for wt in repo.worktrees
+    }
+    found = dict(fresh)
     failed: list[Exception] = []
-    for checkout, result in zip(folded, results, strict=True):
+    for index, (checkout, result) in enumerate(zip(folded, results, strict=True)):
         if isinstance(result, LocalRepo):
-            found.append(result)
             continue
         failed.append(result)
         previous_repo = before.get(str(checkout.path))
+        alternate = by_worktree.get(checkout.path.resolve())
+        if previous_repo is not None and alternate is not None:
+            # Keep the repository's ID while using fresh data from another worktree.
+            found[alternate] = fresh[alternate].model_copy(update={"dir": previous_repo.dir})
+            log.warning(
+                "can't read %s directly, so using another worktree: %s", checkout.path, result
+            )
+            continue
         kept = "keeping what was read before" if previous_repo is not None else "leaving it out"
         log.warning("can't read %s, so %s: %s", checkout.path, kept, result)
         if previous_repo is not None:
-            found.append(previous_repo)
+            found[index] = previous_repo
     if failed and len(failed) == len(folded):
         raise failed[0]
-    return LocalSnapshot(repos=found)
+    return LocalSnapshot(repos=[found[i] for i in sorted(found)])

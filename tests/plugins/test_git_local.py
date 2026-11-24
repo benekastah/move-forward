@@ -478,6 +478,24 @@ def test_a_repo_whose_git_times_out_is_kept_as_read_before(
     assert ran.count(command) == 1
 
 
+def test_a_failed_main_checkout_is_refreshed_through_its_linked_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main, linked = tmp_path / "main", tmp_path / "linked"
+    _init_repo(main)
+    _commit(main, "first.txt")
+    Git(main).run("worktree", "add", "-q", "-b", "side", str(linked))
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    before = local.collect([linked, main], now, 30, [])
+    _commit(linked, "new.txt")
+    _hangs(monkeypatch, main, "rev-parse")
+
+    found = local.collect([linked, main], now, 30, [], previous=before)
+
+    assert [r.dir for r in found.repos] == [str(main)]
+    assert found.repos[0].branches != before.repos[0].branches
+
+
 def test_config_bytes_that_arent_utf8_are_replaced_so_the_repo_can_be_stored(
     tmp_path: Path,
 ) -> None:
