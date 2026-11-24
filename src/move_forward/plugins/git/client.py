@@ -323,13 +323,15 @@ def collect_repo(
     commit_history_days: int,
     ignored_worktree_globs: list[str],
     github_hosts: Sequence[str] = GITHUB_HOSTS,
+    *,
+    listed: list[tuple[str, str | None]] | None = None,
 ) -> LocalRepo:
-    """`repo` as git has it."""
+    """`repo` as git has it, reusing its worktree listing when already read."""
     config, refs = RepoConfig.read(repo), Refs.read(repo)
     found = _remotes(config, refs, github_hosts)
     default_branch = found.default_branch
     worktrees: list[Worktree] = []
-    for path, branch in read_worktrees(repo):
+    for path, branch in read_worktrees(repo) if listed is None else listed:
         if any(fnmatch.fnmatch(path, glob) for glob in ignored_worktree_globs):
             continue
         if not Path(path).exists():  # deleted without `git worktree remove`: git lists it
@@ -519,10 +521,10 @@ def collect(
 ) -> LocalSnapshot:
     """Every repo among `repos`, or the ones `subjects` name, keeping the rest as `previous`
     has them. An unknown subject asks for every repo, and a repo `previous` lacks is read
-    anyway. When a configured checkout fails, a healthy configured worktree of the same
-    repository can refresh its previous row. Other failures are logged and the previous row
-    is kept or left out, so they don't fail the rest; when none can be read, the first error
-    is raised."""
+    anyway. When Git can't identify a configured checkout, a healthy configured worktree
+    of the same repository can refresh its previous row. Other failures are logged and
+    the previous row is kept or left out, so they don't fail the rest; when none can be
+    read, the first error is raised."""
     existing = [repo for repo in repos if repo.exists()]
     before = {r.dir: r for r in previous.repos} if previous else {}
     cache = GitCache()
@@ -530,35 +532,52 @@ def collect(
         checkouts = list(pool.map(_Checkout.read, existing, repeat(cache)))
         only = None if subjects is None else _repos_of(checkouts, subjects, cache)
         folded = _folded(checkouts)
+        failed_paths = {
+            c.path.resolve() for c in folded if c.error is not None and str(c.path) in before
+        }
 
-        def one(checkout: _Checkout) -> LocalRepo | Exception:
+        def one(checkout: _Checkout) -> tuple[LocalRepo | Exception, set[Path] | None]:
             repo = checkout.path
             if checkout.error is not None:
-                return checkout.error
+                return checkout.error, None
             if only is not None and str(repo) in before and str(checkout.common) not in only:
-                return before[str(repo)]
+                return before[str(repo)], None
             try:
-                return collect_repo(
-                    repo, now, commit_history_days, ignored_worktree_globs, github_hosts
+                listed = read_worktrees(repo) if failed_paths else None
+                result = collect_repo(
+                    repo,
+                    now,
+                    commit_history_days,
+                    ignored_worktree_globs,
+                    github_hosts,
+                    listed=listed,
                 )
+                return result, {Path(path).resolve() for path, _ in listed or []}
             except (GitError, NoAnswerError, OSError) as e:
-                return e
+                return e, None
 
         results = list(pool.map(one, folded))
-        found = {i: result for i, result in enumerate(results) if isinstance(result, LocalRepo)}
-        failed_paths = {
-            checkout.path.resolve()
-            for checkout, result in zip(folded, results, strict=True)
-            if isinstance(result, Exception) and str(checkout.path) in before
-        }
+        found: dict[int, LocalRepo] = {}
         by_worktree: dict[Path, int] = {}
-        if failed_paths:
-            for index, members in zip(
-                found, pool.map(_members, (folded[i].path for i in found)), strict=True
-            ):
-                by_worktree.update((path, index) for path in members & failed_paths)
+        cached: list[int] = []
+        for index, (result, members) in enumerate(results):
+            if isinstance(result, Exception):
+                continue
+            found[index] = result
+            if not failed_paths:
+                continue
+            if members is None:
+                cached.append(index)
+                members = {Path(wt.path).resolve() for wt in result.worktrees}
+            by_worktree.update((path, index) for path in failed_paths & members)
+        unmatched = failed_paths - by_worktree.keys()
+        if unmatched:
+            # Only cached rows can still hide a worktree we haven't seen in Git's listing.
+            paths = (folded[i].path for i in cached)
+            for index, members in zip(cached, pool.map(_members, paths), strict=True):
+                by_worktree.update((path, index) for path in unmatched & members)
     failed: list[Exception] = []
-    for index, (checkout, result) in enumerate(zip(folded, results, strict=True)):
+    for index, (checkout, (result, _)) in enumerate(zip(folded, results, strict=True)):
         if isinstance(result, LocalRepo):
             continue
         failed.append(result)

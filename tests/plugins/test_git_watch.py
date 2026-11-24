@@ -150,6 +150,22 @@ def test_a_newly_staged_directory_is_watched_from_the_next_sync(
     assert seen.edits(repo)
 
 
+def test_refs_keep_moving_after_a_linked_worktree_is_replaced(
+    tmp_path: Path, watcher: watch.Watcher
+) -> None:
+    repo, linked = _repo(tmp_path / "r"), tmp_path / "linked"
+    Git(repo).run("worktree", "add", "-q", "--detach", str(linked))
+    common = repo / ".git"
+    watcher.sync({repo: common, linked: common})
+    linked.rename(tmp_path / "old")
+    _repo(linked)
+    assert watcher.take()[0] == {common}
+
+    # Deliver the ref event after invalidation, while the old watch is still reporting changes.
+    watcher._note([common / "refs" / "heads" / "main"])  # pyright: ignore[reportPrivateUsage]
+    assert watcher.take()[0] == {common}
+
+
 @pytest.mark.skipif(
     sys.platform != "linux",
     reason="only inotify watches a directory at a time; elsewhere the worktree is one tree,"

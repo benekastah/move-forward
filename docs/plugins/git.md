@@ -42,8 +42,8 @@ the unpushed commits of any branch git stack tracks (with the git_stack plugin),
 stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` (180) says how far back commits count: yours
 (by the repo's `user.email`) towards the directories you work in, and others' towards the
-github plugin's reviewer suggestions. If Git can't read a configured checkout, another
-configured worktree of the same repo can refresh it under its usual path. A repo Git
+github plugin's reviewer suggestions. If Git can't identify a configured checkout,
+another configured worktree of that repo can refresh it under its usual path. A repo Git
 can't read is logged and kept as it was last read, or left out if it never was, until its
 next change or the next full read (every `refresh_seconds`). A worktree deleted without
 `git worktree remove` is left out.

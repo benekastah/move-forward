@@ -265,7 +265,8 @@ class Watcher:
         """The repos (common git directories) that moved and the worktrees edited since
         the last call. A replacement checkout needs a refresh even if its watch went quiet."""
         with self._lock:
-            moved = self._moved - {self._worktrees[w] for w in self._replaced}
+            # A replaced linked worktree can leave its common directory's watch live.
+            moved = self._moved
             for worktree, anchor in self._anchors.items():
                 if worktree not in self._replaced and any(
                     _identity(path) != identity for path, identity in anchor.items()

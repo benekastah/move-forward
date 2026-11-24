@@ -494,6 +494,18 @@ def test_a_failed_main_checkout_keeps_its_identity_and_precedence(
     before = local.collect(repos, now, 30, globs)
     _commit(linked, "new.txt")
     _hangs(monkeypatch, main, "rev-parse")
+    process = Git.process
+    worktree_lists = 0
+
+    def list_once(self: Git, *args: Arg, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        nonlocal worktree_lists
+        if Path(self.directory) == linked and args[:2] == ("worktree", "list"):
+            worktree_lists += 1
+            if worktree_lists > 1:
+                raise GitTimeoutError(["worktree", "list"], None, "")
+        return process(self, *args, **kwargs)
+
+    monkeypatch.setattr(Git, "process", list_once)
 
     found = local.collect(repos, now, 30, globs, previous=before)
 
@@ -503,6 +515,7 @@ def test_a_failed_main_checkout_keeps_its_identity_and_precedence(
         path.resolve() for path in visible
     ]
     assert found.repos[0].branches != before.repos[0].branches
+    assert worktree_lists == 1
 
 
 def test_config_bytes_that_arent_utf8_are_replaced_so_the_repo_can_be_stored(
