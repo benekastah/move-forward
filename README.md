@@ -478,8 +478,8 @@ a time limit about 20% over how long it takes; a pull request that changes only 
 `docs/entities.md`, which a test reads) skips them, though `static` still runs when the README
 changed. `CI passed` is the one check main's ruleset requires.
 
-The man page, `man/mfd.1`, is made from this README by `dev.py man`, with pandoc (from the
-`pypandoc_binary` dev dependency): every section but Development, with the SYNOPSIS in
+The man page, `man/mfd.1`, is made from this README by `dev.py man`, with pandoc (the version
+`dev.py` pins, which it downloads into `.venv`, so one on your PATH can't change the page): every section but Development, with the SYNOPSIS in
 `dev_project.py`. The pre-commit hook makes it again when a commit changes the README, and adds
 it to the commit (or stops a `git commit PATH`, which it can't add the page to: run
 `dev.py man` and `git add` it, then commit). `dev.py static` fails if it's out of date.

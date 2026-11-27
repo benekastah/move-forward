@@ -64,7 +64,8 @@ Development section says how to set up a clone and run the checks.
   also needs `git config core.hooksPath git_hooks` for the hooks; a worktree shares its
   clone's).
 - **The man pages are made from the README**: `dev.py man` writes `man/<command>.1` for each
-  of the package's commands, with pandoc, and `dev.py static` fails if one is out of date.
+  of the package's commands, with the pandoc version `dev.py` pins (it downloads it, and checks
+  its checksum), and `dev.py static` fails if one is out of date.
   Never edit them by hand: change the README, and commit the pages with it (the pre-commit
   hook makes them again and stages them, but stops a `git commit PATH`, which it can't stage
   them in). Which `##` sections they leave out, and their

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Format and lint-fix the staged Python files; see dev.py's pre_commit. git runs hooks with
-# sh even on Windows, where `py` is the Python to run (`python3` may be a store stub).
+# Format and lint-fix the staged Python files, and make the man pages again from a staged
+# README; see dev.py's pre_commit. git runs hooks with sh even on Windows, where `py` is the
+# Python to run (`python3` may be a store stub).
 if command -v py > /dev/null 2>&1; then exec py -3 dev.py pre-commit; fi
 exec python3 dev.py pre-commit

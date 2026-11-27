@@ -2,7 +2,7 @@
 
     python dev.py venv               # .venv with the package (editable) and the dev tools
     python dev.py check [ARGS...]    # static, then tests (ARGS go to pytest)
-    python dev.py static             # format, lint and types: the same on every system
+    python dev.py static             # format, lint, types and man pages, the same everywhere
     python dev.py tests [ARGS...]    # the tests, in parallel (ARGS go to pytest)
     python dev.py tests --shard I/N  # the Ith of N even parts of the tests, as CI splits them
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
@@ -23,14 +23,15 @@ once between them, and as many tests each, give or take one. CI runs a system's 
 jobs this way when the project's Copier answers say so (see AGENTS.md).
 
 `man` makes each of the package's commands a man page, `man/<command>.1`, from README.md,
-with pandoc (from the pypandoc_binary dev dependency, pinned since the check compares its exact
-output): NAME (the command, and pyproject.toml's description), SYNOPSIS if dev_project.py gives
-one, DESCRIPTION (the README's opening), then the README's `##` sections, but for Install,
-Installing and Development. `static` checks the pages are current, and the pre-commit hook
-makes them again from the staged README when a commit changes what they're made from, and
-stages them (or, if the commit names its files, stops it, as it can't). `install` links them
-into ~/.local/share/man/man1 (not on Windows, which has no `man`). A package with no commands,
-a library, gets none.
+with pandoc, exactly the version `PANDOC_VERSION` names (the check compares its exact output, so
+another version, e.g. a newer one on PATH, would call the pages stale): dev.py downloads it into
+.venv on first use, checking the archive against the checksum it pins. NAME (the command, and
+pyproject.toml's description), SYNOPSIS if dev_project.py gives one, DESCRIPTION (the README's
+opening), then the README's `##` sections, but for Install, Installing and Development.
+`static` checks the pages are current, and the pre-commit hook makes them again from the staged
+README when a commit changes what they're made from, and stages them (or, if the commit names its
+files, stops it, as it can't). `install` links them into ~/.local/share/man/man1 (not on Windows,
+which has no `man`). A package with no commands, a library, gets none.
 
 It comes from python-template, and `copier update` replaces it: a project adds to it in
 dev_project.py, its own file, if it has one. That can define `COMMANDS`, a dict of extra
@@ -56,15 +57,26 @@ tools, and uv picks its own Python.
 """
 
 import argparse
+import contextlib
+import hashlib
+import http.client
 import importlib
+import io
 import json
 import os
+import platform
 import re
 import shutil
+import ssl
 import subprocess
 import sys
+import tarfile
 import tempfile
+import time
 import tomllib
+import urllib.error
+import urllib.request
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -81,6 +93,41 @@ STAMP = VENV / "installed"
 """Touched after installing; older than pyproject.toml or uv.lock means install again."""
 PAGES = ROOT / "man"
 """Where `man` writes each command's man page."""
+PANDOC_VERSION = "3.14"
+"""The pandoc `man` makes the pages with, exactly. To move to another, set this, and each checksum
+below to its archive's: `gh api repos/jgm/pandoc/releases/tags/<version> -q '.assets[] | .name +
+" " + .digest'`; then make the pages again (`man`) and commit them."""
+PANDOC_ARCHIVES: dict[tuple[str, str], tuple[str, str]] = {
+    ("linux", "x86_64"): (
+        f"pandoc-{PANDOC_VERSION}-linux-amd64.tar.gz",
+        "c5f4720cdefb3f7bdc5d07202ef579feef0d1370773c873804dd8fdaa8c4f1b8",
+    ),
+    ("linux", "arm64"): (
+        f"pandoc-{PANDOC_VERSION}-linux-arm64.tar.gz",
+        "c692f3d78a415741bbbac4cdbbbe26fa7edca1f43d2301b982fbf4009cc8cf7f",
+    ),
+    ("darwin", "x86_64"): (
+        f"pandoc-{PANDOC_VERSION}-x86_64-macOS.zip",
+        "891708579061e7b1c1a6ce0df30ebb3cb2b6d0ca045ed3c8554ab830c1e0c270",
+    ),
+    ("darwin", "arm64"): (
+        f"pandoc-{PANDOC_VERSION}-arm64-macOS.zip",
+        "58d6593884fec9d4424b641b92503c316d9c36decb2891ff8d73ae74dd3b6304",
+    ),
+    # pandoc has no Windows ARM build: that runs the x86-64 one.
+    ("win32", "x86_64"): (
+        f"pandoc-{PANDOC_VERSION}-windows-x86_64.zip",
+        "0144b96e8c7b023fd382ec5ef5bdc475e873f1019d6fa72502492df2c9a94a3b",
+    ),
+    ("win32", "arm64"): (
+        f"pandoc-{PANDOC_VERSION}-windows-x86_64.zip",
+        "0144b96e8c7b023fd382ec5ef5bdc475e873f1019d6fa72502492df2c9a94a3b",
+    ),
+}
+"""The archive of pandoc's release to download, and its SHA-256, for each (system, CPU)."""
+PANDOC_MAX_BYTES = 100_000_000
+"""The most `_download` takes of a download. A pandoc archive is about 45 MB: `_download` reads one
+byte more than this, to see a download is too big, and refuses it."""
 MAN_SOURCES = ["README.md", "pyproject.toml", "dev.py", "dev_project.py"]
 """What the man pages are made from: a commit changing one makes them again."""
 MAN_SKIPPED_SECTIONS = {"Install", "Installing", "Development"}
@@ -129,6 +176,108 @@ def _project() -> ModuleType | None:
     if not (ROOT / "dev_project.py").exists():
         return None
     return importlib.import_module("dev_project")
+
+
+def pandoc_platform() -> tuple[str, str]:
+    """This system ("linux", "darwin" or "win32") and CPU ("x86_64" or "arm64"), as PANDOC_ARCHIVES
+    names them."""
+    system = "linux" if sys.platform.startswith("linux") else sys.platform
+    machine = platform.machine().lower()
+    return system, {"amd64": "x86_64", "aarch64": "arm64"}.get(machine, machine)
+
+
+def pandoc_archive() -> tuple[str, str]:
+    """The name and SHA-256 of the pandoc archive for this system."""
+    key = pandoc_platform()
+    if key not in PANDOC_ARCHIVES:
+        sys.exit(f"man: dev.py has no pandoc {PANDOC_VERSION} to download for {key[0]} on {key[1]}")
+    return PANDOC_ARCHIVES[key]
+
+
+def pandoc() -> str:
+    """The path of pandoc `PANDOC_VERSION`, which `install_pandoc` puts in .venv on first use (and
+    which making .venv again removes)."""
+    directory = VENV / "pandoc" / PANDOC_VERSION
+    executable = directory / ("pandoc.exe" if WINDOWS else "pandoc")
+    if not executable.is_file():
+        install_pandoc(directory)
+    return str(executable)
+
+
+def install_pandoc(directory: Path) -> None:
+    """Download this system's pandoc archive and put its executable in `directory`, or end this
+    script, without having made it, if the archive isn't the one PANDOC_ARCHIVES pins. The
+    standard library unpacks the archive, and only its executable is taken out of it."""
+    name, sha256 = pandoc_archive()
+    url = f"https://github.com/jgm/pandoc/releases/download/{PANDOC_VERSION}/{name}"
+    print(f"dev: downloading {url}", file=sys.stderr)
+    data = _download(url)
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != sha256:
+        sys.exit(f"man: the checksum of {url} is {actual}, not the {sha256} dev.py pins for it")
+    executable = "pandoc.exe" if WINDOWS else "pandoc"
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    # Made beside the directory, and moved into place, so one that exists has its executable.
+    # ignore_cleanup_errors: a virus scanner holding a file there on Windows mustn't fail an install
+    # that has finished.
+    with tempfile.TemporaryDirectory(dir=directory.parent, ignore_cleanup_errors=True) as scratch:
+        staged = Path(scratch) / "pandoc"
+        staged.mkdir()
+        (staged / executable).write_bytes(_archived(name, data, executable))
+        (staged / executable).chmod(0o755)
+        if directory.exists() and not (directory / executable).is_file():
+            # What a crash left, which has no executable: moved aside rather than deleted. (Two runs
+            # may find it at once; if one then installs first, the other keeps that install below.)
+            with contextlib.suppress(OSError):
+                directory.replace(Path(scratch) / "broken")
+        try:
+            staged.replace(directory)
+        except OSError:
+            # Another run installed it first (the pre-push hook and a manual run, say): use theirs.
+            if not (directory / executable).is_file():
+                raise
+
+
+def _download(url: str) -> bytes:
+    """What `url` serves, at most `PANDOC_MAX_BYTES` of it: a failure that may pass (no network, a
+    server error) is tried again, and any other (a 404, a certificate that doesn't verify) or a
+    download too big ends this script."""
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:  # the URL is https
+                data = response.read(PANDOC_MAX_BYTES + 1)
+        except urllib.error.HTTPError as error:
+            if error.code < 500 or attempt == 2:
+                sys.exit(f"man: couldn't download {url}: {error}")
+        # No network, a certificate, a dropped connection, a timeout:
+        except (OSError, http.client.HTTPException) as error:
+            reason = getattr(error, "reason", None)
+            if attempt == 2 or isinstance(reason, ssl.SSLCertVerificationError):
+                sys.exit(f"man: couldn't download {url}: {error}")
+        else:
+            if len(data) > PANDOC_MAX_BYTES:
+                sys.exit(f"man: {url} is bigger than the {PANDOC_MAX_BYTES} bytes dev.py allows")
+            return data
+        time.sleep(2**attempt)
+    raise AssertionError("unreachable")
+
+
+def _archived(name: str, data: bytes, executable: str) -> bytes:
+    """The file called `executable` in the zip or tar archive `data` (`name` says which), at any
+    depth."""
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for info in archive.infolist():
+                if not info.is_dir() and info.filename.rsplit("/", 1)[-1] == executable:
+                    return archive.read(info)
+    else:
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            for member in tar:
+                if member.isfile() and member.name.rsplit("/", 1)[-1] == executable:
+                    file = tar.extractfile(member)
+                    if file is not None:
+                        return file.read()
+    sys.exit(f"man: {name} has no {executable}")
 
 
 def _pyproject_text() -> str:
@@ -419,10 +568,6 @@ def pages(readme: Path) -> dict[Path, bytes]:
     if not names:
         return {}
     venv()
-    # -X utf8: the path as UTF-8, rather than in Windows' code page.
-    pandoc = _output(
-        tool("python"), "-X", "utf8", "-c", "import pypandoc; print(pypandoc.get_pandoc_path())"
-    )
     own = _project()
     synopses: dict[str, str] = getattr(own, "MAN_SYNOPSIS", {})
     skipped: set[str] = getattr(own, "MAN_SKIPPED_SECTIONS", MAN_SKIPPED_SECTIONS)
@@ -441,7 +586,7 @@ def pages(readme: Path) -> dict[Path, bytes]:
                 "footer": project["name"],
             }
             made[PAGES / f"{name}.1"] = _output(
-                pandoc.decode().strip(),
+                pandoc(),
                 "--from=gfm",
                 "--to=man",
                 "--standalone",
