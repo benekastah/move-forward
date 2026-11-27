@@ -23,9 +23,6 @@ mfd = "move_forward.cli:main"
 template-dev = [
     "basedpyright>=1.40.2",
     "coverage>=7.17.3",
-    # pandoc, for dev.py man. Pinned: `man --check` compares its exact output with the pages.
-    # It has no wheel for Windows on ARM, so dev.py venv fails there.
-    "pypandoc_binary==1.17",
     "pytest>=9.2.0",
     "pytest-xdist>=3.8.0",
     "ruff>=0.17.5",
